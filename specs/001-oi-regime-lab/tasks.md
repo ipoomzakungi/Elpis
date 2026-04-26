@@ -24,11 +24,11 @@
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T001 Create backend project structure with pyproject.toml at backend/pyproject.toml
-- [ ] T002 Create frontend project structure with Next.js at frontend/
-- [ ] T003 [P] Create data directories (data/raw, data/processed, data/reports) at data/
-- [ ] T004 [P] Create backend __init__.py files at backend/src/__init__.py, backend/src/models/__init__.py, backend/src/services/__init__.py, backend/src/repositories/__init__.py, backend/src/api/__init__.py, backend/src/api/routes/__init__.py
-- [ ] T005 [P] Create .gitignore with data/, __pycache__, .env, node_modules at .gitignore
+- [x] T001 Create backend project structure with pyproject.toml at backend/pyproject.toml
+- [x] T002 Create frontend project structure with Next.js at frontend/
+- [x] T003 [P] Create data directories (data/raw, data/processed, data/reports) at data/
+- [x] T004 [P] Create backend __init__.py files at backend/src/__init__.py, backend/src/models/__init__.py, backend/src/services/__init__.py, backend/src/repositories/__init__.py, backend/src/api/__init__.py, backend/src/api/routes/__init__.py
+- [x] T005 [P] Create .gitignore with data/, __pycache__, .env, node_modules at .gitignore
 
 ---
 
@@ -38,17 +38,17 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T006 Create Pydantic models for MarketData, OpenInterest, FundingRate in backend/src/models/market_data.py
-- [ ] T007 [P] Create Pydantic models for Feature and Regime in backend/src/models/features.py and backend/src/models/regime.py
-- [ ] T008 [P] Create Pydantic model for DataQuality in backend/src/models/market_data.py
-- [ ] T009 Create configuration settings (paths, API URLs, periods) in backend/src/config.py
-- [ ] T010 [P] Create Parquet repository for file operations in backend/src/repositories/parquet_repo.py
-- [ ] T011 [P] Create DuckDB repository for SQL operations in backend/src/repositories/duckdb_repo.py
-- [ ] T012 Create FastAPI app entry point with CORS and router setup in backend/src/main.py
-- [ ] T013 [P] Create FastAPI dependencies (repositories, services) in backend/src/api/dependencies.py
-- [ ] T014 [P] Create TypeScript types for all entities in frontend/src/types/index.ts
-- [ ] T015 [P] Create API client service in frontend/src/services/api.ts
-- [ ] T016 [P] Create data fetching hooks in frontend/src/hooks/useMarketData.ts
+- [x] T006 Create Pydantic models for MarketData, OpenInterest, FundingRate in backend/src/models/market_data.py
+- [x] T007 [P] Create Pydantic models for Feature and Regime in backend/src/models/features.py and backend/src/models/regime.py
+- [x] T008 [P] Create Pydantic model for DataQuality in backend/src/models/data_quality.py
+- [x] T009 Create configuration settings (paths, API URLs, periods) in backend/src/config.py
+- [x] T010 [P] Create Parquet repository for file operations in backend/src/repositories/parquet_repo.py
+- [x] T011 [P] Create DuckDB repository for SQL operations in backend/src/repositories/duckdb_repo.py
+- [x] T012 Create FastAPI app entry point with CORS and router setup in backend/src/main.py
+- [x] T013 [P] Create FastAPI dependencies (repositories, services) in backend/src/api/dependencies.py
+- [x] T014 [P] Create TypeScript types for all entities in frontend/src/types/index.ts
+- [x] T015 [P] Create API client service in frontend/src/services/api.ts
+- [x] T016 [P] Create data fetching hooks in frontend/src/hooks/useMarketData.ts
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -62,17 +62,17 @@
 
 ### Implementation for User Story 1
 
-- [ ] T017 [P] [US1] Create Binance API client with rate limiting in backend/src/services/binance_client.py
-- [ ] T018 [P] [US1] Create OHLCV download endpoint (POST /api/v1/download) in backend/src/api/routes/market_data.py
-- [ ] T019 [US1] Implement OHLCV data download from /fapi/v1/klines in backend/src/services/data_downloader.py
-- [ ] T020 [US1] Implement Open Interest download from /futures/data/openInterestHist in backend/src/services/data_downloader.py
-- [ ] T021 [US1] Implement Funding Rate download from /fapi/v1/fundingRate in backend/src/services/data_downloader.py
-- [ ] T022 [US1] Implement Parquet save for OHLCV at data/raw/btcusdt_15m_ohlcv.parquet in backend/src/repositories/parquet_repo.py
-- [ ] T023 [US1] Implement Parquet save for Open Interest at data/raw/btcusdt_15m_oi.parquet in backend/src/repositories/parquet_repo.py
-- [ ] T024 [US1] Implement Parquet save for Funding Rate at data/raw/btcusdt_15m_funding.parquet in backend/src/repositories/parquet_repo.py
-- [ ] T025 [US1] Create GET /api/v1/market-data/ohlcv endpoint in backend/src/api/routes/market_data.py
-- [ ] T026 [US1] Create GET /api/v1/market-data/open-interest endpoint in backend/src/api/routes/market_data.py
-- [ ] T027 [US1] Create GET /api/v1/market-data/funding-rate endpoint in backend/src/api/routes/market_data.py
+- [x] T017 [P] [US1] Create Binance API client with rate limiting in backend/src/services/binance_client.py
+- [x] T018 [P] [US1] Create OHLCV download endpoint (POST /api/v1/download) in backend/src/api/routes/market_data.py
+- [x] T019 [US1] Implement OHLCV data download from /fapi/v1/klines in backend/src/services/data_downloader.py
+- [x] T020 [US1] Implement Open Interest download from /futures/data/openInterestHist in backend/src/services/data_downloader.py
+- [x] T021 [US1] Implement Funding Rate download from /fapi/v1/fundingRate in backend/src/services/data_downloader.py
+- [x] T022 [US1] Implement Parquet save for OHLCV at data/raw/btcusdt_15m_ohlcv.parquet in backend/src/repositories/parquet_repo.py
+- [x] T023 [US1] Implement Parquet save for Open Interest at data/raw/btcusdt_15m_oi.parquet in backend/src/repositories/parquet_repo.py
+- [x] T024 [US1] Implement Parquet save for Funding Rate at data/raw/btcusdt_15m_funding.parquet in backend/src/repositories/parquet_repo.py
+- [x] T025 [US1] Create GET /api/v1/market-data/ohlcv endpoint in backend/src/api/routes/market_data.py
+- [x] T026 [US1] Create GET /api/v1/market-data/open-interest endpoint in backend/src/api/routes/market_data.py
+- [x] T027 [US1] Create GET /api/v1/market-data/funding-rate endpoint in backend/src/api/routes/market_data.py
 
 **Checkpoint**: User can download data via API and query it back. Parquet files exist in data/raw/.
 
@@ -86,18 +86,18 @@
 
 ### Implementation for User Story 2
 
-- [ ] T028 [P] [US2] Implement ATR computation (14-period) in backend/src/services/feature_engine.py
-- [ ] T029 [P] [US2] Implement range_high, range_low, range_mid computation (20-period) in backend/src/services/feature_engine.py
-- [ ] T030 [P] [US2] Implement OI change percentage computation in backend/src/services/feature_engine.py
-- [ ] T031 [P] [US2] Implement volume ratio computation (20-period avg) in backend/src/services/feature_engine.py
-- [ ] T032 [P] [US2] Implement funding rate features (current, change, cumsum) in backend/src/services/feature_engine.py
-- [ ] T033 [US2] Implement data merge by timestamp (OHLCV + OI + Funding) in backend/src/services/feature_engine.py
-- [ ] T034 [US2] Implement regime classification rules in backend/src/services/regime_classifier.py
-- [ ] T035 [US2] Create POST /api/v1/process endpoint in backend/src/api/routes/features.py
-- [ ] T036 [US2] Create GET /api/v1/features endpoint in backend/src/api/routes/features.py
-- [ ] T037 [US2] Create GET /api/v1/regimes endpoint in backend/src/api/routes/regimes.py
-- [ ] T038 [US2] Implement feature Parquet save at data/processed/btcusdt_15m_features.parquet in backend/src/repositories/parquet_repo.py
-- [ ] T039 [US2] Implement DuckDB views for features in backend/src/repositories/duckdb_repo.py
+- [x] T028 [P] [US2] Implement ATR computation (14-period) in backend/src/services/feature_engine.py
+- [x] T029 [P] [US2] Implement range_high, range_low, range_mid computation (20-period) in backend/src/services/feature_engine.py
+- [x] T030 [P] [US2] Implement OI change percentage computation in backend/src/services/feature_engine.py
+- [x] T031 [P] [US2] Implement volume ratio computation (20-period avg) in backend/src/services/feature_engine.py
+- [x] T032 [P] [US2] Implement funding rate features (current, change, cumsum) in backend/src/services/feature_engine.py
+- [x] T033 [US2] Implement data merge by timestamp (OHLCV + OI + Funding) in backend/src/services/feature_engine.py
+- [x] T034 [US2] Implement regime classification rules in backend/src/services/regime_classifier.py
+- [x] T035 [US2] Create POST /api/v1/process endpoint in backend/src/api/routes/features.py
+- [x] T036 [US2] Create GET /api/v1/features endpoint in backend/src/api/routes/features.py
+- [x] T037 [US2] Create GET /api/v1/regimes endpoint in backend/src/api/routes/regimes.py
+- [x] T038 [US2] Implement feature Parquet save at data/processed/btcusdt_15m_features.parquet in backend/src/repositories/parquet_repo.py
+- [x] T039 [US2] Implement DuckDB views for features in backend/src/repositories/duckdb_repo.py
 
 **Checkpoint**: User can process data via API and query features/regimes. Processed Parquet exists in data/processed/.
 
@@ -111,19 +111,19 @@
 
 ### Implementation for User Story 3
 
-- [ ] T040 [P] [US3] Create dashboard layout with Header component in frontend/src/app/layout.tsx and frontend/src/components/ui/Header.tsx
-- [ ] T041 [P] [US3] Create CandlestickChart component with range lines in frontend/src/components/charts/CandlestickChart.tsx
-- [ ] T042 [P] [US3] Create OIChart component with OI change overlay in frontend/src/components/charts/OIChart.tsx
-- [ ] T043 [P] [US3] Create FundingChart component in frontend/src/components/charts/FundingChart.tsx
-- [ ] T044 [P] [US3] Create VolumeChart component with volume ratio in frontend/src/components/charts/VolumeChart.tsx
-- [ ] T045 [P] [US3] Create RegimePanel component in frontend/src/components/panels/RegimePanel.tsx
-- [ ] T046 [P] [US3] Create DataQualityPanel component in frontend/src/components/panels/DataQualityPanel.tsx
-- [ ] T047 [US3] Create main dashboard page integrating all charts in frontend/src/app/page.tsx
-- [ ] T048 [US3] Create GET /api/v1/data-quality endpoint in backend/src/api/routes/data_quality.py
-- [ ] T049 [US3] Implement data quality checks (missing, duplicates, last updated) in backend/src/services/data_quality.py
-- [ ] T050 [US3] Add download and process buttons to dashboard in frontend/src/app/page.tsx
-- [ ] T051 [US3] Add LoadingSpinner component in frontend/src/components/ui/LoadingSpinner.tsx
-- [ ] T052 [US3] Configure Tailwind CSS and global styles in frontend/tailwind.config.ts and frontend/src/app/globals.css
+- [x] T040 [P] [US3] Create dashboard layout with Header component in frontend/src/app/layout.tsx and frontend/src/components/ui/Header.tsx
+- [x] T041 [P] [US3] Create CandlestickChart component with range lines in frontend/src/components/charts/CandlestickChart.tsx
+- [x] T042 [P] [US3] Create OIChart component with OI change overlay in frontend/src/components/charts/OIChart.tsx
+- [x] T043 [P] [US3] Create FundingChart component in frontend/src/components/charts/FundingChart.tsx
+- [x] T044 [P] [US3] Create VolumeChart component with volume ratio in frontend/src/components/charts/VolumeChart.tsx
+- [x] T045 [P] [US3] Create RegimePanel component in frontend/src/components/panels/RegimePanel.tsx
+- [x] T046 [P] [US3] Create DataQualityPanel component in frontend/src/components/panels/DataQualityPanel.tsx
+- [x] T047 [US3] Create main dashboard page integrating all charts in frontend/src/app/page.tsx
+- [x] T048 [US3] Create GET /api/v1/data-quality endpoint in backend/src/api/routes/data_quality.py
+- [x] T049 [US3] Implement data quality checks (missing, duplicates, last updated) in backend/src/services/data_quality.py
+- [x] T050 [US3] Add download and process buttons to dashboard in frontend/src/app/page.tsx
+- [x] T051 [US3] Add LoadingSpinner component in frontend/src/components/ui/LoadingSpinner.tsx
+- [x] T052 [US3] Configure Tailwind CSS and global styles in frontend/tailwind.config.ts and frontend/src/app/globals.css
 
 **Checkpoint**: Full dashboard is functional with all charts, regime labels, and data quality panel.
 

@@ -1,0 +1,15 @@
+from functools import lru_cache
+from backend.src.repositories.parquet_repo import ParquetRepository
+from backend.src.repositories.duckdb_repo import DuckDBRepository
+
+
+@lru_cache()
+def get_parquet_repo() -> ParquetRepository:
+    """Get Parquet repository instance."""
+    return ParquetRepository()
+
+
+@lru_cache()
+def get_duckdb_repo() -> DuckDBRepository:
+    """Get DuckDB repository instance."""
+    return DuckDBRepository()
