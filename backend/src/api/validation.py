@@ -1,9 +1,8 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException
 
 from src.models.features import RegimeType
-
 
 SUPPORTED_SYMBOLS = {"BTCUSDT"}
 SUPPORTED_INTERVALS = {"15m"}
@@ -91,6 +90,6 @@ def _parse_datetime(field_name: str, value: str | None) -> datetime | None:
         bad_request(f"{field_name} must be an ISO 8601 datetime")
 
     if parsed.tzinfo is not None:
-        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        parsed = parsed.astimezone(UTC).replace(tzinfo=None)
 
     return parsed

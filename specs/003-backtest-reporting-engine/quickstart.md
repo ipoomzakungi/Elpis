@@ -90,8 +90,11 @@ Invoke-RestMethod http://localhost:8000/api/v1/backtests/run `
 
 Expected:
 
-- Response includes `run_id`, status, summary metrics, warnings, and artifact paths.
-- Generated artifacts are written under `data/reports/{run_id}/`.
+- Response includes `run_id`, `status`, `metrics`, `warnings`, and artifact paths.
+- A completed MVP run writes `metadata.json`, `config.json`, `trades.parquet`, `equity.parquet`, `metrics.json`, and `report.json` under `data/reports/{run_id}/`.
+- If the selected configuration produces no simulated trades, the run still completes with an inspectable empty trade log, flat equity curve, and metric notes explaining that trade ratios are undefined.
+- If processed features are missing, `POST /api/v1/backtests/run` returns a structured `NOT_FOUND` response that names the expected feature path.
+- Invalid assumptions such as leverage above 1 or max positions above 1 return a structured `VALIDATION_ERROR` response.
 - No generated report artifacts are committed to git.
 
 ## Inspect Reports Through API

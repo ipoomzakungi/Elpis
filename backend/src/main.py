@@ -3,7 +3,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from src.api.routes import data_quality, features, market_data, providers, regimes
+from src.api.routes import backtests, data_quality, features, market_data, providers, regimes
 from src.config import get_settings
 from src.providers.errors import ProviderError
 
@@ -28,6 +28,7 @@ app.include_router(providers.router, prefix="/api/v1", tags=["providers"])
 app.include_router(features.router, prefix="/api/v1", tags=["features"])
 app.include_router(regimes.router, prefix="/api/v1", tags=["regimes"])
 app.include_router(data_quality.router, prefix="/api/v1", tags=["data-quality"])
+app.include_router(backtests.router, prefix="/api/v1", tags=["backtests"])
 
 
 @app.exception_handler(RequestValidationError)

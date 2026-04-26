@@ -4,7 +4,6 @@ from pydantic import BaseModel
 
 from src.models.backtest import BacktestRun, MetricsSummary
 
-
 RESEARCH_ONLY_WARNING = (
     "Backtest results are historical simulation outputs under documented assumptions only; "
     "they do not imply profitability, predictive power, safety, or live-trading readiness."

@@ -52,19 +52,19 @@
 
 - [X] T012 [P] [US1] Add unit tests for total return, drawdown, profit factor, win rate, expectancy, no-trade, only-win, and only-loss metrics in backend/tests/unit/test_backtest_metrics.py
 - [X] T013 [P] [US1] Add unit tests for fixed fractional sizing, fees, slippage, long/short PnL, max-one-position, end-of-data exits, and stop-first same-bar exits in backend/tests/unit/test_backtest_portfolio.py
-- [ ] T014 [P] [US1] Add integration tests for deterministic synthetic backtest artifacts under an isolated reports path in backend/tests/integration/test_backtest_engine_flow.py
-- [ ] T015 [P] [US1] Add contract tests for POST /api/v1/backtests/run success, missing features, invalid config, and no-trade responses in backend/tests/contract/test_backtest_api_contracts.py
+- [X] T014 [P] [US1] Add integration tests for deterministic synthetic backtest artifacts under an isolated reports path in backend/tests/integration/test_backtest_engine_flow.py
+- [X] T015 [P] [US1] Add contract tests for POST /api/v1/backtests/run success, missing features, invalid config, and no-trade responses in backend/tests/contract/test_backtest_api_contracts.py
 
 ### Implementation for User Story 1
 
 - [X] T016 [P] [US1] Implement metrics calculations and undefined-ratio notes in backend/src/backtest/metrics.py
 - [X] T017 [P] [US1] Implement position sizing, fee/slippage application, long/short accounting, stop/take-profit exits, stop-first ambiguity handling, and equity tracking in backend/src/backtest/portfolio.py
-- [ ] T018 [US1] Implement processed feature loading, required-column validation, final-bar signal skipping, next-bar-open entry, max-one-position orchestration, and deterministic run output in backend/src/backtest/engine.py
-- [ ] T019 [US1] Implement metadata.json, config.json, trades.parquet, equity.parquet, metrics.json, report.json, and optional report.md writes in backend/src/backtest/report_store.py
-- [ ] T020 [US1] Connect report summary composition to saved run outputs in backend/src/reports/writer.py
-- [ ] T021 [US1] Implement POST /api/v1/backtests/run endpoint in backend/src/api/routes/backtests.py
-- [ ] T022 [US1] Register the backtests router with the existing /api/v1 prefix in backend/src/main.py
-- [ ] T023 [US1] Update run-backtest quickstart validation notes for completed, failed, and no-trade runs in specs/003-backtest-reporting-engine/quickstart.md
+- [X] T018 [US1] Implement processed feature loading, required-column validation, final-bar signal skipping, next-bar-open entry, max-one-position orchestration, and deterministic run output in backend/src/backtest/engine.py
+- [X] T019 [US1] Implement metadata.json, config.json, trades.parquet, equity.parquet, metrics.json, report.json, and optional report.md writes in backend/src/backtest/report_store.py
+- [X] T020 [US1] Connect report summary composition to saved run outputs in backend/src/reports/writer.py
+- [X] T021 [US1] Implement POST /api/v1/backtests/run endpoint in backend/src/api/routes/backtests.py
+- [X] T022 [US1] Register the backtests router with the existing /api/v1 prefix in backend/src/main.py
+- [X] T023 [US1] Update run-backtest quickstart validation notes for completed, failed, and no-trade runs in specs/003-backtest-reporting-engine/quickstart.md
 
 **Checkpoint**: User Story 1 can run and inspect a completed local research backtest from processed feature data.
 
