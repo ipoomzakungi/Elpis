@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Query
 
+from src.api.validation import validate_symbol
 from src.models.data_quality import DataQualityResponse
 from src.services.data_quality import DataQualityService
 
@@ -11,6 +12,7 @@ async def get_data_quality(
     symbol: str = Query(default="BTCUSDT"),
 ):
     """Get data quality metrics for all data types."""
+    symbol = validate_symbol(symbol)
     service = DataQualityService()
     result = service.check_data_quality(symbol=symbol)
     return DataQualityResponse(**result)

@@ -133,17 +133,17 @@
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T053 [P] Add error handling and logging to all backend services in backend/src/services/
-- [ ] T054 [P] Add input validation to all API endpoints in backend/src/api/routes/
-- [ ] T055 [P] Create quickstart validation script in backend/tests/test_quickstart.py
-- [ ] T056 [P] Add unit tests for feature engine in backend/tests/unit/test_feature_engine.py
-- [ ] T057 [P] Add unit tests for regime classifier in backend/tests/unit/test_regime_classifier.py
-- [ ] T058 [P] Add unit tests for Binance client in backend/tests/unit/test_binance_client.py
-- [ ] T059 [P] Add integration tests for data download flow in backend/tests/integration/test_download_flow.py
-- [ ] T060 [P] Add integration tests for feature processing in backend/tests/integration/test_feature_flow.py
-- [ ] T061 [P] Add contract tests for all API endpoints in backend/tests/contract/
-- [ ] T062 Run quickstart.md validation and fix issues
-- [ ] T063 Code cleanup and refactoring
+- [x] T053 [P] Add error handling and logging to all backend services in backend/src/services/
+- [x] T054 [P] Add input validation to all API endpoints in backend/src/api/routes/
+- [x] T055 [P] Create quickstart validation script in backend/tests/test_quickstart.py
+- [x] T056 [P] Add unit tests for feature engine in backend/tests/unit/test_feature_engine.py
+- [x] T057 [P] Add unit tests for regime classifier in backend/tests/unit/test_regime_classifier.py
+- [x] T058 [P] Add unit tests for Binance client in backend/tests/unit/test_binance_client.py
+- [x] T059 [P] Add integration tests for data download flow in backend/tests/integration/test_download_flow.py
+- [x] T060 [P] Add integration tests for feature processing in backend/tests/integration/test_feature_flow.py
+- [x] T061 [P] Add contract tests for all API endpoints in backend/tests/contract/
+- [x] T062 Run quickstart.md validation and fix issues
+- [x] T063 Code cleanup and refactoring
 
 ---
 

@@ -1,11 +1,11 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DataQuality(BaseModel):
     """Data quality metrics."""
-    
+
     data_type: str = Field(..., description="Type of data (ohlcv, oi, funding)")
     total_records: int = Field(..., ge=0, description="Total number of records")
     missing_timestamps: int = Field(..., ge=0, description="Number of gaps")
@@ -14,8 +14,8 @@ class DataQuality(BaseModel):
     last_timestamp: Optional[datetime] = Field(None, description="Latest record")
     last_updated: datetime = Field(..., description="When data was last fetched")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "data_type": "ohlcv",
                 "total_records": 2880,
@@ -26,11 +26,12 @@ class DataQuality(BaseModel):
                 "last_updated": "2026-04-26T12:30:00Z",
             }
         }
+    )
 
 
 class DataQualityResponse(BaseModel):
     """Response for data quality query."""
-    
+
     ohlcv: DataQuality = Field(..., description="OHLCV data quality")
     open_interest: DataQuality = Field(..., description="Open interest data quality")
     funding_rate: DataQuality = Field(..., description="Funding rate data quality")

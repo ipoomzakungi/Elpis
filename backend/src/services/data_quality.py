@@ -1,20 +1,23 @@
-import polars as pl
+import logging
 from datetime import datetime
-from typing import Optional
 
 from src.repositories.parquet_repo import ParquetRepository
 
 
+logger = logging.getLogger(__name__)
+
+
 class DataQualityService:
     """Service for data quality checks."""
-    
+
     def __init__(self):
         self.parquet_repo = ParquetRepository()
-    
+
     def check_data_quality(self, symbol: str = "BTCUSDT", interval: str = "15m") -> dict:
         """Check data quality for all data types."""
+        logger.info("Checking data quality for %s %s", symbol, interval)
         result = {}
-        
+
         # Check OHLCV
         ohlcv = self.parquet_repo.load_ohlcv(symbol=symbol, interval=interval)
         if ohlcv is not None:
@@ -29,7 +32,7 @@ class DataQualityService:
                 "last_timestamp": None,
                 "last_updated": datetime.utcnow(),
             }
-        
+
         # Check Open Interest
         oi = self.parquet_repo.load_open_interest(symbol=symbol, interval=interval)
         if oi is not None:
@@ -44,7 +47,7 @@ class DataQualityService:
                 "last_timestamp": None,
                 "last_updated": datetime.utcnow(),
             }
-        
+
         # Check Funding Rate
         funding = self.parquet_repo.load_funding_rate(symbol=symbol, interval=interval)
         if funding is not None:
@@ -59,5 +62,5 @@ class DataQualityService:
                 "last_timestamp": None,
                 "last_updated": datetime.utcnow(),
             }
-        
+
         return result

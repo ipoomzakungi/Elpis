@@ -1,5 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from src.config import get_settings
 from src.api.routes import market_data, features, regimes, data_quality
@@ -27,6 +29,48 @@ app.include_router(regimes.router, prefix="/api/v1", tags=["regimes"])
 app.include_router(data_quality.router, prefix="/api/v1", tags=["data-quality"])
 
 
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: Request,
+    exc: RequestValidationError,
+) -> JSONResponse:
+    details = [
+        {
+            "field": ".".join(str(part) for part in error["loc"] if part != "body"),
+            "message": error["msg"],
+        }
+        for error in exc.errors()
+    ]
+    return JSONResponse(
+        status_code=400,
+        content={
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Invalid request parameters",
+                "details": details,
+            }
+        },
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    if exc.status_code == 400:
+        code = "VALIDATION_ERROR"
+    elif exc.status_code == 404:
+        code = "NOT_FOUND"
+    elif exc.status_code == 429:
+        code = "RATE_LIMITED"
+    else:
+        code = "INTERNAL_ERROR"
+
+    message = exc.detail if isinstance(exc.detail, str) else "Request failed"
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": {"code": code, "message": message, "details": []}},
+    )
+
+
 @app.get("/")
 async def root():
     """Root endpoint."""
@@ -45,6 +89,7 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
+
     settings = get_settings()
     uvicorn.run(
         "src.main:app",
