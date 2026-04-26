@@ -408,3 +408,7 @@ After smoke test passes:
 - commit stable changes
 - push if authentication works
 - report files changed, commands run, results, commit hash, and remaining risks.
+
+<!-- SPECKIT START -->
+Active Speckit plan: specs/003-backtest-reporting-engine/plan.md
+<!-- SPECKIT END -->
