@@ -3,9 +3,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from src.api.routes import data_quality, features, market_data, providers, regimes
 from src.config import get_settings
-from src.api.routes import market_data, features, regimes, data_quality
-
+from src.providers.errors import ProviderError
 
 app = FastAPI(
     title="Elpis OI Regime Lab",
@@ -24,6 +24,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(market_data.router, prefix="/api/v1", tags=["market-data"])
+app.include_router(providers.router, prefix="/api/v1", tags=["providers"])
 app.include_router(features.router, prefix="/api/v1", tags=["features"])
 app.include_router(regimes.router, prefix="/api/v1", tags=["regimes"])
 app.include_router(data_quality.router, prefix="/api/v1", tags=["data-quality"])
@@ -68,6 +69,20 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     return JSONResponse(
         status_code=exc.status_code,
         content={"error": {"code": code, "message": message, "details": []}},
+    )
+
+
+@app.exception_handler(ProviderError)
+async def provider_exception_handler(request: Request, exc: ProviderError) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "code": exc.code,
+                "message": exc.message,
+                "details": exc.details,
+            }
+        },
     )
 
 

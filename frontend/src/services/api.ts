@@ -8,6 +8,11 @@ import {
   FundingRate,
   MarketData,
   OpenInterest,
+  ProviderDownloadRequest,
+  ProviderDownloadResult,
+  ProviderInfo,
+  ProviderSymbolsResponse,
+  ProvidersResponse,
   ProcessRequest,
   Regime,
   TaskResponse,
@@ -109,5 +114,25 @@ export const api = {
   getDataQuality: async (symbol?: string): Promise<DataQualityResponse> => {
     const query = symbol ? `?symbol=${symbol}` : '';
     return fetchApi(`/data-quality${query}`);
+  },
+
+  // Providers
+  getProviders: async (): Promise<ProvidersResponse> => {
+    return fetchApi('/providers');
+  },
+
+  getProvider: async (providerName: string): Promise<ProviderInfo> => {
+    return fetchApi(`/providers/${providerName}`);
+  },
+
+  getProviderSymbols: async (providerName: string): Promise<ProviderSymbolsResponse> => {
+    return fetchApi(`/providers/${providerName}/symbols`);
+  },
+
+  downloadProvider: async (request: ProviderDownloadRequest): Promise<ProviderDownloadResult> => {
+    return fetchApi('/data/download', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
   },
 };

@@ -1,6 +1,8 @@
 import polars as pl
 import pytest
 
+from src.providers.binance_provider import BinanceProvider
+from src.providers.registry import ProviderRegistry
 from src.repositories.parquet_repo import ParquetRepository
 from src.services.data_downloader import DataDownloader
 
@@ -33,10 +35,8 @@ async def test_download_all_saves_raw_parquet_files(
     sample_open_interest: pl.DataFrame,
     sample_funding_rate: pl.DataFrame,
 ):
-    downloader = DataDownloader()
-    await downloader.binance_client.close()
     fake_client = FakeBinanceClient(sample_ohlcv, sample_open_interest, sample_funding_rate)
-    downloader.binance_client = fake_client
+    downloader = DataDownloader(provider_registry=ProviderRegistry([BinanceProvider(fake_client)]))
     downloader.parquet_repo = ParquetRepository()
 
     result = await downloader.download_all(days=1)
@@ -46,18 +46,16 @@ async def test_download_all_saves_raw_parquet_files(
     assert repo.load_ohlcv() is not None
     assert repo.load_open_interest() is not None
     assert repo.load_funding_rate() is not None
-    assert fake_client.closed is True
+    assert fake_client.closed is False
 
 
 @pytest.mark.asyncio()
 async def test_download_all_fails_when_binance_returns_no_data():
     empty = pl.DataFrame()
-    downloader = DataDownloader()
-    await downloader.binance_client.close()
     fake_client = FakeBinanceClient(empty, empty, empty)
-    downloader.binance_client = fake_client
+    downloader = DataDownloader(provider_registry=ProviderRegistry([BinanceProvider(fake_client)]))
 
     with pytest.raises(RuntimeError, match="No data downloaded"):
         await downloader.download_all(days=1)
 
-    assert fake_client.closed is True
+    assert fake_client.closed is False

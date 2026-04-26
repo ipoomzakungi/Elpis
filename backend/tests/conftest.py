@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import polars as pl
 import pytest
 
-from src.api.dependencies import get_duckdb_repo, get_parquet_repo
+from src.api.dependencies import get_duckdb_repo, get_parquet_repo, get_provider_registry
 from src.config import get_settings
 
 
@@ -22,12 +22,14 @@ def isolated_data_paths(monkeypatch: pytest.MonkeyPatch, tmp_path):
     get_settings.cache_clear()
     get_parquet_repo.cache_clear()
     get_duckdb_repo.cache_clear()
+    get_provider_registry.cache_clear()
 
     yield tmp_path
 
     get_settings.cache_clear()
     get_parquet_repo.cache_clear()
     get_duckdb_repo.cache_clear()
+    get_provider_registry.cache_clear()
 
 
 @pytest.fixture()

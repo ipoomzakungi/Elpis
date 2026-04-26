@@ -15,10 +15,21 @@ interface UseMarketDataOptions {
   interval?: string;
   limit?: number;
   autoFetch?: boolean;
+  supportsOpenInterest?: boolean;
+  supportsFundingRate?: boolean;
+  useLegacyReadEndpoints?: boolean;
 }
 
 export function useMarketData(options: UseMarketDataOptions = {}) {
-  const { symbol = 'BTCUSDT', interval = '15m', limit = 1000, autoFetch = true } = options;
+  const {
+    symbol = 'BTCUSDT',
+    interval = '15m',
+    limit = 1000,
+    autoFetch = true,
+    supportsOpenInterest = true,
+    supportsFundingRate = true,
+    useLegacyReadEndpoints = true,
+  } = options;
 
   const [ohlcv, setOhlcv] = useState<ApiResponse<MarketData> | null>(null);
   const [openInterest, setOpenInterest] = useState<ApiResponse<OpenInterest> | null>(null);
@@ -33,10 +44,20 @@ export function useMarketData(options: UseMarketDataOptions = {}) {
     setLoading(true);
     setError(null);
     try {
+      if (!useLegacyReadEndpoints) {
+        setOhlcv(null);
+        setOpenInterest(null);
+        setFundingRate(null);
+        setFeatures(null);
+        setRegimes(null);
+        setDataQuality(null);
+        return;
+      }
+
       const [ohlcvData, oiData, frData, featData, regData, dqData] = await Promise.all([
         api.getOHLCV({ symbol, interval, limit }),
-        api.getOpenInterest({ symbol, interval, limit }),
-        api.getFundingRate({ symbol, limit }),
+        supportsOpenInterest ? api.getOpenInterest({ symbol, interval, limit }) : Promise.resolve(null),
+        supportsFundingRate ? api.getFundingRate({ symbol, limit }) : Promise.resolve(null),
         api.getFeatures({ symbol, interval, limit }),
         api.getRegimes({ symbol, interval, limit }),
         api.getDataQuality(symbol),
@@ -52,7 +73,7 @@ export function useMarketData(options: UseMarketDataOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [symbol, interval, limit]);
+  }, [symbol, interval, limit, supportsOpenInterest, supportsFundingRate, useLegacyReadEndpoints]);
 
   useEffect(() => {
     if (autoFetch) {

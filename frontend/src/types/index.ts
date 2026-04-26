@@ -96,3 +96,81 @@ export interface DataQualityResponse {
   open_interest: DataQuality;
   funding_rate: DataQuality;
 }
+
+export type ProviderDataType = 'ohlcv' | 'open_interest' | 'funding_rate' | 'features';
+
+export interface ProviderCapability {
+  data_type: ProviderDataType;
+  supported: boolean;
+  unsupported_reason: string | null;
+}
+
+export interface ProviderInfo {
+  provider: string;
+  display_name: string;
+  supports_ohlcv: boolean;
+  supports_open_interest: boolean;
+  supports_funding_rate: boolean;
+  requires_auth: boolean;
+  supported_timeframes: string[];
+  default_symbol: string | null;
+  limitations: string[];
+  capabilities: ProviderCapability[];
+}
+
+export interface ProviderSymbol {
+  symbol: string;
+  display_name: string | null;
+  asset_class: string;
+  supports_ohlcv: boolean;
+  supports_open_interest: boolean;
+  supports_funding_rate: boolean;
+  notes: string[];
+}
+
+export interface ProvidersResponse {
+  providers: ProviderInfo[];
+}
+
+export interface ProviderSymbolsResponse {
+  provider: string;
+  symbols: ProviderSymbol[];
+}
+
+export interface ProviderDownloadRequest {
+  provider: string;
+  symbol?: string;
+  timeframe: string;
+  days?: number;
+  data_types?: ProviderDataType[];
+  local_file_path?: string;
+}
+
+export interface UnsupportedCapability {
+  provider: string;
+  data_type: ProviderDataType;
+  reason: string;
+}
+
+export interface DataArtifact {
+  data_type: ProviderDataType;
+  path: string;
+  rows: number;
+  provider: string;
+  symbol: string;
+  timeframe: string;
+  first_timestamp: string | null;
+  last_timestamp: string | null;
+}
+
+export interface ProviderDownloadResult {
+  status: 'completed' | 'partial' | 'failed';
+  provider: string;
+  symbol: string;
+  timeframe: string;
+  completed_data_types: ProviderDataType[];
+  skipped_data_types: UnsupportedCapability[];
+  artifacts: DataArtifact[];
+  message: string;
+  warnings: string[];
+}

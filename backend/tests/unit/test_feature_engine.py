@@ -101,6 +101,20 @@ def test_compute_all_features_from_parquet(
     )
 
 
+def test_compute_all_features_allows_ohlcv_only_data(sample_ohlcv: pl.DataFrame):
+    repo = ParquetRepository()
+    repo.save_ohlcv(sample_ohlcv, symbol="SPY", interval="1d")
+    engine = FeatureEngine()
+
+    result = engine.compute_all_features(symbol="SPY", interval="1d")
+
+    assert result is not None
+    assert not result.is_empty()
+    assert {"atr", "range_high", "range_low", "range_mid", "volume_ratio"}.issubset(result.columns)
+    assert "oi_change_pct" not in result.columns
+    assert "funding_rate_cumsum" not in result.columns
+
+
 def test_compute_atr_rejects_missing_columns():
     engine = FeatureEngine()
 

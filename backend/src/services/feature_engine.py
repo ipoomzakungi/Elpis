@@ -1,11 +1,9 @@
 import logging
-from typing import Optional
 
 import polars as pl
 
 from src.config import get_settings
 from src.repositories.parquet_repo import ParquetRepository
-
 
 logger = logging.getLogger(__name__)
 
@@ -83,11 +81,33 @@ class FeatureEngine:
             ]
         )
 
+    def _has_non_null_values(self, df: pl.DataFrame, column: str) -> bool:
+        if column not in df.columns or df.is_empty():
+            return False
+        return bool(df.select(pl.col(column).is_not_null().any()).item())
+
+    def _drop_required_feature_nulls(self, df: pl.DataFrame) -> pl.DataFrame:
+        required_columns = [
+            "timestamp",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "atr",
+            "range_high",
+            "range_low",
+            "range_mid",
+            "volume_ratio",
+        ]
+        present_required_columns = [column for column in required_columns if column in df.columns]
+        return df.drop_nulls(subset=present_required_columns)
+
     def merge_data(
         self,
         ohlcv: pl.DataFrame,
-        oi: Optional[pl.DataFrame] = None,
-        funding: Optional[pl.DataFrame] = None,
+        oi: pl.DataFrame | None = None,
+        funding: pl.DataFrame | None = None,
     ) -> pl.DataFrame:
         """Merge OHLCV with OI and funding data by timestamp."""
         self._require_columns(
@@ -131,7 +151,7 @@ class FeatureEngine:
         self,
         symbol: str = "BTCUSDT",
         interval: str = "15m",
-    ) -> Optional[pl.DataFrame]:
+    ) -> pl.DataFrame | None:
         """Compute all features from raw data."""
         try:
             logger.info("Computing features for %s %s", symbol, interval)
@@ -148,13 +168,13 @@ class FeatureEngine:
             df = self.compute_range_levels(df, period=self.settings.range_period)
             df = self.compute_volume_ratio(df, period=self.settings.volume_ratio_period)
 
-            if "open_interest" in df.columns:
+            if self._has_non_null_values(df, "open_interest"):
                 df = self.compute_oi_change(df)
 
-            if "funding_rate" in df.columns:
+            if self._has_non_null_values(df, "funding_rate"):
                 df = self.compute_funding_features(df)
 
-            df = df.drop_nulls()
+            df = self._drop_required_feature_nulls(df)
             logger.info("Computed %s feature rows for %s %s", len(df), symbol, interval)
             return df
         except Exception:
