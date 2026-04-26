@@ -5,7 +5,7 @@ import polars as pl
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from backend.src.config import get_settings
+from src.config import get_settings
 
 
 class ParquetRepository:

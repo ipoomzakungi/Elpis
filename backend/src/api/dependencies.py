@@ -1,6 +1,6 @@
 from functools import lru_cache
-from backend.src.repositories.parquet_repo import ParquetRepository
-from backend.src.repositories.duckdb_repo import DuckDBRepository
+from src.repositories.parquet_repo import ParquetRepository
+from src.repositories.duckdb_repo import DuckDBRepository
 
 
 @lru_cache()

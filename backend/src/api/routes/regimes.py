@@ -2,8 +2,8 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
 
-from backend.src.models.features import RegimeResponse
-from backend.src.repositories.parquet_repo import ParquetRepository
+from src.models.features import RegimeResponse
+from src.repositories.parquet_repo import ParquetRepository
 
 router = APIRouter()
 

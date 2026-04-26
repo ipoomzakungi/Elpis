@@ -1,8 +1,8 @@
 import polars as pl
 from datetime import datetime
 
-from backend.src.services.binance_client import BinanceClient
-from backend.src.repositories.parquet_repo import ParquetRepository
+from src.services.binance_client import BinanceClient
+from src.repositories.parquet_repo import ParquetRepository
 
 
 class DataDownloader:

@@ -2,8 +2,8 @@ import polars as pl
 from datetime import datetime
 from typing import Optional
 
-from backend.src.config import get_settings
-from backend.src.repositories.parquet_repo import ParquetRepository
+from src.config import get_settings
+from src.repositories.parquet_repo import ParquetRepository
 
 
 class FeatureEngine:

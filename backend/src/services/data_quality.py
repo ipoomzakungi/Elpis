@@ -2,7 +2,7 @@ import polars as pl
 from datetime import datetime
 from typing import Optional
 
-from backend.src.repositories.parquet_repo import ParquetRepository
+from src.repositories.parquet_repo import ParquetRepository
 
 
 class DataQualityService:

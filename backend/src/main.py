@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.src.config import get_settings
-from backend.src.api.routes import market_data, features, regimes, data_quality
+from src.config import get_settings
+from src.api.routes import market_data, features, regimes, data_quality
 
 
 app = FastAPI(
@@ -47,7 +47,7 @@ if __name__ == "__main__":
     import uvicorn
     settings = get_settings()
     uvicorn.run(
-        "backend.src.main:app",
+        "src.main:app",
         host=settings.api_host,
         port=settings.api_port,
         reload=True,

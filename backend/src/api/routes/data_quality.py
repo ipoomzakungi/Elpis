@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Query
 
-from backend.src.models.data_quality import DataQualityResponse
-from backend.src.services.data_quality import DataQualityService
+from src.models.data_quality import DataQualityResponse
+from src.services.data_quality import DataQualityService
 
 router = APIRouter()
 

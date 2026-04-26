@@ -2,15 +2,15 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
 
-from backend.src.models.market_data import (
+from src.models.market_data import (
     DownloadRequest,
     DownloadResponse,
     MarketDataResponse,
     OpenInterestResponse,
     FundingRateResponse,
 )
-from backend.src.services.data_downloader import DataDownloader
-from backend.src.api.dependencies import get_parquet_repo
+from src.services.data_downloader import DataDownloader
+from src.api.dependencies import get_parquet_repo
 
 router = APIRouter()
 

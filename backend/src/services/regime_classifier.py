@@ -1,8 +1,8 @@
 import polars as pl
 from typing import Optional
 
-from backend.src.config import get_settings
-from backend.src.models.features import RegimeType
+from src.config import get_settings
+from src.models.features import RegimeType
 
 
 class RegimeClassifier:

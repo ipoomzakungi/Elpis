@@ -3,7 +3,7 @@ from typing import Optional
 import duckdb
 import polars as pl
 
-from backend.src.config import get_settings
+from src.config import get_settings
 
 
 class DuckDBRepository:
