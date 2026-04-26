@@ -1,0 +1,1 @@
+"""Research strategy signal generators."""

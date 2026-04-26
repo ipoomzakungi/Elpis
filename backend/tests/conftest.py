@@ -95,3 +95,37 @@ def sample_feature_rows(sample_ohlcv: pl.DataFrame) -> pl.DataFrame:
             "volume_ratio": [1.3, 1.3, 1.0, 1.0],
         }
     )
+
+
+@pytest.fixture()
+def isolated_reports_path():
+    return get_settings().data_reports_path
+
+
+@pytest.fixture()
+def sample_backtest_features() -> pl.DataFrame:
+    start = datetime(2026, 4, 1)
+    rows = []
+    regimes = ["RANGE", "RANGE", "BREAKOUT_UP", "BREAKOUT_UP", "AVOID", "RANGE"]
+    for index, regime in enumerate(regimes):
+        open_price = 100.0 + (index * 2.0)
+        rows.append(
+            {
+                "timestamp": start + timedelta(minutes=15 * index),
+                "open": open_price,
+                "high": open_price + 5.0,
+                "low": open_price - 5.0,
+                "close": open_price + 1.0,
+                "volume": 1000.0 + index,
+                "atr": 4.0,
+                "range_high": 112.0,
+                "range_low": 96.0,
+                "range_mid": 104.0,
+                "regime": regime,
+                "open_interest": 10000.0 + (index * 100.0),
+                "oi_change_pct": 1.0 + index,
+                "volume_ratio": 1.1,
+                "funding_rate": 0.0001,
+            }
+        )
+    return pl.DataFrame(rows)

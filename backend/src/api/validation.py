@@ -13,6 +13,35 @@ def bad_request(message: str) -> None:
     raise HTTPException(status_code=400, detail=message)
 
 
+def api_error(
+    status_code: int,
+    code: str,
+    message: str,
+    details: list[dict[str, str]] | None = None,
+) -> None:
+    raise HTTPException(
+        status_code=status_code,
+        detail={"code": code, "message": message, "details": details or []},
+    )
+
+
+def invalid_backtest_config(message: str, details: list[dict[str, str]] | None = None) -> None:
+    api_error(400, "VALIDATION_ERROR", message, details)
+
+
+def backtest_not_found(run_id: str) -> None:
+    api_error(404, "NOT_FOUND", f"Backtest run '{run_id}' was not found")
+
+
+def processed_features_not_found(symbol: str, timeframe: str, feature_path: str) -> None:
+    api_error(
+        404,
+        "NOT_FOUND",
+        f"Processed features not found for {symbol} {timeframe}",
+        [{"field": "feature_path", "message": f"{feature_path} does not exist"}],
+    )
+
+
 def validate_symbol(symbol: str) -> str:
     normalized = symbol.upper().strip()
     if normalized not in SUPPORTED_SYMBOLS:

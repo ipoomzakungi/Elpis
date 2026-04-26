@@ -56,6 +56,12 @@ async def validation_exception_handler(
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    if isinstance(exc.detail, dict):
+        if "error" in exc.detail:
+            return JSONResponse(status_code=exc.status_code, content=exc.detail)
+        if {"code", "message", "details"}.issubset(exc.detail):
+            return JSONResponse(status_code=exc.status_code, content={"error": exc.detail})
+
     if exc.status_code == 400:
         code = "VALIDATION_ERROR"
     elif exc.status_code == 404:
