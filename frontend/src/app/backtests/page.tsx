@@ -192,9 +192,11 @@ export default function BacktestsPage() {
                     rows={metrics?.return_by_strategy_mode ?? []}
                     columns={[
                       { key: 'strategy_mode', label: 'Mode' },
+                      { key: 'category', label: 'Category' },
                       { key: 'number_of_trades', label: 'Trades' },
                       { key: 'total_return_pct', label: 'Total Return %', format: formatNumber },
                       { key: 'max_drawdown_pct', label: 'Max Drawdown %', format: formatNumber },
+                      { key: 'equity_basis', label: 'Equity Basis' },
                     ]}
                   />
                 </ReportSection>

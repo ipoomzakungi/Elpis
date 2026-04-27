@@ -164,13 +164,21 @@ def _strategy_mode_summary(
     summary = _trade_group_summary(mode_trades)
     summary.update(
         {
+            "category": "baseline" if mode in BASELINE_MODES else "strategy",
             "total_return": total_return,
             "total_return_pct": total_return * 100,
             "max_drawdown": max_drawdown,
             "max_drawdown_pct": max_drawdown * 100,
+            "equity_basis": _equity_basis(mode_equity),
         }
     )
     return summary
+
+
+def _equity_basis(equity_curve: Sequence[EquityPoint]) -> str:
+    if any(point.equity_basis == "total_mark_to_market" for point in equity_curve):
+        return "total_mark_to_market"
+    return "realized_only"
 
 
 def _trade_group_summary(trades: Sequence[TradeRecord]) -> dict[str, Any]:

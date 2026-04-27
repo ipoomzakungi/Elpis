@@ -17,6 +17,11 @@ function formatMetric(value?: number | null, suffix = '') {
   return `${value.toFixed(2)}${suffix}`
 }
 
+function formatReturnMetric(value?: number | null) {
+  if (value === null || value === undefined) return 'Per-mode only'
+  return `${value.toFixed(2)}%`
+}
+
 export default function BacktestSummaryCards({
   metrics: summary,
   totalReturnPct,
@@ -27,7 +32,7 @@ export default function BacktestSummaryCards({
   numberOfTrades,
 }: BacktestSummaryCardsProps) {
   const metrics = [
-    { label: 'Total Return', value: formatMetric(summary?.total_return_pct ?? totalReturnPct, '%') },
+    { label: 'Total Return', value: formatReturnMetric(summary?.total_return_pct ?? totalReturnPct) },
     { label: 'Max Drawdown', value: formatMetric(summary?.max_drawdown_pct ?? maxDrawdownPct, '%') },
     { label: 'Profit Factor', value: formatMetric(summary?.profit_factor ?? profitFactor) },
     { label: 'Win Rate', value: formatMetric(toPercent(summary?.win_rate ?? winRate), '%') },

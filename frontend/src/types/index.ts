@@ -178,10 +178,29 @@ export interface ProviderDownloadResult {
 export type BacktestStatus = 'completed' | 'failed' | 'partial';
 export type BacktestStrategyMode = 'grid_range' | 'breakout' | 'buy_hold' | 'price_breakout' | 'no_trade';
 export type BacktestBaselineMode = 'buy_hold' | 'price_breakout' | 'no_trade';
-export type BacktestArtifactType = 'metadata' | 'config' | 'trades' | 'equity' | 'metrics' | 'report_json' | 'report_markdown';
+export type BacktestArtifactType =
+  | 'metadata'
+  | 'config'
+  | 'trades'
+  | 'equity'
+  | 'metrics'
+  | 'report_json'
+  | 'report_markdown'
+  | 'validation_metadata'
+  | 'validation_config'
+  | 'validation_stress'
+  | 'validation_sensitivity'
+  | 'validation_walk_forward'
+  | 'validation_concentration'
+  | 'validation_report_json'
+  | 'validation_report_markdown';
 export type BacktestArtifactFormat = 'json' | 'parquet' | 'markdown';
 export type BacktestTradeSide = 'long' | 'short';
 export type BacktestExitReason = 'take_profit' | 'stop_loss' | 'end_of_data' | 'invalidated';
+export type ValidationStressProfileName = 'normal' | 'high_fee' | 'high_slippage' | 'worst_reasonable_cost';
+export type ValidationSplitStatus = 'evaluated' | 'insufficient_data';
+export type StressOutcome = 'remained_positive' | 'turned_negative' | 'no_trades' | 'not_evaluable';
+export type DrawdownRecoveryStatus = 'recovered' | 'not_recovered' | 'not_applicable';
 
 export interface BacktestArtifact {
   artifact_type: BacktestArtifactType;
@@ -261,8 +280,8 @@ export interface BacktestTrade {
 }
 
 export interface BacktestMetrics {
-  total_return: number;
-  total_return_pct: number;
+  total_return: number | null;
+  total_return_pct: number | null;
   max_drawdown: number;
   max_drawdown_pct: number;
   profit_factor: number | null;
@@ -288,6 +307,10 @@ export interface BacktestEquityPoint {
   drawdown_pct: number;
   realized_pnl: number;
   open_position: boolean;
+  realized_equity: number | null;
+  unrealized_pnl: number | null;
+  total_equity: number | null;
+  equity_basis: string;
 }
 
 export interface BacktestRunListResponse {
@@ -319,4 +342,171 @@ export interface BacktestEquityResponse {
   meta: {
     count: number;
   };
+}
+
+export interface CapitalSizingConfig {
+  buy_hold_capital_fraction: number;
+  buy_hold_sizing_mode: 'capital_fraction' | 'risk_fractional';
+  active_risk_per_trade: number | null;
+  leverage: number;
+  notional_cap_enabled: boolean;
+}
+
+export interface CostStressProfile {
+  name: ValidationStressProfileName;
+  fee_rate: number;
+  slippage_rate: number;
+  description: string;
+}
+
+export interface SensitivityGrid {
+  grid_entry_threshold: number[];
+  atr_stop_buffer: number[];
+  breakout_risk_reward_multiple: number[];
+  fee_slippage_profile: ValidationStressProfileName[];
+}
+
+export interface WalkForwardConfig {
+  split_count: number;
+  minimum_rows_per_split: number;
+}
+
+export interface ValidationRunRequest {
+  base_config: BacktestRunConfig;
+  capital_sizing: CapitalSizingConfig;
+  stress_profiles: ValidationStressProfileName[];
+  sensitivity_grid: SensitivityGrid;
+  walk_forward: WalkForwardConfig;
+  include_real_data_check: boolean;
+}
+
+export interface NotionalCapEvent {
+  trade_id: string | null;
+  strategy_mode: BacktestStrategyMode;
+  requested_notional: number;
+  capped_notional: number;
+  available_equity: number;
+  reason: string;
+}
+
+export interface ModeMetrics {
+  strategy_mode: BacktestStrategyMode;
+  category: string;
+  total_return_pct: number | null;
+  max_drawdown_pct: number | null;
+  number_of_trades: number;
+  profit_factor: number | null;
+  win_rate: number | null;
+  expectancy: number | null;
+  equity_basis: string;
+  notes: string[];
+}
+
+export interface StressResult {
+  profile: CostStressProfile;
+  strategy_mode: BacktestStrategyMode;
+  category: string;
+  metrics: ModeMetrics;
+  outcome: StressOutcome;
+  notes: string[];
+}
+
+export interface ParameterSensitivityResult {
+  parameter_set_id: string;
+  grid_entry_threshold: number | null;
+  atr_stop_buffer: number | null;
+  breakout_risk_reward_multiple: number | null;
+  stress_profile_name: ValidationStressProfileName | null;
+  strategy_mode: BacktestStrategyMode;
+  metrics: ModeMetrics;
+  fragility_flag: boolean;
+  notes: string[];
+}
+
+export interface WalkForwardResult {
+  split_id: string;
+  start_timestamp: string;
+  end_timestamp: string;
+  row_count: number;
+  status: ValidationSplitStatus;
+  mode_metrics: ModeMetrics[];
+  notes: string[];
+}
+
+export interface RegimeCoverageReport {
+  bar_counts: Record<string, number>;
+  trades_per_regime: Record<string, number>;
+  return_by_regime: Record<string, unknown>;
+  coverage_notes: string[];
+}
+
+export interface TradeConcentrationReport {
+  top_1_profit_contribution_pct: number | null;
+  top_5_profit_contribution_pct: number | null;
+  top_10_profit_contribution_pct: number | null;
+  best_trades: BacktestTrade[];
+  worst_trades: BacktestTrade[];
+  max_consecutive_losses: number;
+  drawdown_recovery_bars: number | null;
+  drawdown_recovery_status: DrawdownRecoveryStatus;
+  notes: string[];
+}
+
+export interface ValidationRun {
+  validation_run_id: string;
+  status: BacktestStatus;
+  created_at: string;
+  completed_at: string | null;
+  symbol: string;
+  provider: string | null;
+  timeframe: string;
+  source_backtest_config: BacktestRunConfig;
+  data_identity: Record<string, unknown>;
+  mode_metrics: ModeMetrics[];
+  stress_results: StressResult[];
+  sensitivity_results: ParameterSensitivityResult[];
+  walk_forward_results: WalkForwardResult[];
+  regime_coverage: RegimeCoverageReport;
+  concentration_report: TradeConcentrationReport;
+  notional_cap_events: NotionalCapEvent[];
+  warnings: string[];
+  artifacts: BacktestArtifact[];
+}
+
+export interface ValidationRunSummary {
+  validation_run_id: string;
+  status: BacktestStatus;
+  created_at: string;
+  symbol: string;
+  provider: string | null;
+  timeframe: string;
+  mode_count: number;
+  stress_profile_count: number;
+  walk_forward_split_count: number;
+  warnings: string[];
+}
+
+export interface ValidationRunListResponse {
+  runs: ValidationRunSummary[];
+}
+
+export interface ValidationStressResponse {
+  validation_run_id: string;
+  data: StressResult[];
+}
+
+export interface ValidationSensitivityResponse {
+  validation_run_id: string;
+  data: ParameterSensitivityResult[];
+}
+
+export interface ValidationWalkForwardResponse {
+  validation_run_id: string;
+  data: WalkForwardResult[];
+}
+
+export interface ValidationConcentrationResponse {
+  validation_run_id: string;
+  regime_coverage: RegimeCoverageReport;
+  concentration_report: TradeConcentrationReport;
 }

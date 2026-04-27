@@ -366,27 +366,34 @@ class BacktestEngine:
         trades_by_exit_timestamp: dict[Any, list[TradeRecord]] = {}
         for trade in trades:
             trades_by_exit_timestamp.setdefault(trade.exit_timestamp, []).append(trade)
-        entry_timestamps = {trade.entry_timestamp for trade in trades}
-        exit_timestamps = {trade.exit_timestamp for trade in trades}
         equity_curve: list[EquityPoint] = []
 
         for row in rows:
             timestamp = row["timestamp"]
             for trade in trades_by_exit_timestamp.get(timestamp, []):
                 realized_pnl += trade.net_pnl
-            equity = request.initial_equity + realized_pnl
-            peak_equity = max(peak_equity, equity)
-            drawdown = (equity - peak_equity) / peak_equity if peak_equity else 0.0
+            realized_equity = request.initial_equity + realized_pnl
+            open_trades = [
+                trade for trade in trades if trade.entry_timestamp <= timestamp < trade.exit_timestamp
+            ]
+            unrealized_pnl = sum(_unrealized_trade_pnl(trade, float(row["close"])) for trade in open_trades)
+            total_equity = realized_equity + unrealized_pnl
+            equity_basis = "total_mark_to_market" if open_trades else "realized_only"
+            peak_equity = max(peak_equity, total_equity)
+            drawdown = (total_equity - peak_equity) / peak_equity if peak_equity else 0.0
             equity_curve.append(
                 EquityPoint(
                     timestamp=timestamp,
                     strategy_mode=strategy_mode,
-                    equity=equity,
+                    equity=total_equity,
                     drawdown=drawdown,
                     drawdown_pct=drawdown * 100,
                     realized_pnl=realized_pnl,
-                    open_position=timestamp in entry_timestamps
-                    and timestamp not in exit_timestamps,
+                    open_position=bool(open_trades),
+                    realized_equity=realized_equity,
+                    unrealized_pnl=unrealized_pnl,
+                    total_equity=total_equity,
+                    equity_basis=equity_basis,
                 )
             )
 
@@ -449,3 +456,9 @@ class BacktestEngine:
 
 def _timestamp_to_text(value: Any) -> str:
     return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
+
+def _unrealized_trade_pnl(trade: TradeRecord, close_price: float) -> float:
+    if trade.side == TradeSide.LONG:
+        return (close_price - trade.entry_price) * trade.quantity
+    return (trade.entry_price - close_price) * trade.quantity

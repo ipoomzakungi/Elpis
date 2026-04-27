@@ -19,9 +19,9 @@
 
 **Purpose**: Prepare test helpers and CI/artifact-guard scaffolding without changing backtest behavior.
 
-- [ ] T001 [P] Create validation test data builders for processed feature rows in `backend/tests/helpers/test_backtest_validation_data.py`
-- [ ] T002 [P] Add validation report fixture helpers for runs, trades, metrics, and equity rows in `backend/tests/helpers/test_backtest_validation_reports.py`
-- [ ] T003 [P] Create artifact guard script placeholder with ignored-path policy constants in `scripts/check_generated_artifacts.ps1`
+- [x] T001 [P] Create validation test data builders for processed feature rows in `backend/tests/helpers/test_backtest_validation_data.py`
+- [x] T002 [P] Add validation report fixture helpers for runs, trades, metrics, and equity rows in `backend/tests/helpers/test_backtest_validation_reports.py`
+- [x] T003 [P] Create artifact guard script placeholder with ignored-path policy constants in `scripts/check_generated_artifacts.ps1`
 
 ---
 
@@ -31,13 +31,13 @@
 
 **CRITICAL**: No user story implementation should begin until this phase is complete.
 
-- [ ] T004 Add validation request/response, capital sizing, stress profile, sensitivity, walk-forward, coverage, and concentration schemas in `backend/src/models/backtest.py`
-- [ ] T005 Add validation artifact enum values and backward-compatible report fields in `backend/src/models/backtest.py`
-- [ ] T006 [P] Create validation orchestration module with empty runner interfaces in `backend/src/backtest/validation.py`
-- [ ] T007 Add validation artifact write/read/list methods under `data/reports/{validation_run_id}` in `backend/src/backtest/report_store.py`
-- [ ] T008 Add validation report JSON and Markdown composition entry points in `backend/src/reports/writer.py`
-- [ ] T009 Register static validation API route skeletons before dynamic backtest run routes in `backend/src/api/routes/backtests.py`
-- [ ] T010 [P] Add frontend validation types for run summaries, reports, stress rows, sensitivity rows, walk-forward rows, and concentration rows in `frontend/src/types/index.ts`
+- [x] T004 Add validation request/response, capital sizing, stress profile, sensitivity, walk-forward, coverage, and concentration schemas in `backend/src/models/backtest.py`
+- [x] T005 Add validation artifact enum values and backward-compatible report fields in `backend/src/models/backtest.py`
+- [x] T006 [P] Create validation orchestration module with empty runner interfaces in `backend/src/backtest/validation.py`
+- [x] T007 Add validation artifact write/read/list methods under `data/reports/{validation_run_id}` in `backend/src/backtest/report_store.py`
+- [x] T008 Add validation report JSON and Markdown composition entry points in `backend/src/reports/writer.py`
+- [x] T009 Register static validation API route skeletons before dynamic backtest run routes in `backend/src/api/routes/backtests.py`
+- [x] T010 [P] Add frontend validation types for run summaries, reports, stress rows, sensitivity rows, walk-forward rows, and concentration rows in `frontend/src/types/index.ts`
 
 **Checkpoint**: Foundation ready; user story implementation can now begin in priority order or in parallel where files do not conflict.
 
@@ -54,21 +54,21 @@
 - [x] T011 [P] [US1] Add buy-and-hold capital fraction sizing tests in `backend/tests/integration/test_backtest_comparison_flow.py`
 - [x] T012 [P] [US1] Add no-leverage notional cap and cap-event tests in `backend/tests/unit/test_backtest_portfolio.py` and `backend/tests/integration/test_backtest_comparison_flow.py`
 - [x] T013 [P] [US1] Add per-mode metric separation and comparison-label tests in `backend/tests/unit/test_backtest_metrics.py` and `backend/tests/integration/test_backtest_comparison_flow.py`
-- [ ] T014 [P] [US1] Add mark-to-market total equity and realized-only labeling tests in `backend/tests/unit/test_backtest_equity_mark_to_market.py`
+- [x] T014 [P] [US1] Add mark-to-market total equity and realized-only labeling tests in `backend/tests/unit/test_backtest_equity_mark_to_market.py`
 
 ### Implementation for User Story 1
 
 - [x] T015 [US1] Implement capital-fraction sizing and no-leverage notional cap calculation in `backend/src/backtest/portfolio.py`
-- [ ] T016 [US1] Preserve price-only and no-trade baselines while marking buy-and-hold as passive capital-based baseline in `backend/src/strategies/baselines.py`
+- [x] T016 [US1] Preserve price-only and no-trade baselines while marking buy-and-hold as passive capital-based baseline in `backend/src/strategies/baselines.py`
 - [x] T017 [US1] Route buy-and-hold through capital sizing and active strategies through capped risk sizing in `backend/src/backtest/engine.py`
-- [ ] T018 [US1] Add cap-event, realized equity, unrealized PnL, total equity, and equity-basis fields to core backtest schemas in `backend/src/models/backtest.py`
-- [ ] T019 [US1] Build mark-to-market total equity and drawdown from close prices for open positions in `backend/src/backtest/engine.py`
+- [x] T018 [US1] Add cap-event, realized equity, unrealized PnL, total equity, and equity-basis fields to core backtest schemas in `backend/src/models/backtest.py`
+- [x] T019 [US1] Build mark-to-market total equity and drawdown from close prices for open positions in `backend/src/backtest/engine.py`
 - [x] T020 [US1] Promote per-mode strategy and baseline metrics while relabeling any aggregate summary as comparison-only in `backend/src/backtest/metrics.py`
-- [ ] T021 [US1] Update report JSON and Markdown labels for independent mode metrics, passive baselines, cap events, and realized versus total equity in `backend/src/reports/writer.py`
-- [ ] T022 [US1] Update backend API metrics response rows for per-mode strategy and baseline categories in `backend/src/api/routes/backtests.py`
-- [ ] T023 [US1] Update frontend backtest report tables for separate active strategy and passive baseline metrics in `frontend/src/app/backtests/page.tsx`
-- [ ] T024 [US1] Update frontend summary cards to avoid unlabeled global portfolio return display in `frontend/src/components/panels/BacktestSummaryCards.tsx`
-- [ ] T025 [US1] Update frontend equity and trade type fields for cap events and realized/total equity in `frontend/src/types/index.ts`
+- [x] T021 [US1] Update report JSON and Markdown labels for independent mode metrics, passive baselines, cap events, and realized versus total equity in `backend/src/reports/writer.py`
+- [x] T022 [US1] Update backend API metrics response rows for per-mode strategy and baseline categories in `backend/src/api/routes/backtests.py`
+- [x] T023 [US1] Update frontend backtest report tables for separate active strategy and passive baseline metrics in `frontend/src/app/backtests/page.tsx`
+- [x] T024 [US1] Update frontend summary cards to avoid unlabeled global portfolio return display in `frontend/src/components/panels/BacktestSummaryCards.tsx`
+- [x] T025 [US1] Update frontend equity and trade type fields for cap events and realized/total equity in `frontend/src/types/index.ts`
 
 **Checkpoint**: US1 should pass its unit tests and a controlled multi-mode backtest should show separate, correctly labeled active strategy and baseline metrics.
 

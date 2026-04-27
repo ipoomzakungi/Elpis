@@ -108,6 +108,36 @@ class ReportFormat(StrEnum):
     BOTH = "both"
 
 
+class CapitalSizingMode(StrEnum):
+    CAPITAL_FRACTION = "capital_fraction"
+    RISK_FRACTIONAL = "risk_fractional"
+
+
+class CostStressProfileName(StrEnum):
+    NORMAL = "normal"
+    HIGH_FEE = "high_fee"
+    HIGH_SLIPPAGE = "high_slippage"
+    WORST_REASONABLE_COST = "worst_reasonable_cost"
+
+
+class ValidationSplitStatus(StrEnum):
+    EVALUATED = "evaluated"
+    INSUFFICIENT_DATA = "insufficient_data"
+
+
+class StressOutcome(StrEnum):
+    REMAINED_POSITIVE = "remained_positive"
+    TURNED_NEGATIVE = "turned_negative"
+    NO_TRADES = "no_trades"
+    NOT_EVALUABLE = "not_evaluable"
+
+
+class DrawdownRecoveryStatus(StrEnum):
+    RECOVERED = "recovered"
+    NOT_RECOVERED = "not_recovered"
+    NOT_APPLICABLE = "not_applicable"
+
+
 class AmbiguousIntrabarPolicy(StrEnum):
     STOP_FIRST = "stop_first"
 
@@ -120,6 +150,14 @@ class ReportArtifactType(StrEnum):
     METRICS = "metrics"
     REPORT_JSON = "report_json"
     REPORT_MARKDOWN = "report_markdown"
+    VALIDATION_METADATA = "validation_metadata"
+    VALIDATION_CONFIG = "validation_config"
+    VALIDATION_STRESS = "validation_stress"
+    VALIDATION_SENSITIVITY = "validation_sensitivity"
+    VALIDATION_WALK_FORWARD = "validation_walk_forward"
+    VALIDATION_CONCENTRATION = "validation_concentration"
+    VALIDATION_REPORT_JSON = "validation_report_json"
+    VALIDATION_REPORT_MARKDOWN = "validation_report_markdown"
 
 
 class ArtifactFormat(StrEnum):
@@ -260,6 +298,10 @@ class EquityPoint(BaseModel):
     drawdown_pct: float = Field(..., le=0)
     realized_pnl: float
     open_position: bool
+    realized_equity: float | None = Field(default=None, ge=0)
+    unrealized_pnl: float | None = None
+    total_equity: float | None = Field(default=None, ge=0)
+    equity_basis: str = "realized_only"
 
 
 class MetricsSummary(BaseModel):
@@ -354,3 +396,178 @@ class BacktestEquityResponse(BaseModel):
     run_id: str
     data: list[EquityPoint]
     meta: dict[str, int]
+
+
+class CapitalSizingConfig(StrictModel):
+    buy_hold_capital_fraction: float = Field(default=1.0, gt=0, le=1)
+    buy_hold_sizing_mode: CapitalSizingMode = Field(default=CapitalSizingMode.CAPITAL_FRACTION)
+    active_risk_per_trade: float | None = Field(default=None, gt=0, le=1)
+    leverage: float = Field(default=1, ge=1, le=1)
+    notional_cap_enabled: bool = Field(default=True)
+
+    @model_validator(mode="after")
+    def validate_no_leverage_cap(self) -> "CapitalSizingConfig":
+        if not self.notional_cap_enabled:
+            raise ValueError("notional cap must remain enabled in v0 validation")
+        return self
+
+
+class CostStressProfile(StrictModel):
+    name: CostStressProfileName
+    fee_rate: float = Field(..., ge=0, le=0.1)
+    slippage_rate: float = Field(..., ge=0, le=0.1)
+    description: str
+
+
+class SensitivityGrid(StrictModel):
+    grid_entry_threshold: list[float] = Field(default_factory=list)
+    atr_stop_buffer: list[float] = Field(default_factory=list)
+    breakout_risk_reward_multiple: list[float] = Field(default_factory=list)
+    fee_slippage_profile: list[CostStressProfileName] = Field(default_factory=list)
+
+
+class WalkForwardConfig(StrictModel):
+    split_count: int = Field(default=3, ge=1, le=20)
+    minimum_rows_per_split: int = Field(default=20, ge=1)
+
+
+class ValidationRunRequest(StrictModel):
+    base_config: BacktestRunRequest
+    capital_sizing: CapitalSizingConfig = Field(default_factory=CapitalSizingConfig)
+    stress_profiles: list[CostStressProfileName] = Field(default_factory=list)
+    sensitivity_grid: SensitivityGrid = Field(default_factory=SensitivityGrid)
+    walk_forward: WalkForwardConfig = Field(default_factory=WalkForwardConfig)
+    include_real_data_check: bool = Field(default=True)
+
+
+class NotionalCapEvent(BaseModel):
+    trade_id: str | None = None
+    strategy_mode: StrategyMode
+    requested_notional: float = Field(..., gt=0)
+    capped_notional: float = Field(..., gt=0)
+    available_equity: float = Field(..., gt=0)
+    reason: str
+
+
+class ModeMetrics(BaseModel):
+    strategy_mode: StrategyMode
+    category: str
+    total_return_pct: float | None = None
+    max_drawdown_pct: float | None = None
+    number_of_trades: int = Field(default=0, ge=0)
+    profit_factor: float | None = None
+    win_rate: float | None = None
+    expectancy: float | None = None
+    equity_basis: str = "realized_only"
+    notes: list[str] = Field(default_factory=list)
+
+
+class StressResult(BaseModel):
+    profile: CostStressProfile
+    strategy_mode: StrategyMode
+    category: str
+    metrics: ModeMetrics
+    outcome: StressOutcome
+    notes: list[str] = Field(default_factory=list)
+
+
+class ParameterSensitivityResult(BaseModel):
+    parameter_set_id: str
+    grid_entry_threshold: float | None = None
+    atr_stop_buffer: float | None = None
+    breakout_risk_reward_multiple: float | None = None
+    stress_profile_name: CostStressProfileName | None = None
+    strategy_mode: StrategyMode
+    metrics: ModeMetrics
+    fragility_flag: bool = False
+    notes: list[str] = Field(default_factory=list)
+
+
+class WalkForwardResult(BaseModel):
+    split_id: str
+    start_timestamp: datetime
+    end_timestamp: datetime
+    row_count: int = Field(..., ge=0)
+    status: ValidationSplitStatus
+    mode_metrics: list[ModeMetrics] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+
+
+class RegimeCoverageReport(BaseModel):
+    bar_counts: dict[str, int] = Field(default_factory=dict)
+    trades_per_regime: dict[str, int] = Field(default_factory=dict)
+    return_by_regime: dict[str, Any] = Field(default_factory=dict)
+    coverage_notes: list[str] = Field(default_factory=list)
+
+
+class TradeConcentrationReport(BaseModel):
+    top_1_profit_contribution_pct: float | None = None
+    top_5_profit_contribution_pct: float | None = None
+    top_10_profit_contribution_pct: float | None = None
+    best_trades: list[TradeRecord] = Field(default_factory=list)
+    worst_trades: list[TradeRecord] = Field(default_factory=list)
+    max_consecutive_losses: int = Field(default=0, ge=0)
+    drawdown_recovery_bars: int | None = Field(default=None, ge=0)
+    drawdown_recovery_status: DrawdownRecoveryStatus = Field(
+        default=DrawdownRecoveryStatus.NOT_APPLICABLE
+    )
+    notes: list[str] = Field(default_factory=list)
+
+
+class ValidationRun(BaseModel):
+    validation_run_id: str
+    status: BacktestStatus
+    created_at: datetime
+    completed_at: datetime | None = None
+    symbol: str
+    provider: str | None = None
+    timeframe: str
+    source_backtest_config: BacktestRunRequest
+    data_identity: dict[str, Any] = Field(default_factory=dict)
+    mode_metrics: list[ModeMetrics] = Field(default_factory=list)
+    stress_results: list[StressResult] = Field(default_factory=list)
+    sensitivity_results: list[ParameterSensitivityResult] = Field(default_factory=list)
+    walk_forward_results: list[WalkForwardResult] = Field(default_factory=list)
+    regime_coverage: RegimeCoverageReport = Field(default_factory=RegimeCoverageReport)
+    concentration_report: TradeConcentrationReport = Field(default_factory=TradeConcentrationReport)
+    notional_cap_events: list[NotionalCapEvent] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    artifacts: list[ReportArtifact] = Field(default_factory=list)
+
+
+class ValidationRunSummary(BaseModel):
+    validation_run_id: str
+    status: BacktestStatus
+    created_at: datetime
+    symbol: str
+    provider: str | None = None
+    timeframe: str
+    mode_count: int = Field(default=0, ge=0)
+    stress_profile_count: int = Field(default=0, ge=0)
+    walk_forward_split_count: int = Field(default=0, ge=0)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class ValidationRunListResponse(BaseModel):
+    runs: list[ValidationRunSummary] = Field(default_factory=list)
+
+
+class ValidationStressResponse(BaseModel):
+    validation_run_id: str
+    data: list[StressResult] = Field(default_factory=list)
+
+
+class ValidationSensitivityResponse(BaseModel):
+    validation_run_id: str
+    data: list[ParameterSensitivityResult] = Field(default_factory=list)
+
+
+class ValidationWalkForwardResponse(BaseModel):
+    validation_run_id: str
+    data: list[WalkForwardResult] = Field(default_factory=list)
+
+
+class ValidationConcentrationResponse(BaseModel):
+    validation_run_id: str
+    regime_coverage: RegimeCoverageReport = Field(default_factory=RegimeCoverageReport)
+    concentration_report: TradeConcentrationReport = Field(default_factory=TradeConcentrationReport)

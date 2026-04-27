@@ -2,7 +2,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from src.models.backtest import BacktestRun, MetricsSummary
+from src.models.backtest import BacktestRun, MetricsSummary, ValidationRun
 
 RESEARCH_ONLY_WARNING = (
     "Backtest results are historical simulation outputs under documented assumptions only; "
@@ -49,6 +49,16 @@ def compose_report_json(
         "return_by_strategy_mode": (metrics_payload or {}).get("return_by_strategy_mode", {}),
         "return_by_symbol_provider": (metrics_payload or {}).get("return_by_symbol_provider", {}),
         "baseline_comparison": (metrics_payload or {}).get("baseline_comparison", []),
+        "mode_comparison_label": (
+            "Strategy and baseline modes are independent comparisons, not a combined portfolio."
+        ),
+        "equity_basis_note": (
+            "Equity uses total mark-to-market values while positions are open and realized-only "
+            "values when no position is open."
+        ),
+        "notional_cap_note": (
+            "No-leverage cap events are recorded in trade assumptions_snapshot.sizing when present."
+        ),
         "notes": notes,
     }
 
@@ -94,13 +104,21 @@ def compose_report_markdown(
         f"Max drawdown %: {metrics_payload.get('max_drawdown_pct')}",
         f"Trades: {metrics_payload.get('number_of_trades')}",
         "",
+        "## Mode Comparison Semantics",
+        "",
+        report["mode_comparison_label"],
+        report["equity_basis_note"],
+        report["notional_cap_note"],
+        "",
         "## Strategy Mode Performance",
         "",
     ]
     for strategy_mode, summary in report["return_by_strategy_mode"].items():
         lines.append(
             f"- {strategy_mode}: total return % {summary.get('total_return_pct')}, "
-            f"trades {summary.get('number_of_trades')}"
+            f"trades {summary.get('number_of_trades')}, "
+            f"category {summary.get('category')}, "
+            f"equity basis {summary.get('equity_basis')}"
         )
     lines.extend(
         [
@@ -135,6 +153,65 @@ def compose_report_markdown(
         ]
     )
     lines.extend(f"- {limitation}" for limitation in report["limitations"])
+    lines.extend(
+        [
+            "",
+            "## Notes",
+            "",
+        ]
+    )
+    lines.extend(f"- {note}" for note in report["notes"])
+    return "\n".join(lines) + "\n"
+
+
+def compose_validation_report_json(
+    validation_run: ValidationRun | dict[str, Any],
+    extra_notes: list[str] | None = None,
+) -> dict[str, Any]:
+    notes = [RESEARCH_ONLY_WARNING, NO_INTRABAR_LIMITATION]
+    if extra_notes:
+        notes.extend(extra_notes)
+
+    run_payload = _to_jsonable(validation_run)
+    return {
+        "validation_run": run_payload,
+        "research_disclaimer": RESEARCH_ONLY_WARNING,
+        "data_identity": run_payload.get("data_identity", {}),
+        "mode_metrics": run_payload.get("mode_metrics", []),
+        "stress_results": run_payload.get("stress_results", []),
+        "sensitivity_results": run_payload.get("sensitivity_results", []),
+        "walk_forward_results": run_payload.get("walk_forward_results", []),
+        "regime_coverage": run_payload.get("regime_coverage", {}),
+        "concentration_report": run_payload.get("concentration_report", {}),
+        "notional_cap_events": run_payload.get("notional_cap_events", []),
+        "warnings": run_payload.get("warnings", []),
+        "notes": notes,
+    }
+
+
+def compose_validation_report_markdown(
+    validation_run: ValidationRun | dict[str, Any],
+    extra_notes: list[str] | None = None,
+) -> str:
+    report = compose_validation_report_json(validation_run, extra_notes=extra_notes)
+    run_payload = report["validation_run"]
+    lines = [
+        "# Validation Report",
+        "",
+        f"Validation Run ID: {run_payload.get('validation_run_id', 'unknown')}",
+        f"Status: {run_payload.get('status', 'unknown')}",
+        f"Symbol: {run_payload.get('symbol', 'unknown')}",
+        f"Timeframe: {run_payload.get('timeframe', 'unknown')}",
+        "",
+        "## Mode Metrics",
+        "",
+    ]
+    for row in report["mode_metrics"]:
+        lines.append(
+            f"- {row.get('strategy_mode')}: {row.get('category')}, "
+            f"total return % {row.get('total_return_pct')}, "
+            f"max drawdown % {row.get('max_drawdown_pct')}"
+        )
     lines.extend(
         [
             "",

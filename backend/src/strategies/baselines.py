@@ -21,7 +21,7 @@ def generate_buy_hold_signals(rows: Sequence[dict[str, Any]]) -> list[StrategySi
             stop_loss=0.01,
             take_profit=None,
             regime=first_row.get("regime"),
-            reason="passive_buy_hold_baseline",
+            reason="passive_capital_based_buy_hold_baseline",
         )
     ]
 

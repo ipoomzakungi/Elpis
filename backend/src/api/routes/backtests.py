@@ -2,9 +2,16 @@ import logging
 
 from fastapi import APIRouter, HTTPException, Query
 
-from src.api.validation import backtest_not_found, invalid_backtest_config, processed_features_not_found
+from src.api.validation import (
+    backtest_not_found,
+    invalid_backtest_config,
+    processed_features_not_found,
+    validation_not_implemented,
+    validation_report_not_found,
+)
 from src.backtest.engine import BacktestEngine, BacktestFeatureNotFoundError
 from src.backtest.report_store import ReportStore, ReportStoreError
+from src.backtest.validation import ValidationExecutionNotImplementedError, ValidationReportService
 from src.models.backtest import (
     BacktestEquityResponse,
     BacktestMetricsResponse,
@@ -14,6 +21,13 @@ from src.models.backtest import (
     BacktestRunResponse,
     BacktestTradesResponse,
     PaginationMeta,
+    ValidationConcentrationResponse,
+    ValidationRun,
+    ValidationRunListResponse,
+    ValidationRunRequest,
+    ValidationSensitivityResponse,
+    ValidationStressResponse,
+    ValidationWalkForwardResponse,
 )
 
 router = APIRouter()
@@ -46,6 +60,87 @@ async def run_backtest(request: BacktestRunRequest) -> BacktestRunResponse:
 async def list_backtests() -> BacktestRunListResponse:
     """List saved local research backtest runs."""
     return BacktestRunListResponse(runs=ReportStore().list_run_summaries())
+
+
+@router.post("/backtests/validation/run", response_model=ValidationRun)
+async def run_validation_report(request: ValidationRunRequest) -> ValidationRun:
+    """Run a synchronous local research validation report."""
+    try:
+        return ValidationReportService().run(request)
+    except ValidationExecutionNotImplementedError:
+        validation_not_implemented()
+
+    raise HTTPException(status_code=500, detail="Validation report run failed")
+
+
+@router.get("/backtests/validation", response_model=ValidationRunListResponse)
+async def list_validation_reports() -> ValidationRunListResponse:
+    """List saved local research validation reports."""
+    return ValidationReportService().list_runs()
+
+
+@router.get("/backtests/validation/{validation_run_id}", response_model=ValidationRun)
+async def get_validation_report(validation_run_id: str) -> ValidationRun:
+    """Return saved validation report metadata and sections."""
+    try:
+        return ValidationReportService().read_run(validation_run_id)
+    except (FileNotFoundError, ReportStoreError):
+        validation_report_not_found(validation_run_id)
+
+    raise HTTPException(status_code=500, detail="Validation report read failed")
+
+
+@router.get("/backtests/validation/{validation_run_id}/stress", response_model=ValidationStressResponse)
+async def get_validation_stress(validation_run_id: str) -> ValidationStressResponse:
+    """Return saved validation stress rows."""
+    try:
+        return ValidationReportService().read_stress_results(validation_run_id)
+    except (FileNotFoundError, ReportStoreError):
+        validation_report_not_found(validation_run_id)
+
+    raise HTTPException(status_code=500, detail="Validation stress read failed")
+
+
+@router.get(
+    "/backtests/validation/{validation_run_id}/sensitivity",
+    response_model=ValidationSensitivityResponse,
+)
+async def get_validation_sensitivity(validation_run_id: str) -> ValidationSensitivityResponse:
+    """Return saved validation sensitivity rows."""
+    try:
+        return ValidationReportService().read_sensitivity_results(validation_run_id)
+    except (FileNotFoundError, ReportStoreError):
+        validation_report_not_found(validation_run_id)
+
+    raise HTTPException(status_code=500, detail="Validation sensitivity read failed")
+
+
+@router.get(
+    "/backtests/validation/{validation_run_id}/walk-forward",
+    response_model=ValidationWalkForwardResponse,
+)
+async def get_validation_walk_forward(validation_run_id: str) -> ValidationWalkForwardResponse:
+    """Return saved validation walk-forward rows."""
+    try:
+        return ValidationReportService().read_walk_forward_results(validation_run_id)
+    except (FileNotFoundError, ReportStoreError):
+        validation_report_not_found(validation_run_id)
+
+    raise HTTPException(status_code=500, detail="Validation walk-forward read failed")
+
+
+@router.get(
+    "/backtests/validation/{validation_run_id}/concentration",
+    response_model=ValidationConcentrationResponse,
+)
+async def get_validation_concentration(validation_run_id: str) -> ValidationConcentrationResponse:
+    """Return saved validation regime coverage and concentration sections."""
+    try:
+        return ValidationReportService().read_concentration_results(validation_run_id)
+    except (FileNotFoundError, ReportStoreError):
+        validation_report_not_found(validation_run_id)
+
+    raise HTTPException(status_code=500, detail="Validation concentration read failed")
 
 
 @router.get("/backtests/{run_id}", response_model=BacktestRun)

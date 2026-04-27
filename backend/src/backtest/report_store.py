@@ -19,6 +19,8 @@ from src.models.backtest import (
     ReportArtifactType,
     ReportFormat,
     TradeRecord,
+    ValidationRun,
+    ValidationRunSummary,
 )
 from src.reports.writer import (
     NO_INTRABAR_LIMITATION,
@@ -165,8 +167,51 @@ class ReportStore:
             runs.append(BacktestRun.model_validate(metadata))
         return runs
 
+    def list_validation_metadata(self) -> list[dict[str, Any]]:
+        runs = []
+        for run_id in self.list_run_ids():
+            metadata_path = self.run_path(run_id) / "validation_metadata.json"
+            if metadata_path.exists():
+                runs.append(json.loads(metadata_path.read_text(encoding="utf-8")))
+        return runs
+
+    def list_validation_runs(self) -> list[ValidationRun]:
+        return [ValidationRun.model_validate(metadata) for metadata in self.list_validation_metadata()]
+
+    def list_validation_run_summaries(self) -> list[ValidationRunSummary]:
+        summaries = []
+        for run in self.list_validation_runs():
+            summaries.append(
+                ValidationRunSummary(
+                    validation_run_id=run.validation_run_id,
+                    status=run.status,
+                    created_at=run.created_at,
+                    symbol=run.symbol,
+                    provider=run.provider,
+                    timeframe=run.timeframe,
+                    mode_count=len(run.mode_metrics),
+                    stress_profile_count=len({result.profile.name for result in run.stress_results}),
+                    walk_forward_split_count=len(run.walk_forward_results),
+                    warnings=run.warnings,
+                )
+            )
+        return sorted(summaries, key=lambda summary: summary.created_at, reverse=True)
+
     def read_run(self, run_id: str) -> BacktestRun:
         return BacktestRun.model_validate(self.read_json(run_id, "metadata.json"))
+
+    def read_validation_run(self, validation_run_id: str) -> ValidationRun:
+        return ValidationRun.model_validate(
+            self.read_json(validation_run_id, "validation_metadata.json")
+        )
+
+    def write_validation_metadata(self, validation_run: ValidationRun) -> ReportArtifact:
+        return self.write_json(
+            validation_run.validation_run_id,
+            "validation_metadata.json",
+            validation_run,
+            ReportArtifactType.VALIDATION_METADATA,
+        )
 
     def read_metrics_summary(self, run_id: str) -> MetricsSummary:
         return MetricsSummary.model_validate(self.read_json(run_id, "metrics.json"))
@@ -385,6 +430,10 @@ def _equity_schema() -> dict[str, pl.DataType]:
         "drawdown_pct": pl.Float64,
         "realized_pnl": pl.Float64,
         "open_position": pl.Boolean,
+        "realized_equity": pl.Float64,
+        "unrealized_pnl": pl.Float64,
+        "total_equity": pl.Float64,
+        "equity_basis": pl.Utf8,
     }
 
 

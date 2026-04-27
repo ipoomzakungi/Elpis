@@ -32,6 +32,22 @@ def backtest_not_found(run_id: str) -> None:
     api_error(404, "NOT_FOUND", f"Backtest run '{run_id}' was not found")
 
 
+def validation_report_not_found(validation_run_id: str) -> None:
+    api_error(404, "NOT_FOUND", f"Validation run '{validation_run_id}' was not found")
+
+
+def validation_not_implemented() -> None:
+    api_error(
+        501,
+        "NOT_IMPLEMENTED",
+        "Validation report execution is not implemented in this phase",
+    )
+
+
+def invalid_validation_config(message: str, details: list[dict[str, str]] | None = None) -> None:
+    api_error(400, "VALIDATION_ERROR", message, details)
+
+
 def processed_features_not_found(symbol: str, timeframe: str, feature_path: str) -> None:
     api_error(
         404,
