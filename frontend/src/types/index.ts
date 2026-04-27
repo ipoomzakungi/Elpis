@@ -500,6 +500,9 @@ export interface ValidationSensitivityResponse {
   data: ParameterSensitivityResult[];
 }
 
+export type ValidationStressTableRow = StressResult;
+export type ValidationSensitivityTableRow = ParameterSensitivityResult;
+
 export interface ValidationWalkForwardResponse {
   validation_run_id: string;
   data: WalkForwardResult[];

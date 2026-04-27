@@ -179,7 +179,27 @@ def compose_validation_report_json(
         "data_identity": run_payload.get("data_identity", {}),
         "mode_metrics": run_payload.get("mode_metrics", []),
         "stress_results": run_payload.get("stress_results", []),
+        "stress_summary": {
+            "row_count": len(run_payload.get("stress_results", [])),
+            "profiles": sorted(
+                {
+                    row.get("profile", {}).get("name")
+                    for row in run_payload.get("stress_results", [])
+                    if row.get("profile", {}).get("name")
+                }
+            ),
+        },
         "sensitivity_results": run_payload.get("sensitivity_results", []),
+        "sensitivity_summary": {
+            "row_count": len(run_payload.get("sensitivity_results", [])),
+            "fragile_count": len(
+                [
+                    row
+                    for row in run_payload.get("sensitivity_results", [])
+                    if row.get("fragility_flag")
+                ]
+            ),
+        },
         "walk_forward_results": run_payload.get("walk_forward_results", []),
         "regime_coverage": run_payload.get("regime_coverage", {}),
         "concentration_report": run_payload.get("concentration_report", {}),
@@ -211,6 +231,35 @@ def compose_validation_report_markdown(
             f"- {row.get('strategy_mode')}: {row.get('category')}, "
             f"total return % {row.get('total_return_pct')}, "
             f"max drawdown % {row.get('max_drawdown_pct')}"
+        )
+    lines.extend(
+        [
+            "",
+            "## Cost Stress Results",
+            "",
+        ]
+    )
+    for row in report["stress_results"]:
+        profile = row.get("profile", {})
+        metrics = row.get("metrics", {})
+        lines.append(
+            f"- {profile.get('name')} / {row.get('strategy_mode')}: "
+            f"outcome {row.get('outcome')}, total return % {metrics.get('total_return_pct')}, "
+            f"trades {metrics.get('number_of_trades')}"
+        )
+    lines.extend(
+        [
+            "",
+            "## Parameter Sensitivity",
+            "",
+        ]
+    )
+    for row in report["sensitivity_results"]:
+        metrics = row.get("metrics", {})
+        lines.append(
+            f"- {row.get('parameter_set_id')} / {row.get('strategy_mode')}: "
+            f"total return % {metrics.get('total_return_pct')}, "
+            f"fragile {row.get('fragility_flag')}"
         )
     lines.extend(
         [

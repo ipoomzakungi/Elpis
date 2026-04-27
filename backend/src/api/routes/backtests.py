@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Query
 from src.api.validation import (
     backtest_not_found,
     invalid_backtest_config,
+    invalid_validation_config,
     processed_features_not_found,
     validation_not_implemented,
     validation_report_not_found,
@@ -69,6 +70,8 @@ async def run_validation_report(request: ValidationRunRequest) -> ValidationRun:
         return ValidationReportService().run(request)
     except ValidationExecutionNotImplementedError:
         validation_not_implemented()
+    except ValueError as exc:
+        invalid_validation_config(str(exc))
 
     raise HTTPException(status_code=500, detail="Validation report run failed")
 

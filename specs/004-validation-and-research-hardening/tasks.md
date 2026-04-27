@@ -82,22 +82,22 @@
 
 ### Tests for User Story 2
 
-- [ ] T026 [P] [US2] Add fee/slippage stress profile tests in `backend/tests/unit/test_backtest_cost_stress.py`
-- [ ] T027 [P] [US2] Add bounded parameter grid and fragility flag tests in `backend/tests/unit/test_backtest_sensitivity.py`
-- [ ] T028 [P] [US2] Add stress and sensitivity artifact integration tests in `backend/tests/integration/test_backtest_validation_flow.py`
+- [x] T026 [P] [US2] Add fee/slippage stress profile tests in `backend/tests/unit/test_backtest_cost_stress.py`
+- [x] T027 [P] [US2] Add bounded parameter grid and fragility flag tests in `backend/tests/unit/test_backtest_sensitivity.py`
+- [x] T028 [P] [US2] Add stress and sensitivity artifact integration tests in `backend/tests/integration/test_backtest_validation_flow.py`
 
 ### Implementation for User Story 2
 
-- [ ] T029 [US2] Implement predefined `normal`, `high_fee`, `high_slippage`, and `worst_reasonable_cost` profiles in `backend/src/backtest/validation.py`
-- [ ] T030 [US2] Implement stress reruns for each eligible strategy and baseline mode in `backend/src/backtest/validation.py`
-- [ ] T031 [US2] Implement bounded parameter sensitivity grid execution and grid-size validation in `backend/src/backtest/validation.py`
-- [ ] T032 [US2] Implement fragility flag calculation for isolated strong parameter settings in `backend/src/backtest/validation.py`
-- [ ] T033 [US2] Persist stress and sensitivity output tables as validation artifacts in `backend/src/backtest/report_store.py`
-- [ ] T034 [US2] Add stress and sensitivity sections to validation report JSON and Markdown in `backend/src/reports/writer.py`
-- [ ] T035 [US2] Add stress and sensitivity validation endpoints in `backend/src/api/routes/backtests.py`
-- [ ] T036 [US2] Add validation API client methods for stress and sensitivity endpoints in `frontend/src/services/api.ts`
-- [ ] T037 [US2] Add stress and sensitivity frontend types in `frontend/src/types/index.ts`
-- [ ] T038 [US2] Render fee/slippage stress and parameter sensitivity tables in `frontend/src/app/backtests/page.tsx`
+- [x] T029 [US2] Implement predefined `normal`, `high_fee`, `high_slippage`, and `worst_reasonable_cost` profiles in `backend/src/backtest/validation.py`
+- [x] T030 [US2] Implement stress reruns for each eligible strategy and baseline mode in `backend/src/backtest/validation.py`
+- [x] T031 [US2] Implement bounded parameter sensitivity grid execution and grid-size validation in `backend/src/backtest/validation.py`
+- [x] T032 [US2] Implement fragility flag calculation for isolated strong parameter settings in `backend/src/backtest/validation.py`
+- [x] T033 [US2] Persist stress and sensitivity output tables as validation artifacts in `backend/src/backtest/report_store.py`
+- [x] T034 [US2] Add stress and sensitivity sections to validation report JSON and Markdown in `backend/src/reports/writer.py`
+- [x] T035 [US2] Add stress and sensitivity validation endpoints in `backend/src/api/routes/backtests.py`
+- [x] T036 [US2] Add validation API client methods for stress and sensitivity endpoints in `frontend/src/services/api.ts`
+- [x] T037 [US2] Add stress and sensitivity frontend types in `frontend/src/types/index.ts`
+- [x] T038 [US2] Render fee/slippage stress and parameter sensitivity tables in `frontend/src/app/backtests/page.tsx`
 
 **Checkpoint**: US2 should produce stress and sensitivity report sections for all eligible modes without claiming profitability or live readiness.
 

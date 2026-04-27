@@ -1,5 +1,21 @@
+from datetime import datetime
+from itertools import product
+
+from src.backtest.engine import BacktestEngine
 from src.backtest.report_store import ReportStore
 from src.models.backtest import (
+    BacktestRunRequest,
+    BacktestRunResponse,
+    BacktestStatus,
+    CostStressProfile,
+    CostStressProfileName,
+    ModeMetrics,
+    ParameterSensitivityResult,
+    SensitivityGrid,
+    StrategyConfig,
+    StrategyMode,
+    StressOutcome,
+    StressResult,
     ValidationConcentrationResponse,
     ValidationRun,
     ValidationRunListResponse,
@@ -8,6 +24,11 @@ from src.models.backtest import (
     ValidationStressResponse,
     ValidationWalkForwardResponse,
 )
+from src.reports.writer import RESEARCH_ONLY_WARNING
+
+MAX_SENSITIVITY_GRID_SIZE = 64
+HIGH_FEE_RATE = 0.001
+HIGH_SLIPPAGE_RATE = 0.001
 
 
 class ValidationExecutionNotImplementedError(NotImplementedError):
@@ -19,9 +40,109 @@ class ValidationReportService:
         self.report_store = report_store or ReportStore()
 
     def run(self, request: ValidationRunRequest) -> ValidationRun:
-        raise ValidationExecutionNotImplementedError(
-            "Validation report execution is implemented in later validation-depth tasks."
+        base_result = self._run_backtest(request.base_config)
+        stress_results = self.run_cost_stress(request)
+        sensitivity_results = self.run_parameter_sensitivity(request)
+        validation_run = ValidationRun(
+            validation_run_id=_validation_run_id(request),
+            status=BacktestStatus.COMPLETED,
+            created_at=datetime.utcnow(),
+            completed_at=datetime.utcnow(),
+            symbol=request.base_config.symbol,
+            provider=request.base_config.provider,
+            timeframe=request.base_config.timeframe,
+            source_backtest_config=request.base_config,
+            data_identity=base_result.data_identity,
+            mode_metrics=_mode_metrics_from_response(base_result),
+            stress_results=stress_results,
+            sensitivity_results=sensitivity_results,
+            warnings=[
+                RESEARCH_ONLY_WARNING,
+                "Cost stress and parameter sensitivity outputs are bounded research checks only.",
+            ],
         )
+        return self.report_store.write_validation_outputs(validation_run)
+
+    def run_cost_stress(self, request: ValidationRunRequest) -> list[StressResult]:
+        profiles = build_cost_stress_profiles(
+            base_fee_rate=request.base_config.assumptions.fee_rate,
+            base_slippage_rate=request.base_config.assumptions.slippage_rate,
+            selected_names=request.stress_profiles,
+        )
+        normal_returns: dict[StrategyMode, float | None] = {}
+        results: list[StressResult] = []
+
+        for profile in profiles:
+            response = self._run_backtest(_request_with_cost_profile(request.base_config, profile))
+            mode_metrics = _mode_metrics_from_response(response)
+            if profile.name == CostStressProfileName.NORMAL:
+                normal_returns = {
+                    metric.strategy_mode: metric.total_return_pct for metric in mode_metrics
+                }
+            for metric in mode_metrics:
+                outcome = _stress_outcome(metric, normal_returns.get(metric.strategy_mode))
+                results.append(
+                    StressResult(
+                        profile=profile,
+                        strategy_mode=metric.strategy_mode,
+                        category=metric.category,
+                        metrics=metric,
+                        outcome=outcome,
+                        notes=_stress_notes(outcome),
+                    )
+                )
+        return results
+
+    def run_parameter_sensitivity(
+        self,
+        request: ValidationRunRequest,
+    ) -> list[ParameterSensitivityResult]:
+        validate_sensitivity_grid_size(request.sensitivity_grid)
+        profiles = {
+            profile.name: profile
+            for profile in build_cost_stress_profiles(
+                base_fee_rate=request.base_config.assumptions.fee_rate,
+                base_slippage_rate=request.base_config.assumptions.slippage_rate,
+            )
+        }
+        results: list[ParameterSensitivityResult] = []
+
+        for entry_threshold, atr_stop_buffer, risk_reward, profile_name in _grid_combinations(
+            request.base_config,
+            request.sensitivity_grid,
+        ):
+            profile = profiles[profile_name]
+            sensitivity_request = _request_with_sensitivity_parameters(
+                request.base_config,
+                profile=profile,
+                entry_threshold=entry_threshold,
+                atr_stop_buffer=atr_stop_buffer,
+                risk_reward_multiple=risk_reward,
+            )
+            response = self._run_backtest(sensitivity_request)
+            parameter_set_id = _parameter_set_id(
+                entry_threshold=entry_threshold,
+                atr_stop_buffer=atr_stop_buffer,
+                risk_reward_multiple=risk_reward,
+                profile_name=profile_name,
+            )
+            for metric in _mode_metrics_from_response(response):
+                results.append(
+                    ParameterSensitivityResult(
+                        parameter_set_id=parameter_set_id,
+                        grid_entry_threshold=entry_threshold,
+                        atr_stop_buffer=atr_stop_buffer,
+                        breakout_risk_reward_multiple=risk_reward,
+                        stress_profile_name=profile_name,
+                        strategy_mode=metric.strategy_mode,
+                        metrics=metric,
+                    )
+                )
+
+        return apply_fragility_flags(results)
+
+    def _run_backtest(self, request: BacktestRunRequest) -> BacktestRunResponse:
+        return BacktestEngine(report_store=self.report_store).run(request)
 
     def list_runs(self) -> ValidationRunListResponse:
         return ValidationRunListResponse(runs=self.report_store.list_validation_run_summaries())
@@ -57,3 +178,247 @@ class ValidationReportService:
             regime_coverage=run.regime_coverage,
             concentration_report=run.concentration_report,
         )
+
+
+def build_cost_stress_profiles(
+    base_fee_rate: float,
+    base_slippage_rate: float,
+    selected_names: list[CostStressProfileName] | None = None,
+) -> list[CostStressProfile]:
+    high_fee_rate = min(max(base_fee_rate * 2, HIGH_FEE_RATE), 0.1)
+    high_slippage_rate = min(max(base_slippage_rate * 3, HIGH_SLIPPAGE_RATE), 0.1)
+    profiles = {
+        CostStressProfileName.NORMAL: CostStressProfile(
+            name=CostStressProfileName.NORMAL,
+            fee_rate=base_fee_rate,
+            slippage_rate=base_slippage_rate,
+            description="Base fee and slippage assumptions from the validation configuration.",
+        ),
+        CostStressProfileName.HIGH_FEE: CostStressProfile(
+            name=CostStressProfileName.HIGH_FEE,
+            fee_rate=high_fee_rate,
+            slippage_rate=base_slippage_rate,
+            description="Higher fee assumption with base slippage unchanged.",
+        ),
+        CostStressProfileName.HIGH_SLIPPAGE: CostStressProfile(
+            name=CostStressProfileName.HIGH_SLIPPAGE,
+            fee_rate=base_fee_rate,
+            slippage_rate=high_slippage_rate,
+            description="Higher slippage assumption with base fee unchanged.",
+        ),
+        CostStressProfileName.WORST_REASONABLE_COST: CostStressProfile(
+            name=CostStressProfileName.WORST_REASONABLE_COST,
+            fee_rate=high_fee_rate,
+            slippage_rate=high_slippage_rate,
+            description="Combined higher fee and higher slippage assumptions for local research stress.",
+        ),
+    }
+    names = selected_names or list(CostStressProfileName)
+    unique_names = list(dict.fromkeys(names))
+    return [profiles[name] for name in unique_names]
+
+
+def validate_sensitivity_grid_size(
+    grid: SensitivityGrid,
+    max_size: int = MAX_SENSITIVITY_GRID_SIZE,
+) -> int:
+    size = _grid_axis_size(grid.grid_entry_threshold)
+    size *= _grid_axis_size(grid.atr_stop_buffer)
+    size *= _grid_axis_size(grid.breakout_risk_reward_multiple)
+    size *= _grid_axis_size(grid.fee_slippage_profile)
+    if size > max_size:
+        raise ValueError(
+            f"parameter grid exceeds local validation limit ({size} > {max_size})"
+        )
+    return size
+
+
+def apply_fragility_flags(
+    results: list[ParameterSensitivityResult],
+) -> list[ParameterSensitivityResult]:
+    grouped: dict[StrategyMode, list[ParameterSensitivityResult]] = {}
+    for result in results:
+        grouped.setdefault(result.strategy_mode, []).append(result)
+
+    flagged_results: list[ParameterSensitivityResult] = []
+    for result in results:
+        mode_results = grouped[result.strategy_mode]
+        positive_results = [
+            item
+            for item in mode_results
+            if item.metrics.total_return_pct is not None and item.metrics.total_return_pct > 0
+        ]
+        is_fragile = (
+            len(mode_results) > 1
+            and len(positive_results) == 1
+            and result in positive_results
+        )
+        notes = list(result.notes)
+        if is_fragile:
+            notes.append(
+                "Isolated positive historical result within the bounded parameter grid; "
+                "treat as fragile research evidence."
+            )
+        flagged_results.append(result.model_copy(update={"fragility_flag": is_fragile, "notes": notes}))
+    return flagged_results
+
+
+def _request_with_cost_profile(
+    request: BacktestRunRequest,
+    profile: CostStressProfile,
+) -> BacktestRunRequest:
+    assumptions = request.assumptions.model_copy(
+        update={"fee_rate": profile.fee_rate, "slippage_rate": profile.slippage_rate}
+    )
+    return request.model_copy(update={"assumptions": assumptions})
+
+
+def _request_with_sensitivity_parameters(
+    request: BacktestRunRequest,
+    profile: CostStressProfile,
+    entry_threshold: float,
+    atr_stop_buffer: float,
+    risk_reward_multiple: float,
+) -> BacktestRunRequest:
+    strategies = [
+        _strategy_with_sensitivity_parameters(
+            strategy,
+            entry_threshold=entry_threshold,
+            atr_stop_buffer=atr_stop_buffer,
+            risk_reward_multiple=risk_reward_multiple,
+        )
+        for strategy in request.strategies
+    ]
+    return _request_with_cost_profile(request, profile).model_copy(update={"strategies": strategies})
+
+
+def _strategy_with_sensitivity_parameters(
+    strategy: StrategyConfig,
+    entry_threshold: float,
+    atr_stop_buffer: float,
+    risk_reward_multiple: float,
+) -> StrategyConfig:
+    updates: dict[str, float] = {}
+    if strategy.mode == StrategyMode.GRID_RANGE:
+        updates["entry_threshold"] = entry_threshold
+        updates["atr_buffer"] = atr_stop_buffer
+    if strategy.mode == StrategyMode.BREAKOUT:
+        updates["atr_buffer"] = atr_stop_buffer
+        updates["risk_reward_multiple"] = risk_reward_multiple
+    return strategy.model_copy(update=updates) if updates else strategy
+
+
+def _mode_metrics_from_response(response: BacktestRunResponse) -> list[ModeMetrics]:
+    if response.metrics is None:
+        return []
+    rows = []
+    for strategy_mode, summary in response.metrics.return_by_strategy_mode.items():
+        mode = StrategyMode(strategy_mode)
+        rows.append(
+            ModeMetrics(
+                strategy_mode=mode,
+                category=str(summary.get("category") or _mode_category(mode)),
+                total_return_pct=summary.get("total_return_pct"),
+                max_drawdown_pct=summary.get("max_drawdown_pct"),
+                number_of_trades=int(summary.get("number_of_trades") or 0),
+                profit_factor=summary.get("profit_factor"),
+                win_rate=summary.get("win_rate"),
+                expectancy=summary.get("expectancy"),
+                equity_basis=str(summary.get("equity_basis") or "realized_only"),
+                notes=[],
+            )
+        )
+    return rows
+
+
+def _stress_outcome(metric: ModeMetrics, normal_return_pct: float | None) -> StressOutcome:
+    if metric.number_of_trades == 0:
+        return StressOutcome.NO_TRADES
+    if metric.total_return_pct is None:
+        return StressOutcome.NOT_EVALUABLE
+    if normal_return_pct is not None and normal_return_pct > 0 and metric.total_return_pct <= 0:
+        return StressOutcome.TURNED_NEGATIVE
+    if metric.total_return_pct > 0:
+        return StressOutcome.REMAINED_POSITIVE
+    return StressOutcome.TURNED_NEGATIVE
+
+
+def _stress_notes(outcome: StressOutcome) -> list[str]:
+    if outcome == StressOutcome.REMAINED_POSITIVE:
+        return ["Positive historical return under this cost assumption; not a profitability claim."]
+    if outcome == StressOutcome.TURNED_NEGATIVE:
+        return ["Non-positive historical return under this cost assumption."]
+    if outcome == StressOutcome.NO_TRADES:
+        return ["No completed trades under this cost assumption."]
+    return ["Cost stress row could not be evaluated from available metrics."]
+
+
+def _grid_combinations(
+    request: BacktestRunRequest,
+    grid: SensitivityGrid,
+):
+    return product(
+        _numeric_values(grid.grid_entry_threshold, _default_grid_entry_threshold(request)),
+        _numeric_values(grid.atr_stop_buffer, _default_atr_stop_buffer(request)),
+        _numeric_values(
+            grid.breakout_risk_reward_multiple,
+            _default_breakout_risk_reward_multiple(request),
+        ),
+        grid.fee_slippage_profile or [CostStressProfileName.NORMAL],
+    )
+
+
+def _numeric_values(values: list[float], default: float) -> list[float]:
+    return values or [default]
+
+
+def _grid_axis_size(values: list | tuple) -> int:
+    return max(1, len(values))
+
+
+def _default_grid_entry_threshold(request: BacktestRunRequest) -> float:
+    for strategy in request.strategies:
+        if strategy.mode == StrategyMode.GRID_RANGE and strategy.entry_threshold is not None:
+            return strategy.entry_threshold
+    return 0.5
+
+
+def _default_atr_stop_buffer(request: BacktestRunRequest) -> float:
+    for strategy in request.strategies:
+        if strategy.atr_buffer is not None:
+            return strategy.atr_buffer
+    return 1.0
+
+
+def _default_breakout_risk_reward_multiple(request: BacktestRunRequest) -> float:
+    for strategy in request.strategies:
+        if strategy.mode == StrategyMode.BREAKOUT and strategy.risk_reward_multiple is not None:
+            return strategy.risk_reward_multiple
+    return 1.5
+
+
+def _parameter_set_id(
+    entry_threshold: float,
+    atr_stop_buffer: float,
+    risk_reward_multiple: float,
+    profile_name: CostStressProfileName,
+) -> str:
+    return (
+        f"entry_{_parameter_value(entry_threshold)}__atr_{_parameter_value(atr_stop_buffer)}__"
+        f"rr_{_parameter_value(risk_reward_multiple)}__cost_{profile_name.value}"
+    )
+
+
+def _parameter_value(value: float) -> str:
+    return str(value)
+
+
+def _mode_category(mode: StrategyMode) -> str:
+    if mode in {StrategyMode.BUY_HOLD, StrategyMode.PRICE_BREAKOUT, StrategyMode.NO_TRADE}:
+        return "baseline"
+    return "strategy"
+
+
+def _validation_run_id(request: ValidationRunRequest) -> str:
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")
+    return f"val_{timestamp}_{request.base_config.symbol.lower()}_{request.base_config.timeframe}"

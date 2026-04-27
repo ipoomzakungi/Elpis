@@ -27,6 +27,8 @@ from src.reports.writer import (
     RESEARCH_ONLY_WARNING,
     compose_report_json,
     compose_report_markdown,
+    compose_validation_report_json,
+    compose_validation_report_markdown,
 )
 
 DEFAULT_LIMITATIONS = [
@@ -212,6 +214,43 @@ class ReportStore:
             validation_run,
             ReportArtifactType.VALIDATION_METADATA,
         )
+
+    def write_validation_outputs(self, validation_run: ValidationRun) -> ValidationRun:
+        artifacts = [
+            self.write_json(
+                validation_run.validation_run_id,
+                "validation_config.json",
+                validation_run.source_backtest_config,
+                ReportArtifactType.VALIDATION_CONFIG,
+            ),
+            self.write_parquet(
+                validation_run.validation_run_id,
+                "validation_stress.parquet",
+                _validation_stress_frame(validation_run),
+                ReportArtifactType.VALIDATION_STRESS,
+            ),
+            self.write_parquet(
+                validation_run.validation_run_id,
+                "validation_sensitivity.parquet",
+                _validation_sensitivity_frame(validation_run),
+                ReportArtifactType.VALIDATION_SENSITIVITY,
+            ),
+            self.write_json(
+                validation_run.validation_run_id,
+                "validation_report.json",
+                compose_validation_report_json(validation_run),
+                ReportArtifactType.VALIDATION_REPORT_JSON,
+            ),
+            self.write_markdown(
+                validation_run.validation_run_id,
+                "validation_report.md",
+                compose_validation_report_markdown(validation_run),
+                ReportArtifactType.VALIDATION_REPORT_MARKDOWN,
+            ),
+        ]
+        metadata_run = validation_run.model_copy(update={"artifacts": artifacts})
+        metadata_artifact = self.write_validation_metadata(metadata_run)
+        return metadata_run.model_copy(update={"artifacts": [metadata_artifact, *artifacts]})
 
     def read_metrics_summary(self, run_id: str) -> MetricsSummary:
         return MetricsSummary.model_validate(self.read_json(run_id, "metrics.json"))
@@ -434,6 +473,88 @@ def _equity_schema() -> dict[str, pl.DataType]:
         "unrealized_pnl": pl.Float64,
         "total_equity": pl.Float64,
         "equity_basis": pl.Utf8,
+    }
+
+
+def _validation_stress_frame(validation_run: ValidationRun) -> pl.DataFrame:
+    records = []
+    for result in validation_run.stress_results:
+        records.append(
+            {
+                "validation_run_id": validation_run.validation_run_id,
+                "profile_name": result.profile.name.value,
+                "fee_rate": result.profile.fee_rate,
+                "slippage_rate": result.profile.slippage_rate,
+                "strategy_mode": result.strategy_mode.value,
+                "category": result.category,
+                "outcome": result.outcome.value,
+                "total_return_pct": result.metrics.total_return_pct,
+                "max_drawdown_pct": result.metrics.max_drawdown_pct,
+                "number_of_trades": result.metrics.number_of_trades,
+                "win_rate": result.metrics.win_rate,
+                "equity_basis": result.metrics.equity_basis,
+                "notes": json.dumps(result.notes, sort_keys=True),
+            }
+        )
+    return pl.DataFrame(records, schema=_validation_stress_schema(), strict=False)
+
+
+def _validation_sensitivity_frame(validation_run: ValidationRun) -> pl.DataFrame:
+    records = []
+    for result in validation_run.sensitivity_results:
+        records.append(
+            {
+                "validation_run_id": validation_run.validation_run_id,
+                "parameter_set_id": result.parameter_set_id,
+                "grid_entry_threshold": result.grid_entry_threshold,
+                "atr_stop_buffer": result.atr_stop_buffer,
+                "breakout_risk_reward_multiple": result.breakout_risk_reward_multiple,
+                "stress_profile_name": result.stress_profile_name.value
+                if result.stress_profile_name
+                else None,
+                "strategy_mode": result.strategy_mode.value,
+                "total_return_pct": result.metrics.total_return_pct,
+                "max_drawdown_pct": result.metrics.max_drawdown_pct,
+                "number_of_trades": result.metrics.number_of_trades,
+                "fragility_flag": result.fragility_flag,
+                "notes": json.dumps(result.notes, sort_keys=True),
+            }
+        )
+    return pl.DataFrame(records, schema=_validation_sensitivity_schema(), strict=False)
+
+
+def _validation_stress_schema() -> dict[str, pl.DataType]:
+    return {
+        "validation_run_id": pl.Utf8,
+        "profile_name": pl.Utf8,
+        "fee_rate": pl.Float64,
+        "slippage_rate": pl.Float64,
+        "strategy_mode": pl.Utf8,
+        "category": pl.Utf8,
+        "outcome": pl.Utf8,
+        "total_return_pct": pl.Float64,
+        "max_drawdown_pct": pl.Float64,
+        "number_of_trades": pl.Int64,
+        "win_rate": pl.Float64,
+        "equity_basis": pl.Utf8,
+        "notes": pl.Utf8,
+    }
+
+
+def _validation_sensitivity_schema() -> dict[str, pl.DataType]:
+    return {
+        "validation_run_id": pl.Utf8,
+        "parameter_set_id": pl.Utf8,
+        "grid_entry_threshold": pl.Float64,
+        "atr_stop_buffer": pl.Float64,
+        "breakout_risk_reward_multiple": pl.Float64,
+        "stress_profile_name": pl.Utf8,
+        "strategy_mode": pl.Utf8,
+        "total_return_pct": pl.Float64,
+        "max_drawdown_pct": pl.Float64,
+        "number_of_trades": pl.Int64,
+        "fragility_flag": pl.Boolean,
+        "notes": pl.Utf8,
     }
 
 

@@ -21,6 +21,9 @@ import {
   ProcessRequest,
   Regime,
   TaskResponse,
+  ValidationRunListResponse,
+  ValidationSensitivityResponse,
+  ValidationStressResponse,
 } from '@/types';
 
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
@@ -167,5 +170,20 @@ export const api = {
 
   getBacktestEquity: async (runId: string): Promise<BacktestEquityResponse> => {
     return fetchApi(`/backtests/${encodeURIComponent(runId)}/equity`);
+  },
+
+  // Validation report stress and sensitivity sections
+  getValidationReports: async (): Promise<ValidationRunListResponse> => {
+    return fetchApi('/backtests/validation');
+  },
+
+  getValidationStress: async (validationRunId: string): Promise<ValidationStressResponse> => {
+    return fetchApi(`/backtests/validation/${encodeURIComponent(validationRunId)}/stress`);
+  },
+
+  getValidationSensitivity: async (
+    validationRunId: string,
+  ): Promise<ValidationSensitivityResponse> => {
+    return fetchApi(`/backtests/validation/${encodeURIComponent(validationRunId)}/sensitivity`);
   },
 };

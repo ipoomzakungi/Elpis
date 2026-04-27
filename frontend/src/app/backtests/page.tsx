@@ -11,6 +11,9 @@ import {
   BacktestRun,
   BacktestRunSummary,
   BacktestTrade,
+  ParameterSensitivityResult,
+  StressResult,
+  ValidationRunSummary,
 } from '@/types'
 
 const TRADE_LIMIT = 200
@@ -22,8 +25,13 @@ export default function BacktestsPage() {
   const [metrics, setMetrics] = useState<BacktestMetricsResponse | null>(null)
   const [trades, setTrades] = useState<BacktestTrade[]>([])
   const [equity, setEquity] = useState<BacktestEquityPoint[]>([])
+  const [validationRuns, setValidationRuns] = useState<ValidationRunSummary[]>([])
+  const [selectedValidationRunId, setSelectedValidationRunId] = useState<string | null>(null)
+  const [stressResults, setStressResults] = useState<StressResult[]>([])
+  const [sensitivityResults, setSensitivityResults] = useState<ParameterSensitivityResult[]>([])
   const [loadingRuns, setLoadingRuns] = useState(true)
   const [loadingReport, setLoadingReport] = useState(false)
+  const [loadingValidation, setLoadingValidation] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -41,6 +49,24 @@ export default function BacktestsPage() {
       })
       .finally(() => {
         if (active) setLoadingRuns(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    api.getValidationReports()
+      .then((response) => {
+        if (!active) return
+        setValidationRuns(response.runs)
+        setSelectedValidationRunId((current) => current ?? response.runs[0]?.validation_run_id ?? null)
+      })
+      .catch(() => {
+        if (!active) return
+        setValidationRuns([])
       })
 
     return () => {
@@ -85,6 +111,38 @@ export default function BacktestsPage() {
       active = false
     }
   }, [selectedRunId])
+
+  useEffect(() => {
+    if (!selectedValidationRunId) {
+      setStressResults([])
+      setSensitivityResults([])
+      return
+    }
+
+    let active = true
+    setLoadingValidation(true)
+    Promise.all([
+      api.getValidationStress(selectedValidationRunId),
+      api.getValidationSensitivity(selectedValidationRunId),
+    ])
+      .then(([stressResponse, sensitivityResponse]) => {
+        if (!active) return
+        setStressResults(stressResponse.data)
+        setSensitivityResults(sensitivityResponse.data)
+      })
+      .catch(() => {
+        if (!active) return
+        setStressResults([])
+        setSensitivityResults([])
+      })
+      .finally(() => {
+        if (active) setLoadingValidation(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [selectedValidationRunId])
 
   const selectedSummary = useMemo(
     () => runs.find((item) => item.run_id === selectedRunId) ?? null,
@@ -213,6 +271,60 @@ export default function BacktestsPage() {
                     { key: 'max_drawdown_pct', label: 'Max Drawdown %', format: formatNumber },
                   ]}
                 />
+              </ReportSection>
+
+              <ReportSection title="Validation Robustness">
+                <div className="mb-4 flex flex-col gap-2 text-sm text-gray-300 md:w-96">
+                  Validation run
+                  <select
+                    value={selectedValidationRunId ?? ''}
+                    onChange={(event) => setSelectedValidationRunId(event.target.value || null)}
+                    className="rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+                    disabled={validationRuns.length === 0}
+                  >
+                    {validationRuns.length === 0 ? (
+                      <option value="">No validation runs</option>
+                    ) : (
+                      validationRuns.map((item) => (
+                        <option key={item.validation_run_id} value={item.validation_run_id}>
+                          {item.validation_run_id}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+                {loadingValidation ? (
+                  <p className="text-sm text-gray-400">Loading validation tables...</p>
+                ) : (
+                  <div className="grid grid-cols-1 gap-6 2xl:grid-cols-2">
+                    <MetricTable
+                      rows={stressRows(stressResults)}
+                      columns={[
+                        { key: 'profile', label: 'Profile' },
+                        { key: 'mode', label: 'Mode' },
+                        { key: 'category', label: 'Category' },
+                        { key: 'outcome', label: 'Outcome' },
+                        { key: 'total_return_pct', label: 'Total Return %', format: formatNumber },
+                        { key: 'trades', label: 'Trades' },
+                        { key: 'fee_rate', label: 'Fee', format: formatRate },
+                        { key: 'slippage_rate', label: 'Slippage', format: formatRate },
+                      ]}
+                    />
+                    <MetricTable
+                      rows={sensitivityRows(sensitivityResults)}
+                      columns={[
+                        { key: 'parameter_set_id', label: 'Parameter Set' },
+                        { key: 'mode', label: 'Mode' },
+                        { key: 'profile', label: 'Cost' },
+                        { key: 'entry_threshold', label: 'Entry', format: formatNumber },
+                        { key: 'atr_stop_buffer', label: 'ATR', format: formatNumber },
+                        { key: 'risk_reward', label: 'R Multiple', format: formatNumber },
+                        { key: 'total_return_pct', label: 'Total Return %', format: formatNumber },
+                        { key: 'fragility_flag', label: 'Fragile' },
+                      ]}
+                    />
+                  </div>
+                )}
               </ReportSection>
 
               {notes.length > 0 && (
@@ -357,6 +469,11 @@ function formatNumber(value: unknown): string {
   return value.toFixed(2)
 }
 
+function formatRate(value: unknown): string {
+  if (typeof value !== 'number' || Number.isNaN(value)) return 'n/a'
+  return `${(value * 100).toFixed(4)}%`
+}
+
 function formatRatioPercent(value: unknown): string {
   if (typeof value !== 'number' || Number.isNaN(value)) return 'n/a'
   return `${(value * 100).toFixed(2)}%`
@@ -364,4 +481,30 @@ function formatRatioPercent(value: unknown): string {
 
 function formatDate(value: string): string {
   return value.replace('T', ' ').slice(0, 16)
+}
+
+function stressRows(results: StressResult[]): Array<Record<string, unknown>> {
+  return results.map((row) => ({
+    profile: row.profile.name,
+    mode: row.strategy_mode,
+    category: row.category,
+    outcome: row.outcome,
+    total_return_pct: row.metrics.total_return_pct,
+    trades: row.metrics.number_of_trades,
+    fee_rate: row.profile.fee_rate,
+    slippage_rate: row.profile.slippage_rate,
+  }))
+}
+
+function sensitivityRows(results: ParameterSensitivityResult[]): Array<Record<string, unknown>> {
+  return results.map((row) => ({
+    parameter_set_id: row.parameter_set_id,
+    mode: row.strategy_mode,
+    profile: row.stress_profile_name,
+    entry_threshold: row.grid_entry_threshold,
+    atr_stop_buffer: row.atr_stop_buffer,
+    risk_reward: row.breakout_risk_reward_multiple,
+    total_return_pct: row.metrics.total_return_pct,
+    fragility_flag: row.fragility_flag ? 'yes' : 'no',
+  }))
 }
