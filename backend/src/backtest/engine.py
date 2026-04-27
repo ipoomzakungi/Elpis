@@ -29,6 +29,13 @@ from src.models.backtest import (
 )
 from src.reports.writer import NO_INTRABAR_LIMITATION, RESEARCH_ONLY_WARNING
 from src.repositories.parquet_repo import ParquetRepository
+from src.strategies.baselines import (
+    generate_buy_hold_signals,
+    generate_no_trade_signals,
+    generate_price_breakout_signals,
+)
+from src.strategies.breakout_strategy import generate_breakout_signals
+from src.strategies.grid_strategy import generate_grid_range_signals
 
 BASE_REQUIRED_COLUMNS = {
     "timestamp",
@@ -136,99 +143,166 @@ class BacktestEngine:
         warnings: list[str],
     ) -> list[TradeRecord]:
         enabled_strategies = [strategy for strategy in request.strategies if strategy.enabled]
-        if not enabled_strategies and request.baselines == [BaselineMode.NO_TRADE]:
+        baseline_modes = self._requested_baselines(request, enabled_strategies)
+        if not enabled_strategies and baseline_modes == [BaselineMode.NO_TRADE]:
             warnings.append("No-trade baseline selected; no simulated positions were opened.")
             return []
         if len(rows) < 2:
             warnings.append("Not enough bars to enter on the next bar open.")
             return []
 
-        strategy = (
-            enabled_strategies[0]
-            if enabled_strategies
-            else StrategyConfig(mode=StrategyMode.NO_TRADE)
-        )
-        if strategy.mode == StrategyMode.NO_TRADE:
-            warnings.append("No-trade strategy selected; no simulated positions were opened.")
-            return []
-
-        position = self._open_first_position(request, rows, strategy)
-        if position is None:
-            warnings.append("No valid signal had a next bar open for entry.")
-            return []
-
-        signal_timestamp = rows[0]["timestamp"]
-        for index in range(1, len(rows)):
-            exit_decision = evaluate_exit(
-                position=position,
-                bar=rows[index],
-                is_final_bar=index == len(rows) - 1,
-            )
-            if exit_decision is None:
-                continue
-            return [
-                close_position(
+        signals_by_mode = self._signals_by_mode(request, rows, enabled_strategies, baseline_modes)
+        trades: list[TradeRecord] = []
+        for signals in signals_by_mode.values():
+            trades.extend(
+                self._simulate_signals(
                     run_id=run_id,
-                    trade_index=1,
-                    position=position,
-                    exit_timestamp=rows[index]["timestamp"],
-                    raw_exit_price=exit_decision.price,
-                    exit_reason=exit_decision.reason,
-                    assumptions=request.assumptions,
-                    signal_timestamp=signal_timestamp,
-                    symbol=request.symbol,
-                    timeframe=request.timeframe,
-                    provider=request.provider,
-                    regime_at_signal=rows[0].get("regime"),
-                    holding_bars=max(0, index - 1),
+                    request=request,
+                    rows=rows,
+                    signals=signals,
+                    starting_trade_index=len(trades) + 1,
                 )
-            ]
+            )
 
-        return []
+        if not trades and signals_by_mode:
+            warnings.append("No valid signals produced completed trades for this run.")
+        elif not signals_by_mode:
+            warnings.append("No strategy or baseline signals were requested for this run.")
+        return trades
 
-    def _open_first_position(
+    def _requested_baselines(
+        self,
+        request: BacktestRunRequest,
+        enabled_strategies: list[StrategyConfig],
+    ) -> list[BaselineMode]:
+        if enabled_strategies and "baselines" not in request.model_fields_set:
+            return []
+        return list(request.baselines)
+
+    def _signals_by_mode(
         self,
         request: BacktestRunRequest,
         rows: list[dict[str, Any]],
-        strategy: StrategyConfig,
-    ) -> Position | None:
-        entry_bar = rows[1]
-        signal_bar = rows[0]
+        enabled_strategies: list[StrategyConfig],
+        baseline_modes: list[BaselineMode],
+    ) -> dict[StrategyMode, list]:
+        signals_by_mode: dict[StrategyMode, list] = {}
+        for strategy in enabled_strategies:
+            allow_short = strategy.allow_short
+            if allow_short is None:
+                allow_short = request.assumptions.allow_short
+            if strategy.mode == StrategyMode.GRID_RANGE:
+                signals_by_mode[StrategyMode.GRID_RANGE] = generate_grid_range_signals(
+                    rows,
+                    config=strategy,
+                    allow_short=allow_short,
+                )
+            elif strategy.mode == StrategyMode.BREAKOUT:
+                signals_by_mode[StrategyMode.BREAKOUT] = generate_breakout_signals(
+                    rows,
+                    config=strategy,
+                    allow_short=allow_short,
+                )
+            elif strategy.mode == StrategyMode.NO_TRADE:
+                signals_by_mode[StrategyMode.NO_TRADE] = generate_no_trade_signals()
+
+        for baseline_mode in baseline_modes:
+            if baseline_mode == BaselineMode.BUY_HOLD:
+                signals_by_mode[StrategyMode.BUY_HOLD] = generate_buy_hold_signals(rows)
+            elif baseline_mode == BaselineMode.PRICE_BREAKOUT:
+                signals_by_mode[StrategyMode.PRICE_BREAKOUT] = generate_price_breakout_signals(
+                    rows,
+                    allow_short=request.assumptions.allow_short,
+                )
+            elif baseline_mode == BaselineMode.NO_TRADE:
+                signals_by_mode[StrategyMode.NO_TRADE] = generate_no_trade_signals()
+
+        return signals_by_mode
+
+    def _simulate_signals(
+        self,
+        run_id: str,
+        request: BacktestRunRequest,
+        rows: list[dict[str, Any]],
+        signals: list,
+        starting_trade_index: int,
+    ) -> list[TradeRecord]:
+        trades: list[TradeRecord] = []
+        next_available_entry_index = 1
+        for signal in signals:
+            if signal.entry_bar_index >= len(rows):
+                continue
+            if signal.entry_bar_index < next_available_entry_index:
+                continue
+
+            position = self._open_position_from_signal(
+                request=request,
+                rows=rows,
+                signal=signal,
+                position_index=starting_trade_index + len(trades),
+            )
+            for index in range(signal.entry_bar_index, len(rows)):
+                exit_decision = evaluate_exit(
+                    position=position,
+                    bar=rows[index],
+                    is_final_bar=index == len(rows) - 1,
+                )
+                if exit_decision is None:
+                    continue
+
+                trades.append(
+                    close_position(
+                        run_id=run_id,
+                        trade_index=starting_trade_index + len(trades),
+                        position=position,
+                        exit_timestamp=rows[index]["timestamp"],
+                        raw_exit_price=exit_decision.price,
+                        exit_reason=exit_decision.reason,
+                        assumptions=request.assumptions,
+                        signal_timestamp=signal.signal_timestamp,
+                        symbol=request.symbol,
+                        timeframe=request.timeframe,
+                        provider=request.provider,
+                        regime_at_signal=signal.regime,
+                        holding_bars=max(0, index - signal.entry_bar_index),
+                    )
+                )
+                next_available_entry_index = index + 1
+                break
+        return trades
+
+    def _open_position_from_signal(
+        self,
+        request: BacktestRunRequest,
+        rows: list[dict[str, Any]],
+        signal,
+        position_index: int,
+    ) -> Position:
+        entry_bar = rows[signal.entry_bar_index]
         entry_raw_price = float(entry_bar["open"])
-        atr = float(signal_bar.get("atr") or 0.0)
-        stop_distance = max(atr * (strategy.atr_buffer or 1.0), entry_raw_price * 0.005, 0.01)
-        stop_loss = max(0.01, entry_raw_price - stop_distance)
-        risk_reward = strategy.risk_reward_multiple or 1.0
-        take_profit = entry_raw_price + (entry_raw_price - stop_loss) * risk_reward
-
-        if strategy.take_profit and strategy.take_profit.mode == "range_mid":
-            range_mid = float(signal_bar.get("range_mid") or 0.0)
-            if range_mid > entry_raw_price:
-                take_profit = range_mid
-
         entry_price = apply_entry_slippage(
-            side=TradeSide.LONG,
+            side=signal.side,
             price=entry_raw_price,
             slippage_rate=request.assumptions.slippage_rate,
         )
         quantity, notional = calculate_position_size(
             equity=request.initial_equity,
             entry_price=entry_price,
-            stop_loss=stop_loss,
+            stop_loss=signal.stop_loss,
             risk_per_trade=request.assumptions.risk_per_trade,
         )
         entry_fee = calculate_entry_fee(notional, request.assumptions.fee_rate)
 
         return Position(
-            position_id="P000001",
-            strategy_mode=strategy.mode,
-            side=TradeSide.LONG,
+            position_id=f"P{position_index:06d}",
+            strategy_mode=signal.strategy_mode,
+            side=signal.side,
             entry_timestamp=entry_bar["timestamp"],
             entry_price=entry_price,
             quantity=quantity,
             notional=notional,
-            stop_loss=stop_loss,
-            take_profit=take_profit,
+            stop_loss=signal.stop_loss,
+            take_profit=signal.take_profit,
             entry_fee=entry_fee,
         )
 
@@ -238,24 +312,42 @@ class BacktestEngine:
         rows: list[dict[str, Any]],
         trades: list[TradeRecord],
     ) -> list[EquityPoint]:
+        equity_curve: list[EquityPoint] = []
+        modes = self._equity_modes(request, trades)
+
+        for mode in modes:
+            mode_trades = [trade for trade in trades if trade.strategy_mode == mode]
+            equity_curve.extend(self._build_mode_equity_curve(request, rows, mode_trades, mode))
+
+        return equity_curve
+
+    def _build_mode_equity_curve(
+        self,
+        request: BacktestRunRequest,
+        rows: list[dict[str, Any]],
+        trades: list[TradeRecord],
+        strategy_mode: StrategyMode,
+    ) -> list[EquityPoint]:
         realized_pnl = 0.0
         peak_equity = request.initial_equity
-        trade_by_exit_timestamp = {trade.exit_timestamp: trade for trade in trades}
+        trades_by_exit_timestamp: dict[Any, list[TradeRecord]] = {}
+        for trade in trades:
+            trades_by_exit_timestamp.setdefault(trade.exit_timestamp, []).append(trade)
         entry_timestamps = {trade.entry_timestamp for trade in trades}
         exit_timestamps = {trade.exit_timestamp for trade in trades}
         equity_curve: list[EquityPoint] = []
 
         for row in rows:
             timestamp = row["timestamp"]
-            if timestamp in trade_by_exit_timestamp:
-                realized_pnl += trade_by_exit_timestamp[timestamp].net_pnl
+            for trade in trades_by_exit_timestamp.get(timestamp, []):
+                realized_pnl += trade.net_pnl
             equity = request.initial_equity + realized_pnl
             peak_equity = max(peak_equity, equity)
             drawdown = (equity - peak_equity) / peak_equity if peak_equity else 0.0
             equity_curve.append(
                 EquityPoint(
                     timestamp=timestamp,
-                    strategy_mode=trades[0].strategy_mode if trades else StrategyMode.NO_TRADE,
+                    strategy_mode=strategy_mode,
                     equity=equity,
                     drawdown=drawdown,
                     drawdown_pct=drawdown * 100,
@@ -266,6 +358,29 @@ class BacktestEngine:
             )
 
         return equity_curve
+
+    def _equity_modes(
+        self,
+        request: BacktestRunRequest,
+        trades: list[TradeRecord],
+    ) -> list[StrategyMode]:
+        modes: list[StrategyMode] = []
+        for strategy in request.strategies:
+            if strategy.enabled and strategy.mode not in modes:
+                modes.append(strategy.mode)
+        for baseline in self._requested_baselines(
+            request,
+            [strategy for strategy in request.strategies if strategy.enabled],
+        ):
+            mode = StrategyMode(baseline.value)
+            if mode not in modes:
+                modes.append(mode)
+        for trade in trades:
+            if trade.strategy_mode not in modes:
+                modes.append(trade.strategy_mode)
+        if not modes:
+            return [StrategyMode.NO_TRADE]
+        return modes
 
     def _run_id(self, request: BacktestRunRequest) -> str:
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")

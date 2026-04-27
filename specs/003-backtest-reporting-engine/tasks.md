@@ -78,19 +78,19 @@
 
 ### Tests for User Story 2
 
-- [ ] T024 [P] [US2] Add unit tests for RANGE-only grid/range long and optional short signal behavior in backend/tests/unit/test_grid_strategy.py
-- [ ] T025 [P] [US2] Add unit tests for BREAKOUT_UP and BREAKOUT_DOWN signal behavior and non-breakout suppression in backend/tests/unit/test_breakout_strategy.py
-- [ ] T026 [P] [US2] Add unit tests for buy-and-hold, price-only breakout, and no-trade baseline generation in backend/tests/unit/test_baselines.py
-- [ ] T027 [P] [US2] Add integration tests for strategy-vs-baseline comparison outputs in backend/tests/integration/test_backtest_comparison_flow.py
+- [X] T024 [P] [US2] Add unit tests for RANGE-only grid/range long and optional short signal behavior in backend/tests/unit/test_grid_strategy.py
+- [X] T025 [P] [US2] Add unit tests for BREAKOUT_UP and BREAKOUT_DOWN signal behavior and non-breakout suppression in backend/tests/unit/test_breakout_strategy.py
+- [X] T026 [P] [US2] Add unit tests for buy-and-hold, price-only breakout, and no-trade baseline generation in backend/tests/unit/test_baselines.py
+- [X] T027 [P] [US2] Add integration tests for strategy-vs-baseline comparison outputs in backend/tests/integration/test_backtest_comparison_flow.py
 
 ### Implementation for User Story 2
 
-- [ ] T028 [US2] Implement RANGE-only grid/range signal generation with lower-range longs, optional upper-range shorts, midpoint or next-level take profit, ATR-buffered stops, and no martingale state in backend/src/strategies/grid_strategy.py
-- [ ] T029 [US2] Implement BREAKOUT_UP and BREAKOUT_DOWN signal generation with optional shorts, stop-back-inside-range or ATR stops, and risk-multiple take profit in backend/src/strategies/breakout_strategy.py
-- [ ] T030 [US2] Implement buy-and-hold, price-only breakout, and no-trade baseline generation in backend/src/strategies/baselines.py
-- [ ] T031 [US2] Wire strategy mode dispatch, baseline dispatch, and shared accounting assumptions into backend/src/backtest/engine.py
-- [ ] T032 [US2] Add return-by-regime, return-by-strategy-mode, return-by-symbol-provider, and baseline comparison calculations in backend/src/backtest/metrics.py
-- [ ] T033 [US2] Persist strategy mode, regime performance, and baseline comparison sections in backend/src/reports/writer.py
+- [X] T028 [US2] Implement RANGE-only grid/range signal generation with lower-range longs, optional upper-range shorts, midpoint or next-level take profit, ATR-buffered stops, and no martingale state in backend/src/strategies/grid_strategy.py
+- [X] T029 [US2] Implement BREAKOUT_UP and BREAKOUT_DOWN signal generation with optional shorts, stop-back-inside-range or ATR stops, and risk-multiple take profit in backend/src/strategies/breakout_strategy.py
+- [X] T030 [US2] Implement buy-and-hold, price-only breakout, and no-trade baseline generation in backend/src/strategies/baselines.py
+- [X] T031 [US2] Wire strategy mode dispatch, baseline dispatch, and shared accounting assumptions into backend/src/backtest/engine.py
+- [X] T032 [US2] Add return-by-regime, return-by-strategy-mode, return-by-symbol-provider, and baseline comparison calculations in backend/src/backtest/metrics.py
+- [X] T033 [US2] Persist strategy mode, regime performance, and baseline comparison sections in backend/src/reports/writer.py
 
 **Checkpoint**: User Story 2 can compare regime-aware strategies with baselines without making profitability or live-readiness claims.
 

@@ -34,9 +34,14 @@ def compose_report_json(
     if extra_notes:
         notes.extend(extra_notes)
 
+    metrics_payload = _to_jsonable(metrics) if metrics is not None else None
     return {
         "run": _to_jsonable(run),
-        "metrics": _to_jsonable(metrics) if metrics is not None else None,
+        "metrics": metrics_payload,
+        "return_by_regime": (metrics_payload or {}).get("return_by_regime", {}),
+        "return_by_strategy_mode": (metrics_payload or {}).get("return_by_strategy_mode", {}),
+        "return_by_symbol_provider": (metrics_payload or {}).get("return_by_symbol_provider", {}),
+        "baseline_comparison": (metrics_payload or {}).get("baseline_comparison", []),
         "notes": notes,
     }
 
@@ -63,8 +68,45 @@ def compose_report_markdown(
         f"Max drawdown %: {metrics_payload.get('max_drawdown_pct')}",
         f"Trades: {metrics_payload.get('number_of_trades')}",
         "",
-        "## Notes",
+        "## Strategy Mode Performance",
         "",
     ]
+    for strategy_mode, summary in report["return_by_strategy_mode"].items():
+        lines.append(
+            f"- {strategy_mode}: total return % {summary.get('total_return_pct')}, "
+            f"trades {summary.get('number_of_trades')}"
+        )
+    lines.extend(
+        [
+            "",
+            "## Regime Performance",
+            "",
+        ]
+    )
+    for regime, summary in report["return_by_regime"].items():
+        lines.append(
+            f"- {regime}: return % {summary.get('return_pct_display')}, "
+            f"trades {summary.get('number_of_trades')}"
+        )
+    lines.extend(
+        [
+            "",
+            "## Baseline Comparison",
+            "",
+        ]
+    )
+    for row in report["baseline_comparison"]:
+        lines.append(
+            f"- {row.get('strategy_mode')}: {row.get('category')}, "
+            f"total return % {row.get('total_return_pct')}, "
+            f"max drawdown % {row.get('max_drawdown_pct')}"
+        )
+    lines.extend(
+        [
+            "",
+            "## Notes",
+            "",
+        ]
+    )
     lines.extend(f"- {note}" for note in report["notes"])
     return "\n".join(lines) + "\n"

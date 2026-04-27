@@ -1,6 +1,13 @@
 from collections.abc import Sequence
+from typing import Any
 
-from src.models.backtest import EquityPoint, MetricsSummary, TradeRecord
+from src.models.backtest import EquityPoint, MetricsSummary, StrategyMode, TradeRecord
+
+BASELINE_MODES = {
+    StrategyMode.BUY_HOLD,
+    StrategyMode.PRICE_BREAKOUT,
+    StrategyMode.NO_TRADE,
+}
 
 
 def calculate_metrics(
@@ -48,9 +55,10 @@ def calculate_metrics(
         number_of_trades=len(trades),
         average_holding_bars=average_holding_bars,
         max_consecutive_losses=_max_consecutive_losses(trades),
-        return_by_regime={},
-        return_by_strategy_mode={},
-        return_by_symbol_provider={},
+        return_by_regime=_group_trades_by_regime(trades),
+        return_by_strategy_mode=_group_by_strategy_mode(trades, equity_curve, initial_equity),
+        return_by_symbol_provider=_group_trades_by_symbol_provider(trades),
+        baseline_comparison=_baseline_comparison(trades, equity_curve, initial_equity),
         notes=notes,
     )
 
@@ -74,3 +82,87 @@ def _max_consecutive_losses(trades: Sequence[TradeRecord]) -> int:
         else:
             current = 0
     return longest
+
+
+def _group_trades_by_regime(trades: Sequence[TradeRecord]) -> dict[str, dict[str, Any]]:
+    grouped: dict[str, list[TradeRecord]] = {}
+    for trade in trades:
+        grouped.setdefault(trade.regime_at_signal or "unknown", []).append(trade)
+    return {key: _trade_group_summary(group_trades) for key, group_trades in grouped.items()}
+
+
+def _group_trades_by_symbol_provider(trades: Sequence[TradeRecord]) -> dict[str, dict[str, Any]]:
+    grouped: dict[str, list[TradeRecord]] = {}
+    for trade in trades:
+        provider = trade.provider or "unknown"
+        grouped.setdefault(f"{provider}:{trade.symbol}", []).append(trade)
+    return {key: _trade_group_summary(group_trades) for key, group_trades in grouped.items()}
+
+
+def _group_by_strategy_mode(
+    trades: Sequence[TradeRecord],
+    equity_curve: Sequence[EquityPoint],
+    initial_equity: float,
+) -> dict[str, dict[str, Any]]:
+    modes = {point.strategy_mode for point in equity_curve}
+    modes.update(trade.strategy_mode for trade in trades)
+    return {
+        mode.value: _strategy_mode_summary(mode, trades, equity_curve, initial_equity)
+        for mode in sorted(modes, key=lambda item: item.value)
+    }
+
+
+def _baseline_comparison(
+    trades: Sequence[TradeRecord],
+    equity_curve: Sequence[EquityPoint],
+    initial_equity: float,
+) -> list[dict[str, Any]]:
+    grouped = _group_by_strategy_mode(trades, equity_curve, initial_equity)
+    rows = []
+    for strategy_mode, summary in grouped.items():
+        mode = StrategyMode(strategy_mode)
+        rows.append(
+            {
+                "strategy_mode": strategy_mode,
+                "category": "baseline" if mode in BASELINE_MODES else "strategy",
+                **summary,
+            }
+        )
+    return rows
+
+
+def _strategy_mode_summary(
+    mode: StrategyMode,
+    trades: Sequence[TradeRecord],
+    equity_curve: Sequence[EquityPoint],
+    initial_equity: float,
+) -> dict[str, Any]:
+    mode_trades = [trade for trade in trades if trade.strategy_mode == mode]
+    mode_equity = [point for point in equity_curve if point.strategy_mode == mode]
+    final_equity = mode_equity[-1].equity if mode_equity else initial_equity
+    total_return = (final_equity - initial_equity) / initial_equity if initial_equity else 0.0
+    max_drawdown = min((point.drawdown for point in mode_equity), default=0.0)
+    summary = _trade_group_summary(mode_trades)
+    summary.update(
+        {
+            "total_return": total_return,
+            "total_return_pct": total_return * 100,
+            "max_drawdown": max_drawdown,
+            "max_drawdown_pct": max_drawdown * 100,
+        }
+    )
+    return summary
+
+
+def _trade_group_summary(trades: Sequence[TradeRecord]) -> dict[str, Any]:
+    net_pnl = sum(trade.net_pnl for trade in trades)
+    notional = sum(trade.notional for trade in trades)
+    return_pct = net_pnl / notional if notional else 0.0
+    wins = [trade for trade in trades if trade.net_pnl > 0]
+    return {
+        "number_of_trades": len(trades),
+        "net_pnl": net_pnl,
+        "return_pct": return_pct,
+        "return_pct_display": return_pct * 100,
+        "win_rate": len(wins) / len(trades) if trades else None,
+    }
