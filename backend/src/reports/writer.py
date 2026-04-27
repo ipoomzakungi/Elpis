@@ -35,8 +35,15 @@ def compose_report_json(
         notes.extend(extra_notes)
 
     metrics_payload = _to_jsonable(metrics) if metrics is not None else None
+    run_payload = _to_jsonable(run)
+    config_payload = run_payload.get("config", {}) if isinstance(run_payload, dict) else {}
     return {
-        "run": _to_jsonable(run),
+        "run": run_payload,
+        "research_disclaimer": RESEARCH_ONLY_WARNING,
+        "assumptions": config_payload.get("assumptions", {}),
+        "data_identity": run_payload.get("data_identity", {}),
+        "config_hash": run_payload.get("config_hash"),
+        "limitations": run_payload.get("limitations", [NO_INTRABAR_LIMITATION]),
         "metrics": metrics_payload,
         "return_by_regime": (metrics_payload or {}).get("return_by_regime", {}),
         "return_by_strategy_mode": (metrics_payload or {}).get("return_by_strategy_mode", {}),
@@ -61,6 +68,23 @@ def compose_report_markdown(
         f"Status: {run_payload.get('status', 'unknown')}",
         f"Symbol: {run_payload.get('symbol', 'unknown')}",
         f"Timeframe: {run_payload.get('timeframe', 'unknown')}",
+        f"Config hash: {report.get('config_hash')}",
+        "",
+        "## Data Identity",
+        "",
+        f"Provider: {report['data_identity'].get('provider')}",
+        f"Feature path: {report['data_identity'].get('feature_path')}",
+        f"Rows: {report['data_identity'].get('row_count')}",
+        f"Content hash: {report['data_identity'].get('content_hash')}",
+        "",
+        "## Assumptions",
+        "",
+        f"Fee rate: {report['assumptions'].get('fee_rate')}",
+        f"Slippage rate: {report['assumptions'].get('slippage_rate')}",
+        f"Risk per trade: {report['assumptions'].get('risk_per_trade')}",
+        f"Max positions: {report['assumptions'].get('max_positions')}",
+        f"Leverage: {report['assumptions'].get('leverage')}",
+        f"Compounding: {report['assumptions'].get('allow_compounding')}",
         "",
         "## Summary Metrics",
         "",
@@ -101,6 +125,14 @@ def compose_report_markdown(
             f"total return % {row.get('total_return_pct')}, "
             f"max drawdown % {row.get('max_drawdown_pct')}"
         )
+    lines.extend(
+        [
+            "",
+            "## Limitations",
+            "",
+        ]
+    )
+    lines.extend(f"- {limitation}" for limitation in report["limitations"])
     lines.extend(
         [
             "",

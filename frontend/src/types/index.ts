@@ -227,6 +227,9 @@ export interface BacktestRun {
   timeframe: string;
   feature_path: string;
   config: BacktestRunConfig;
+  config_hash: string | null;
+  data_identity: Record<string, unknown>;
+  limitations: string[];
   artifacts: BacktestArtifact[];
   warnings: string[];
 }

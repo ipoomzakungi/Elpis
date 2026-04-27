@@ -131,17 +131,17 @@
 
 ### Tests for User Story 4
 
-- [ ] T045 [P] [US4] Add unit tests rejecting live-trading fields, leverage above 1, max_positions above 1, invalid fee/slippage/risk, and unexpected config keys in backend/tests/unit/test_backtest_guardrails.py
-- [ ] T046 [P] [US4] Add reproducibility integration tests comparing rerun trade logs, equity curves, metrics, and metadata for unchanged inputs in backend/tests/integration/test_backtest_reproducibility.py
-- [ ] T047 [P] [US4] Add compatibility integration tests for existing provider metadata, download, feature processing, regime, and dashboard-support API flows in backend/tests/integration/test_backtest_compatibility.py
+- [X] T045 [P] [US4] Add unit tests rejecting live-trading fields, leverage above 1, max_positions above 1, invalid fee/slippage/risk, and unexpected config keys in backend/tests/unit/test_backtest_guardrails.py
+- [X] T046 [P] [US4] Add reproducibility integration tests comparing rerun trade logs, equity curves, metrics, and metadata for unchanged inputs in backend/tests/integration/test_backtest_reproducibility.py
+- [X] T047 [P] [US4] Add compatibility integration tests for existing provider metadata, download, feature processing, regime, and dashboard-support API flows in backend/tests/integration/test_backtest_compatibility.py
 
 ### Implementation for User Story 4
 
-- [ ] T048 [US4] Enforce Pydantic extra-forbid config behavior, v0 leverage guardrails, max-one-position guardrails, and forbidden live-trading field rejection in backend/src/models/backtest.py
-- [ ] T049 [US4] Add data identity, assumption snapshots, limitation notes, artifact content hashes, and deterministic config serialization in backend/src/backtest/report_store.py
-- [ ] T050 [US4] Add research-only disclaimer and no-intrabar limitation text to JSON and Markdown reports in backend/src/reports/writer.py
-- [ ] T051 [US4] Display assumptions, data identity, limitations, and no-profitability/no-live-readiness wording in frontend/src/app/backtests/page.tsx
-- [ ] T052 [US4] Update reproducibility and forbidden-technology validation steps in specs/003-backtest-reporting-engine/quickstart.md
+- [X] T048 [US4] Enforce Pydantic extra-forbid config behavior, v0 leverage guardrails, max-one-position guardrails, and forbidden live-trading field rejection in backend/src/models/backtest.py
+- [X] T049 [US4] Add data identity, assumption snapshots, limitation notes, artifact content hashes, and deterministic config serialization in backend/src/backtest/report_store.py
+- [X] T050 [US4] Add research-only disclaimer and no-intrabar limitation text to JSON and Markdown reports in backend/src/reports/writer.py
+- [X] T051 [US4] Display assumptions, data identity, limitations, and no-profitability/no-live-readiness wording in frontend/src/app/backtests/page.tsx
+- [X] T052 [US4] Update reproducibility and forbidden-technology validation steps in specs/003-backtest-reporting-engine/quickstart.md
 
 **Checkpoint**: User Story 4 preserves reproducibility, compatibility, and v0 research-only boundaries.
 

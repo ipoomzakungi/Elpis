@@ -5,11 +5,69 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+FORBIDDEN_LIVE_TRADING_FIELDS = {
+    "account",
+    "accountid",
+    "apikey",
+    "apisecret",
+    "broker",
+    "brokerid",
+    "exchangecredential",
+    "exchangecredentials",
+    "exchangesecret",
+    "executeorder",
+    "execution",
+    "live",
+    "livetrading",
+    "margin",
+    "order",
+    "ordertype",
+    "positionmanager",
+    "privatekey",
+    "secretkey",
+    "wallet",
+    "walletaddress",
+}
+
+
+def _normalize_guardrail_key(value: str) -> str:
+    return "".join(character for character in value.lower() if character.isalnum())
+
+
+def _forbidden_live_trading_paths(value: Any, prefix: str = "") -> list[str]:
+    if isinstance(value, dict):
+        matches: list[str] = []
+        for key, item in value.items():
+            path = f"{prefix}.{key}" if prefix else str(key)
+            if _normalize_guardrail_key(str(key)) in FORBIDDEN_LIVE_TRADING_FIELDS:
+                matches.append(path)
+            matches.extend(_forbidden_live_trading_paths(item, path))
+        return matches
+    if isinstance(value, list):
+        matches = []
+        for index, item in enumerate(value):
+            path = f"{prefix}.{index}" if prefix else str(index)
+            matches.extend(_forbidden_live_trading_paths(item, path))
+        return matches
+    return []
+
 
 class StrictModel(BaseModel):
     """Base model for persisted research configurations."""
 
     model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_live_trading_fields(cls, value: Any) -> Any:
+        matches = _forbidden_live_trading_paths(value)
+        if matches:
+            fields = ", ".join(sorted(set(matches)))
+            raise ValueError(
+                "live-trading fields are not allowed in v0 research backtests: "
+                f"{fields}"
+            )
+        return value
 
 
 class BacktestStatus(StrEnum):
@@ -238,6 +296,9 @@ class BacktestRun(BaseModel):
     timeframe: str
     feature_path: str
     config: BacktestRunRequest
+    config_hash: str | None = None
+    data_identity: dict[str, Any] = Field(default_factory=dict)
+    limitations: list[str] = Field(default_factory=list)
     artifacts: list[ReportArtifact] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
 

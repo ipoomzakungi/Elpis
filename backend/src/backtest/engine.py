@@ -1,3 +1,5 @@
+import hashlib
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -50,6 +52,12 @@ BASE_REQUIRED_COLUMNS = {
     "range_mid",
 }
 REGIME_REQUIRED_MODES = {StrategyMode.GRID_RANGE, StrategyMode.BREAKOUT}
+BACKTEST_LIMITATIONS = [
+    RESEARCH_ONLY_WARNING,
+    NO_INTRABAR_LIMITATION,
+    "Signals are simulated at the next bar open; no intrabar tick order is inferred.",
+    "v0 assumes no leverage, no compounding, and at most one open position per strategy mode.",
+]
 
 
 class BacktestFeatureNotFoundError(FileNotFoundError):
@@ -76,6 +84,7 @@ class BacktestEngine:
         rows = features.sort("timestamp").to_dicts()
         run_id = self._run_id(request)
         warnings = [RESEARCH_ONLY_WARNING, NO_INTRABAR_LIMITATION]
+        data_identity = self._data_identity(features, feature_path, request)
 
         trades = self._simulate_trades(run_id, request, rows, warnings)
         equity_curve = self._build_equity_curve(request, rows, trades)
@@ -94,6 +103,9 @@ class BacktestEngine:
             timeframe=request.timeframe,
             feature_path=feature_path.as_posix(),
             config=request,
+            config_hash=self._config_hash(request),
+            data_identity=data_identity,
+            limitations=BACKTEST_LIMITATIONS,
             artifacts=[],
             warnings=warnings,
         )
@@ -385,3 +397,34 @@ class BacktestEngine:
     def _run_id(self, request: BacktestRunRequest) -> str:
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")
         return f"bt_{timestamp}_{request.symbol.lower()}_{request.timeframe}"
+
+    def _config_hash(self, request: BacktestRunRequest) -> str:
+        payload = json.dumps(request.model_dump(mode="json"), sort_keys=True)
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def _data_identity(
+        self,
+        features: pl.DataFrame,
+        feature_path: Path,
+        request: BacktestRunRequest,
+    ) -> dict[str, Any]:
+        sorted_features = features.sort("timestamp")
+        first_timestamp = _timestamp_to_text(sorted_features["timestamp"][0])
+        last_timestamp = _timestamp_to_text(sorted_features["timestamp"][-1])
+        content_hash = hashlib.sha256(feature_path.read_bytes()).hexdigest()
+        return {
+            "provider": request.provider,
+            "symbol": request.symbol,
+            "timeframe": request.timeframe,
+            "feature_path": feature_path.as_posix(),
+            "exists": feature_path.exists(),
+            "row_count": features.height,
+            "first_timestamp": first_timestamp,
+            "last_timestamp": last_timestamp,
+            "columns": list(features.columns),
+            "content_hash": content_hash,
+        }
+
+
+def _timestamp_to_text(value: Any) -> str:
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)

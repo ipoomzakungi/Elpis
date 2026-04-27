@@ -92,9 +92,14 @@ export default function BacktestsPage() {
   )
 
   const notes = useMemo(() => {
-    const values = [...(run?.warnings ?? []), ...(metrics?.notes ?? [])]
+    const values = [
+      'Historical simulation outputs only; not profitability evidence, predictive proof, safety evidence, or live-trading readiness.',
+      ...(run?.warnings ?? []),
+      ...(run?.limitations ?? []),
+      ...(metrics?.notes ?? []),
+    ]
     return Array.from(new Set(values))
-  }, [run?.warnings, metrics?.notes])
+  }, [run?.warnings, run?.limitations, metrics?.notes])
 
   return (
     <div className="space-y-6">
@@ -148,6 +153,21 @@ export default function BacktestsPage() {
                 </ReportSection>
                 <ReportSection title="Drawdown">
                   <DrawdownChart data={equity} height={300} />
+                </ReportSection>
+              </div>
+
+              <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                <ReportSection title="Assumptions">
+                  <KeyValueTable
+                    rows={objectRows({
+                      ...run?.config.assumptions,
+                      initial_equity: run?.config.initial_equity,
+                      config_hash: run?.config_hash,
+                    })}
+                  />
+                </ReportSection>
+                <ReportSection title="Data Identity">
+                  <KeyValueTable rows={objectRows(run?.data_identity ?? {})} />
                 </ReportSection>
               </div>
 
@@ -297,9 +317,36 @@ function MetricTable({ rows, columns }: { rows: Array<Record<string, unknown>>; 
   )
 }
 
+function KeyValueTable({ rows }: { rows: Array<{ key: string; value: unknown }> }) {
+  if (rows.length === 0) {
+    return <p className="text-sm text-gray-400">No details</p>
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-left text-sm">
+        <tbody className="divide-y divide-gray-700">
+          {rows.map((row) => (
+            <tr key={row.key}>
+              <th className="w-44 px-3 py-2 text-xs uppercase text-gray-400">{row.key}</th>
+              <td className="px-3 py-2 text-gray-200">{formatValue(row.value)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function objectRows(value: Record<string, unknown>): Array<{ key: string; value: unknown }> {
+  return Object.entries(value).map(([key, item]) => ({ key, value: item }))
+}
+
 function formatValue(value: unknown): string {
   if (value === null || value === undefined) return 'n/a'
   if (typeof value === 'number') return formatNumber(value)
+  if (Array.isArray(value)) return value.join(', ')
+  if (typeof value === 'object') return JSON.stringify(value)
   return String(value)
 }
 

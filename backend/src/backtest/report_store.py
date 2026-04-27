@@ -20,7 +20,19 @@ from src.models.backtest import (
     ReportFormat,
     TradeRecord,
 )
-from src.reports.writer import compose_report_json, compose_report_markdown
+from src.reports.writer import (
+    NO_INTRABAR_LIMITATION,
+    RESEARCH_ONLY_WARNING,
+    compose_report_json,
+    compose_report_markdown,
+)
+
+DEFAULT_LIMITATIONS = [
+    RESEARCH_ONLY_WARNING,
+    NO_INTRABAR_LIMITATION,
+    "Signals are simulated at the next bar open; no intrabar tick order is inferred.",
+    "v0 assumes no leverage, no compounding, and at most one open position per strategy mode.",
+]
 
 
 class ReportStoreError(RuntimeError):
@@ -183,6 +195,7 @@ class ReportStore:
         metrics: MetricsSummary,
         report_format: ReportFormat,
     ) -> BacktestRun:
+        run = self._enrich_run_metadata(run)
         artifacts = [
             self.write_json(
                 run.run_id,
@@ -233,6 +246,18 @@ class ReportStore:
         )
         return run.model_copy(update={"artifacts": [metadata_artifact, *artifacts]})
 
+    def _enrich_run_metadata(self, run: BacktestRun) -> BacktestRun:
+        updates: dict[str, Any] = {}
+        if run.config_hash is None:
+            updates["config_hash"] = _stable_hash(run.config.model_dump(mode="json"))
+        if not run.data_identity:
+            updates["data_identity"] = _source_data_identity(run)
+        if not run.limitations:
+            updates["limitations"] = DEFAULT_LIMITATIONS
+        if not updates:
+            return run
+        return run.model_copy(update=updates)
+
     def _read_optional_metrics(self, run_id: str) -> MetricsSummary | None:
         try:
             return self.read_metrics_summary(run_id)
@@ -261,6 +286,45 @@ def _to_jsonable(value: dict[str, Any] | BaseModel) -> dict[str, Any]:
     if isinstance(value, BaseModel):
         return value.model_dump(mode="json")
     return value
+
+
+def _stable_hash(payload: dict[str, Any]) -> str:
+    content = json.dumps(payload, sort_keys=True)
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
+def _source_data_identity(run: BacktestRun) -> dict[str, Any]:
+    feature_path = Path(run.feature_path)
+    identity: dict[str, Any] = {
+        "provider": run.provider,
+        "symbol": run.symbol,
+        "timeframe": run.timeframe,
+        "feature_path": run.feature_path,
+        "exists": feature_path.exists(),
+    }
+    if not feature_path.exists():
+        return identity
+
+    frame = pl.read_parquet(feature_path)
+    sorted_frame = frame.sort("timestamp") if "timestamp" in frame.columns else frame
+    identity.update(
+        {
+            "row_count": frame.height,
+            "first_timestamp": _timestamp_to_text(sorted_frame["timestamp"][0])
+            if "timestamp" in sorted_frame.columns and frame.height
+            else None,
+            "last_timestamp": _timestamp_to_text(sorted_frame["timestamp"][-1])
+            if "timestamp" in sorted_frame.columns and frame.height
+            else None,
+            "columns": list(frame.columns),
+            "content_hash": hashlib.sha256(feature_path.read_bytes()).hexdigest(),
+        }
+    )
+    return identity
+
+
+def _timestamp_to_text(value: Any) -> str:
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)
 
 
 def _trades_frame(trades: list[TradeRecord]) -> pl.DataFrame:

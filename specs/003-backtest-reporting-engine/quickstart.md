@@ -92,6 +92,8 @@ Expected:
 
 - Response includes `run_id`, `status`, `metrics`, `warnings`, and artifact paths.
 - A completed MVP run writes `metadata.json`, `config.json`, `trades.parquet`, `equity.parquet`, `metrics.json`, and `report.json` under `data/reports/{run_id}/`.
+- Saved metadata includes a deterministic `config_hash`, `data_identity` with source feature content hash and row range, report `limitations`, and artifact `content_hash` values.
+- Trade records include an `assumptions_snapshot` so position sizing, fees, slippage, leverage, and compounding assumptions remain auditable.
 - If the selected configuration produces no simulated trades, the run still completes with an inspectable empty trade log, flat equity curve, and metric notes explaining that trade ratios are undefined.
 - If processed features are missing, `POST /api/v1/backtests/run` returns a structured `NOT_FOUND` response that names the expected feature path.
 - Invalid assumptions such as leverage above 1 or max positions above 1 return a structured `VALIDATION_ERROR` response.
@@ -127,6 +129,39 @@ Open `http://localhost:3000/backtests` or the implemented backtest panel and ver
 - Strategy mode and baseline comparison sections render.
 - Report assumptions and limitations are visible.
 - Text does not claim profitability or live-trading readiness.
+
+## Reproducibility Check
+
+Re-run the same request against unchanged input features and compare stable artifacts:
+
+```powershell
+cd backend
+pytest tests/integration/test_backtest_reproducibility.py -v
+```
+
+Expected:
+
+- Stable trade rows match after ignoring the new run identifier.
+- Equity curves and metrics match exactly.
+- Metadata has matching saved configuration, `config_hash`, `data_identity`, limitations, and warnings.
+- Report JSON includes assumptions, data identity, limitation notes, and content hashes.
+
+## Forbidden-Technology And Guardrail Check
+
+Run the guardrail tests:
+
+```powershell
+cd backend
+pytest tests/unit/test_backtest_guardrails.py -v
+pytest tests/integration/test_backtest_compatibility.py -v
+```
+
+Expected:
+
+- Requests with live-trading fields such as `broker`, `api_key`, `private_key`, `live_trading`, `order_type`, or exchange secrets are rejected.
+- Requests with leverage above 1, max positions above 1, invalid fee/slippage, or invalid risk are rejected.
+- Existing provider metadata, download, process, feature, regime, data-quality, and dashboard-support API flows still return expected responses.
+- No Rust, ClickHouse, PostgreSQL, Kafka, Kubernetes, ML, broker integration, private keys, or real execution behavior is introduced.
 
 ## Required Test Commands
 
