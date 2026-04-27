@@ -8,9 +8,11 @@ import polars as pl
 
 from src.backtest.metrics import calculate_metrics
 from src.backtest.portfolio import (
+    NO_LEVERAGE_CAP_NOTE,
     apply_entry_slippage,
     calculate_entry_fee,
-    calculate_position_size,
+    calculate_capital_position_sizing,
+    calculate_position_sizing,
     close_position,
     evaluate_exit,
 )
@@ -297,12 +299,27 @@ class BacktestEngine:
             price=entry_raw_price,
             slippage_rate=request.assumptions.slippage_rate,
         )
-        quantity, notional = calculate_position_size(
-            equity=request.initial_equity,
-            entry_price=entry_price,
-            stop_loss=signal.stop_loss,
-            risk_per_trade=request.assumptions.risk_per_trade,
-        )
+        if signal.strategy_mode == StrategyMode.BUY_HOLD:
+            sizing = calculate_capital_position_sizing(
+                equity=request.initial_equity,
+                entry_price=entry_price,
+                capital_fraction=request.assumptions.buy_hold_capital_fraction,
+            )
+            sizing_method = "capital_fraction"
+            sizing_notes = ["Buy-and-hold baseline uses capital-based sizing."]
+        else:
+            sizing = calculate_position_sizing(
+                equity=request.initial_equity,
+                entry_price=entry_price,
+                stop_loss=signal.stop_loss,
+                risk_per_trade=request.assumptions.risk_per_trade,
+                max_notional=request.initial_equity,
+            )
+            sizing_method = "risk_fractional"
+            sizing_notes = [NO_LEVERAGE_CAP_NOTE] if sizing.capped else []
+
+        quantity = sizing.quantity
+        notional = sizing.notional
         entry_fee = calculate_entry_fee(notional, request.assumptions.fee_rate)
 
         return Position(
@@ -316,6 +333,10 @@ class BacktestEngine:
             stop_loss=signal.stop_loss,
             take_profit=signal.take_profit,
             entry_fee=entry_fee,
+            sizing_method=sizing_method,
+            requested_notional=sizing.requested_notional,
+            notional_cap=request.initial_equity,
+            sizing_notes=sizing_notes,
         )
 
     def _build_equity_curve(

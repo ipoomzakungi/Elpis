@@ -61,6 +61,8 @@ def compose_report_markdown(
     report = compose_report_json(run=run, metrics=metrics, extra_notes=extra_notes)
     run_payload = report["run"]
     metrics_payload = report["metrics"] or {}
+    total_return_pct = metrics_payload.get("total_return_pct")
+    total_return_display = "n/a" if total_return_pct is None else total_return_pct
     lines = [
         "# Backtest Report",
         "",
@@ -88,7 +90,7 @@ def compose_report_markdown(
         "",
         "## Summary Metrics",
         "",
-        f"Total return %: {metrics_payload.get('total_return_pct')}",
+        f"Total return %: {total_return_display}",
         f"Max drawdown %: {metrics_payload.get('max_drawdown_pct')}",
         f"Trades: {metrics_payload.get('number_of_trades')}",
         "",

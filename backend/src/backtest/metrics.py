@@ -16,8 +16,18 @@ def calculate_metrics(
     initial_equity: float,
 ) -> MetricsSummary:
     notes: list[str] = []
-    final_equity = equity_curve[-1].equity if equity_curve else initial_equity
-    total_return = (final_equity - initial_equity) / initial_equity if initial_equity else 0.0
+    strategy_modes = _strategy_modes(trades, equity_curve)
+    if len(strategy_modes) > 1:
+        total_return = None
+        total_return_pct = None
+        notes.append(
+            "Summary total return is omitted because this run compares independent strategy modes; "
+            "use return_by_strategy_mode and baseline_comparison for per-mode results."
+        )
+    else:
+        final_equity = equity_curve[-1].equity if equity_curve else initial_equity
+        total_return = (final_equity - initial_equity) / initial_equity if initial_equity else 0.0
+        total_return_pct = total_return * 100
     max_drawdown = min((point.drawdown for point in equity_curve), default=0.0)
 
     winning_trades = [trade for trade in trades if trade.net_pnl > 0]
@@ -44,7 +54,7 @@ def calculate_metrics(
 
     return MetricsSummary(
         total_return=total_return,
-        total_return_pct=total_return * 100,
+        total_return_pct=total_return_pct,
         max_drawdown=max_drawdown,
         max_drawdown_pct=max_drawdown * 100,
         profit_factor=profit_factor,
@@ -82,6 +92,15 @@ def _max_consecutive_losses(trades: Sequence[TradeRecord]) -> int:
         else:
             current = 0
     return longest
+
+
+def _strategy_modes(
+    trades: Sequence[TradeRecord],
+    equity_curve: Sequence[EquityPoint],
+) -> set[StrategyMode]:
+    modes = {point.strategy_mode for point in equity_curve}
+    modes.update(trade.strategy_mode for trade in trades)
+    return modes
 
 
 def _group_trades_by_regime(trades: Sequence[TradeRecord]) -> dict[str, dict[str, Any]]:

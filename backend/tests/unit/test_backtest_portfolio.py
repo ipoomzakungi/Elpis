@@ -5,6 +5,7 @@ import pytest
 from src.backtest.portfolio import (
     apply_entry_slippage,
     apply_exit_slippage,
+    calculate_position_sizing,
     calculate_position_size,
     close_position,
     evaluate_exit,
@@ -28,6 +29,21 @@ def test_calculate_position_size_uses_fixed_fractional_risk():
 
     assert quantity == pytest.approx(20.0)
     assert notional == pytest.approx(2000.0)
+
+
+def test_calculate_position_sizing_caps_notional_to_available_equity():
+    sizing = calculate_position_sizing(
+        equity=10000.0,
+        entry_price=100.0,
+        stop_loss=99.99,
+        risk_per_trade=0.01,
+        max_notional=10000.0,
+    )
+
+    assert sizing.requested_notional > 10000.0
+    assert sizing.notional == pytest.approx(10000.0)
+    assert sizing.quantity == pytest.approx(100.0)
+    assert sizing.capped is True
 
 
 def test_slippage_is_adverse_for_entries_and_exits():
@@ -114,6 +130,46 @@ def test_close_position_calculates_long_and_short_net_pnl_with_fees_and_slippage
     assert short_trade.net_pnl > 0
     assert long_trade.fees > long_position.entry_fee
     assert short_trade.slippage > 0
+
+
+def test_close_position_records_notional_cap_in_assumptions_snapshot():
+    assumptions = BacktestAssumptions(fee_rate=0.0, slippage_rate=0.0)
+    timestamp = datetime(2026, 4, 1)
+    position = Position(
+        position_id="P1",
+        strategy_mode=StrategyMode.GRID_RANGE,
+        side=TradeSide.LONG,
+        entry_timestamp=timestamp,
+        entry_price=100.0,
+        quantity=100.0,
+        notional=10000.0,
+        stop_loss=99.99,
+        take_profit=None,
+        entry_fee=0.0,
+        requested_notional=1000000.0,
+        notional_cap=10000.0,
+        sizing_notes=["Position notional capped to available equity for no-leverage v0."],
+    )
+
+    trade = close_position(
+        run_id="test_run",
+        trade_index=1,
+        position=position,
+        exit_timestamp=timestamp + timedelta(minutes=15),
+        raw_exit_price=101.0,
+        exit_reason=ExitReason.END_OF_DATA,
+        assumptions=assumptions,
+        signal_timestamp=timestamp,
+        symbol="BTCUSDT",
+        timeframe="15m",
+        provider="binance",
+        regime_at_signal="RANGE",
+        holding_bars=1,
+    )
+
+    assert trade.assumptions_snapshot["sizing"]["capped"] is True
+    assert trade.assumptions_snapshot["sizing"]["requested_notional"] == pytest.approx(1000000.0)
+    assert trade.assumptions_snapshot["sizing"]["capped_notional"] == pytest.approx(10000.0)
 
 
 def test_evaluate_exit_returns_end_of_data_on_final_bar():

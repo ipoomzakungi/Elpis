@@ -137,6 +137,7 @@ class BacktestAssumptions(StrictModel):
     fee_rate: float = Field(default=0.0004, ge=0, le=0.1)
     slippage_rate: float = Field(default=0.0002, ge=0, le=0.1)
     risk_per_trade: float = Field(default=0.01, gt=0, le=1)
+    buy_hold_capital_fraction: float = Field(default=1.0, gt=0, le=1)
     max_positions: int = Field(default=1, ge=1, le=1)
     allow_short: bool = Field(default=True)
     allow_compounding: bool = Field(default=False)
@@ -219,6 +220,10 @@ class Position(BaseModel):
     stop_loss: float = Field(..., gt=0)
     take_profit: float | None = Field(default=None, gt=0)
     entry_fee: float = Field(default=0, ge=0)
+    sizing_method: str = Field(default="risk_fractional")
+    requested_notional: float | None = Field(default=None, gt=0)
+    notional_cap: float | None = Field(default=None, gt=0)
+    sizing_notes: list[str] = Field(default_factory=list)
 
 
 class TradeRecord(BaseModel):
@@ -258,8 +263,8 @@ class EquityPoint(BaseModel):
 
 
 class MetricsSummary(BaseModel):
-    total_return: float
-    total_return_pct: float
+    total_return: float | None
+    total_return_pct: float | None
     max_drawdown: float
     max_drawdown_pct: float
     profit_factor: float | None = None

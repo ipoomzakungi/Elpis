@@ -34,10 +34,14 @@ def _trade(index: int, pnl: float, holding_bars: int = 2) -> TradeRecord:
     )
 
 
-def _equity(value: float, drawdown: float = 0.0) -> EquityPoint:
+def _equity(
+    value: float,
+    drawdown: float = 0.0,
+    strategy_mode: StrategyMode = StrategyMode.GRID_RANGE,
+) -> EquityPoint:
     return EquityPoint(
         timestamp=datetime(2026, 4, 1),
-        strategy_mode=StrategyMode.GRID_RANGE,
+        strategy_mode=strategy_mode,
         equity=value,
         drawdown=drawdown,
         drawdown_pct=drawdown * 100,
@@ -102,3 +106,20 @@ def test_calculate_metrics_handles_only_wins_and_only_losses():
     assert only_losses.profit_factor == 0
     assert only_losses.average_win is None
     assert only_losses.max_consecutive_losses == 2
+
+
+def test_calculate_metrics_omits_global_total_return_for_multi_mode_comparison():
+    metrics = calculate_metrics(
+        trades=[_trade(1, 50.0)],
+        equity_curve=[
+            _equity(1050.0, strategy_mode=StrategyMode.GRID_RANGE),
+            _equity(1200.0, strategy_mode=StrategyMode.BUY_HOLD),
+        ],
+        initial_equity=1000.0,
+    )
+
+    assert metrics.total_return is None
+    assert metrics.total_return_pct is None
+    assert metrics.return_by_strategy_mode["grid_range"]["total_return_pct"] == pytest.approx(5.0)
+    assert metrics.return_by_strategy_mode["buy_hold"]["total_return_pct"] == pytest.approx(20.0)
+    assert any("independent strategy modes" in note for note in metrics.notes)

@@ -17,18 +17,90 @@ class ExitDecision:
     price: float
 
 
+@dataclass(frozen=True)
+class PositionSizing:
+    quantity: float
+    notional: float
+    requested_quantity: float
+    requested_notional: float
+    capped: bool
+
+
+NO_LEVERAGE_CAP_NOTE = "Position notional capped to available equity for no-leverage v0."
+
+
 def calculate_position_size(
     equity: float,
     entry_price: float,
     stop_loss: float,
     risk_per_trade: float,
 ) -> tuple[float, float]:
+    sizing = calculate_position_sizing(
+        equity=equity,
+        entry_price=entry_price,
+        stop_loss=stop_loss,
+        risk_per_trade=risk_per_trade,
+    )
+    return sizing.quantity, sizing.notional
+
+
+def calculate_position_sizing(
+    equity: float,
+    entry_price: float,
+    stop_loss: float,
+    risk_per_trade: float,
+    max_notional: float | None = None,
+) -> PositionSizing:
+    if entry_price <= 0:
+        raise ValueError("entry_price must be positive")
     per_unit_risk = abs(entry_price - stop_loss)
     if per_unit_risk <= 0:
         raise ValueError("entry_price and stop_loss must not be equal")
     risk_amount = equity * risk_per_trade
-    quantity = risk_amount / per_unit_risk
-    return quantity, quantity * entry_price
+    requested_quantity = risk_amount / per_unit_risk
+    requested_notional = requested_quantity * entry_price
+    quantity = requested_quantity
+    notional = requested_notional
+    capped = False
+
+    if max_notional is not None:
+        if max_notional <= 0:
+            raise ValueError("max_notional must be positive")
+        if requested_notional > max_notional:
+            notional = max_notional
+            quantity = max_notional / entry_price
+            capped = True
+
+    return PositionSizing(
+        quantity=quantity,
+        notional=notional,
+        requested_quantity=requested_quantity,
+        requested_notional=requested_notional,
+        capped=capped,
+    )
+
+
+def calculate_capital_position_sizing(
+    equity: float,
+    entry_price: float,
+    capital_fraction: float,
+) -> PositionSizing:
+    if entry_price <= 0:
+        raise ValueError("entry_price must be positive")
+    if equity <= 0:
+        raise ValueError("equity must be positive")
+    if capital_fraction <= 0 or capital_fraction > 1:
+        raise ValueError("capital_fraction must be greater than 0 and less than or equal to 1")
+
+    notional = equity * capital_fraction
+    quantity = notional / entry_price
+    return PositionSizing(
+        quantity=quantity,
+        notional=notional,
+        requested_quantity=quantity,
+        requested_notional=notional,
+        capped=False,
+    )
 
 
 def apply_entry_slippage(side: TradeSide, price: float, slippage_rate: float) -> float:
@@ -106,6 +178,17 @@ def close_position(
 
     fees = position.entry_fee + exit_fee
     net_pnl = gross_pnl - fees
+    assumptions_snapshot = assumptions.model_dump(mode="json")
+    if position.requested_notional is not None or position.sizing_method != "risk_fractional":
+        assumptions_snapshot["sizing"] = {
+            "method": position.sizing_method,
+            "requested_notional": position.requested_notional or position.notional,
+            "capped_notional": position.notional,
+            "notional_cap": position.notional_cap,
+            "capped": position.requested_notional is not None
+            and position.requested_notional > position.notional,
+            "notes": position.sizing_notes,
+        }
 
     return TradeRecord(
         trade_id=f"T{trade_index:06d}",
@@ -130,5 +213,5 @@ def close_position(
         net_pnl=net_pnl,
         return_pct=net_pnl / position.notional,
         holding_bars=holding_bars,
-        assumptions_snapshot=assumptions.model_dump(mode="json"),
+        assumptions_snapshot=assumptions_snapshot,
     )
