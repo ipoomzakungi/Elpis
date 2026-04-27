@@ -87,3 +87,78 @@ def test_run_backtest_endpoint_contract_no_trade_response(sample_backtest_featur
     assert body["status"] == "completed"
     assert body["metrics"]["number_of_trades"] == 0
     assert any("No trades" in note for note in body["metrics"]["notes"])
+
+
+def test_backtest_report_read_endpoints_contract(sample_backtest_features):
+    ParquetRepository().save_features(sample_backtest_features, symbol="BTCUSDT", interval="15m")
+
+    with TestClient(app) as client:
+        run_response = client.post("/api/v1/backtests/run", json=_run_payload())
+        run_id = run_response.json()["run_id"]
+
+        list_response = client.get("/api/v1/backtests")
+        detail_response = client.get(f"/api/v1/backtests/{run_id}")
+        trades_response = client.get(f"/api/v1/backtests/{run_id}/trades?limit=1&offset=0")
+        metrics_response = client.get(f"/api/v1/backtests/{run_id}/metrics")
+        equity_response = client.get(f"/api/v1/backtests/{run_id}/equity")
+
+    assert list_response.status_code == 200
+    runs = list_response.json()["runs"]
+    assert any(run["run_id"] == run_id for run in runs)
+    assert runs[0]["strategy_modes"]
+
+    assert detail_response.status_code == 200
+    detail = detail_response.json()
+    assert detail["run_id"] == run_id
+    assert detail["artifacts"]
+    assert detail["config"]["symbol"] == "BTCUSDT"
+
+    assert trades_response.status_code == 200
+    trades_payload = trades_response.json()
+    assert trades_payload["meta"] == {"count": 1, "limit": 1, "offset": 0}
+    assert trades_payload["data"][0]["run_id"] == run_id
+    assert trades_payload["data"][0]["strategy_mode"] == "grid_range"
+
+    assert metrics_response.status_code == 200
+    metrics_payload = metrics_response.json()
+    assert metrics_payload["run_id"] == run_id
+    assert metrics_payload["summary"]["number_of_trades"] >= 1
+    assert metrics_payload["return_by_strategy_mode"]
+
+    assert equity_response.status_code == 200
+    equity_payload = equity_response.json()
+    assert equity_payload["run_id"] == run_id
+    assert equity_payload["meta"]["count"] >= len(sample_backtest_features)
+    assert equity_payload["data"][0]["strategy_mode"] == "grid_range"
+
+
+def test_backtest_report_read_endpoints_contract_missing_run():
+    with TestClient(app) as client:
+        response = client.get("/api/v1/backtests/unknown_run")
+
+    payload = response.json()
+    assert response.status_code == 404
+    assert payload["error"]["code"] == "NOT_FOUND"
+    assert "unknown_run" in payload["error"]["message"]
+
+
+def test_backtest_report_read_endpoints_contract_missing_artifact(
+    sample_backtest_features,
+    isolated_data_paths,
+):
+    ParquetRepository().save_features(sample_backtest_features, symbol="BTCUSDT", interval="15m")
+
+    with TestClient(app) as client:
+        run_response = client.post("/api/v1/backtests/run", json=_run_payload())
+        run_id = run_response.json()["run_id"]
+
+    metrics_path = isolated_data_paths / "reports" / run_id / "metrics.json"
+    metrics_path.unlink()
+
+    with TestClient(app) as client:
+        response = client.get(f"/api/v1/backtests/{run_id}/metrics")
+
+    payload = response.json()
+    assert response.status_code == 404
+    assert payload["error"]["code"] == "NOT_FOUND"
+    assert run_id in payload["error"]["message"]

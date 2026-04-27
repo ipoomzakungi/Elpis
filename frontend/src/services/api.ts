@@ -2,6 +2,11 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/a
 
 import {
   ApiResponse,
+  BacktestEquityResponse,
+  BacktestMetricsResponse,
+  BacktestRun,
+  BacktestRunListResponse,
+  BacktestTradesResponse,
   DataQualityResponse,
   DownloadRequest,
   Feature,
@@ -134,5 +139,33 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(request),
     });
+  },
+
+  // Backtest reports
+  getBacktests: async (): Promise<BacktestRunListResponse> => {
+    return fetchApi('/backtests');
+  },
+
+  getBacktestRun: async (runId: string): Promise<BacktestRun> => {
+    return fetchApi(`/backtests/${encodeURIComponent(runId)}`);
+  },
+
+  getBacktestTrades: async (
+    runId: string,
+    params: { limit?: number; offset?: number } = {},
+  ): Promise<BacktestTradesResponse> => {
+    const query = new URLSearchParams();
+    if (params.limit !== undefined) query.set('limit', String(params.limit));
+    if (params.offset !== undefined) query.set('offset', String(params.offset));
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return fetchApi(`/backtests/${encodeURIComponent(runId)}/trades${suffix}`);
+  },
+
+  getBacktestMetrics: async (runId: string): Promise<BacktestMetricsResponse> => {
+    return fetchApi(`/backtests/${encodeURIComponent(runId)}/metrics`);
+  },
+
+  getBacktestEquity: async (runId: string): Promise<BacktestEquityResponse> => {
+    return fetchApi(`/backtests/${encodeURIComponent(runId)}/equity`);
   },
 };

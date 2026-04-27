@@ -104,20 +104,20 @@
 
 ### Tests for User Story 3
 
-- [ ] T034 [US3] Add contract tests for GET /api/v1/backtests, GET /api/v1/backtests/{run_id}, GET /api/v1/backtests/{run_id}/trades, GET /api/v1/backtests/{run_id}/metrics, GET /api/v1/backtests/{run_id}/equity, and missing artifact responses in backend/tests/contract/test_backtest_api_contracts.py
+- [X] T034 [US3] Add contract tests for GET /api/v1/backtests, GET /api/v1/backtests/{run_id}, GET /api/v1/backtests/{run_id}/trades, GET /api/v1/backtests/{run_id}/metrics, GET /api/v1/backtests/{run_id}/equity, and missing artifact responses in backend/tests/contract/test_backtest_api_contracts.py
 
 ### Implementation for User Story 3
 
-- [ ] T035 [US3] Implement saved run listing and run detail artifact reads in backend/src/backtest/report_store.py
-- [ ] T036 [US3] Implement GET /api/v1/backtests and GET /api/v1/backtests/{run_id} endpoints in backend/src/api/routes/backtests.py
-- [ ] T037 [US3] Implement GET /api/v1/backtests/{run_id}/trades, GET /api/v1/backtests/{run_id}/metrics, and GET /api/v1/backtests/{run_id}/equity endpoints with pagination and structured errors in backend/src/api/routes/backtests.py
-- [ ] T038 [P] [US3] Add BacktestRun, BacktestTrade, BacktestMetrics, BacktestEquityPoint, and BacktestArtifact TypeScript types in frontend/src/types/index.ts
-- [ ] T039 [US3] Add backtest run/list/detail/trades/metrics/equity API client methods in frontend/src/services/api.ts
-- [ ] T040 [P] [US3] Implement reusable equity curve chart in frontend/src/components/charts/EquityCurveChart.tsx
-- [ ] T041 [P] [US3] Implement reusable drawdown chart in frontend/src/components/charts/DrawdownChart.tsx
-- [ ] T042 [P] [US3] Implement compact summary metric cards in frontend/src/components/panels/BacktestSummaryCards.tsx
-- [ ] T043 [US3] Implement /backtests report inspection page with run selector, summary cards, equity and drawdown charts, trade table, regime table, strategy table, baseline table, loading state, and error state in frontend/src/app/backtests/page.tsx
-- [ ] T044 [US3] Add backtest report navigation entry to the existing dashboard header in frontend/src/components/ui/Header.tsx
+- [X] T035 [US3] Implement saved run listing and run detail artifact reads in backend/src/backtest/report_store.py
+- [X] T036 [US3] Implement GET /api/v1/backtests and GET /api/v1/backtests/{run_id} endpoints in backend/src/api/routes/backtests.py
+- [X] T037 [US3] Implement GET /api/v1/backtests/{run_id}/trades, GET /api/v1/backtests/{run_id}/metrics, and GET /api/v1/backtests/{run_id}/equity endpoints with pagination and structured errors in backend/src/api/routes/backtests.py
+- [X] T038 [P] [US3] Add BacktestRun, BacktestTrade, BacktestMetrics, BacktestEquityPoint, and BacktestArtifact TypeScript types in frontend/src/types/index.ts
+- [X] T039 [US3] Add backtest run/list/detail/trades/metrics/equity API client methods in frontend/src/services/api.ts
+- [X] T040 [P] [US3] Implement reusable equity curve chart in frontend/src/components/charts/EquityCurveChart.tsx
+- [X] T041 [P] [US3] Implement reusable drawdown chart in frontend/src/components/charts/DrawdownChart.tsx
+- [X] T042 [P] [US3] Implement compact summary metric cards in frontend/src/components/panels/BacktestSummaryCards.tsx
+- [X] T043 [US3] Implement /backtests report inspection page with run selector, summary cards, equity and drawdown charts, trade table, regime table, strategy table, baseline table, loading state, and error state in frontend/src/app/backtests/page.tsx
+- [X] T044 [US3] Add backtest report navigation entry to the existing dashboard header in frontend/src/components/ui/Header.tsx
 
 **Checkpoint**: User Story 3 can inspect completed backtest reports from API endpoints and the dashboard.
 

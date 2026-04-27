@@ -12,6 +12,7 @@ from src.config import get_reports_path
 from src.models.backtest import (
     ArtifactFormat,
     BacktestRun,
+    BacktestRunSummary,
     EquityPoint,
     MetricsSummary,
     ReportArtifact,
@@ -122,6 +123,58 @@ class ReportStore:
                 runs.append(json.loads(metadata_path.read_text(encoding="utf-8")))
         return runs
 
+    def list_run_summaries(self) -> list[BacktestRunSummary]:
+        summaries: list[BacktestRunSummary] = []
+        for run in self.list_runs():
+            metrics = self._read_optional_metrics(run.run_id)
+            summaries.append(
+                BacktestRunSummary(
+                    run_id=run.run_id,
+                    status=run.status,
+                    created_at=run.created_at,
+                    symbol=run.symbol,
+                    provider=run.provider,
+                    timeframe=run.timeframe,
+                    strategy_modes=[
+                        strategy.mode
+                        for strategy in run.config.strategies
+                        if strategy.enabled
+                    ],
+                    baseline_modes=list(run.config.baselines),
+                    total_return_pct=metrics.total_return_pct if metrics else None,
+                    max_drawdown_pct=metrics.max_drawdown_pct if metrics else None,
+                )
+            )
+        return sorted(summaries, key=lambda summary: summary.created_at, reverse=True)
+
+    def list_runs(self) -> list[BacktestRun]:
+        runs = []
+        for metadata in self.list_metadata():
+            runs.append(BacktestRun.model_validate(metadata))
+        return runs
+
+    def read_run(self, run_id: str) -> BacktestRun:
+        return BacktestRun.model_validate(self.read_json(run_id, "metadata.json"))
+
+    def read_metrics_summary(self, run_id: str) -> MetricsSummary:
+        return MetricsSummary.model_validate(self.read_json(run_id, "metrics.json"))
+
+    def read_trades_log(self, run_id: str, limit: int, offset: int) -> tuple[list[TradeRecord], int]:
+        frame = self.read_parquet(run_id, "trades.parquet")
+        total = frame.height
+        rows = frame.slice(offset, limit).to_dicts()
+        trades = []
+        for row in rows:
+            snapshot = row.get("assumptions_snapshot")
+            if isinstance(snapshot, str):
+                row["assumptions_snapshot"] = json.loads(snapshot)
+            trades.append(TradeRecord.model_validate(row))
+        return trades, min(max(total - offset, 0), limit)
+
+    def read_equity_curve(self, run_id: str) -> list[EquityPoint]:
+        frame = self.read_parquet(run_id, "equity.parquet")
+        return [EquityPoint.model_validate(row) for row in frame.to_dicts()]
+
     def write_run_outputs(
         self,
         run: BacktestRun,
@@ -179,6 +232,12 @@ class ReportStore:
             ReportArtifactType.METADATA,
         )
         return run.model_copy(update={"artifacts": [metadata_artifact, *artifacts]})
+
+    def _read_optional_metrics(self, run_id: str) -> MetricsSummary | None:
+        try:
+            return self.read_metrics_summary(run_id)
+        except FileNotFoundError:
+            return None
 
     def _artifact(
         self,
