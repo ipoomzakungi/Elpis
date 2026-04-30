@@ -14,6 +14,7 @@ import {
   ParameterSensitivityResult,
   StressResult,
   ValidationRunSummary,
+  WalkForwardResult,
 } from '@/types'
 
 const TRADE_LIMIT = 200
@@ -29,6 +30,7 @@ export default function BacktestsPage() {
   const [selectedValidationRunId, setSelectedValidationRunId] = useState<string | null>(null)
   const [stressResults, setStressResults] = useState<StressResult[]>([])
   const [sensitivityResults, setSensitivityResults] = useState<ParameterSensitivityResult[]>([])
+  const [walkForwardResults, setWalkForwardResults] = useState<WalkForwardResult[]>([])
   const [loadingRuns, setLoadingRuns] = useState(true)
   const [loadingReport, setLoadingReport] = useState(false)
   const [loadingValidation, setLoadingValidation] = useState(false)
@@ -116,6 +118,7 @@ export default function BacktestsPage() {
     if (!selectedValidationRunId) {
       setStressResults([])
       setSensitivityResults([])
+      setWalkForwardResults([])
       return
     }
 
@@ -124,16 +127,19 @@ export default function BacktestsPage() {
     Promise.all([
       api.getValidationStress(selectedValidationRunId),
       api.getValidationSensitivity(selectedValidationRunId),
+      api.getValidationWalkForward(selectedValidationRunId),
     ])
-      .then(([stressResponse, sensitivityResponse]) => {
+      .then(([stressResponse, sensitivityResponse, walkForwardResponse]) => {
         if (!active) return
         setStressResults(stressResponse.data)
         setSensitivityResults(sensitivityResponse.data)
+        setWalkForwardResults(walkForwardResponse.data)
       })
       .catch(() => {
         if (!active) return
         setStressResults([])
         setSensitivityResults([])
+        setWalkForwardResults([])
       })
       .finally(() => {
         if (active) setLoadingValidation(false)
@@ -323,6 +329,18 @@ export default function BacktestsPage() {
                         { key: 'fragility_flag', label: 'Fragile' },
                       ]}
                     />
+                    <MetricTable
+                      rows={walkForwardRows(walkForwardResults)}
+                      columns={[
+                        { key: 'split_id', label: 'Split' },
+                        { key: 'start', label: 'Start' },
+                        { key: 'end', label: 'End' },
+                        { key: 'row_count', label: 'Rows' },
+                        { key: 'trade_count', label: 'Trades' },
+                        { key: 'status', label: 'Status' },
+                        { key: 'notes', label: 'Notes' },
+                      ]}
+                    />
                   </div>
                 )}
               </ReportSection>
@@ -506,5 +524,17 @@ function sensitivityRows(results: ParameterSensitivityResult[]): Array<Record<st
     risk_reward: row.breakout_risk_reward_multiple,
     total_return_pct: row.metrics.total_return_pct,
     fragility_flag: row.fragility_flag ? 'yes' : 'no',
+  }))
+}
+
+function walkForwardRows(results: WalkForwardResult[]): Array<Record<string, unknown>> {
+  return results.map((row) => ({
+    split_id: row.split_id,
+    start: formatDate(row.start_timestamp),
+    end: formatDate(row.end_timestamp),
+    row_count: row.row_count,
+    trade_count: row.trade_count,
+    status: row.status,
+    notes: row.notes.join(' '),
   }))
 }

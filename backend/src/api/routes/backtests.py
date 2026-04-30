@@ -93,7 +93,9 @@ async def get_validation_report(validation_run_id: str) -> ValidationRun:
     raise HTTPException(status_code=500, detail="Validation report read failed")
 
 
-@router.get("/backtests/validation/{validation_run_id}/stress", response_model=ValidationStressResponse)
+@router.get(
+    "/backtests/validation/{validation_run_id}/stress", response_model=ValidationStressResponse
+)
 async def get_validation_stress(validation_run_id: str) -> ValidationStressResponse:
     """Return saved validation stress rows."""
     try:

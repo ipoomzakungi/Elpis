@@ -64,8 +64,7 @@ class StrictModel(BaseModel):
         if matches:
             fields = ", ".join(sorted(set(matches)))
             raise ValueError(
-                "live-trading fields are not allowed in v0 research backtests: "
-                f"{fields}"
+                f"live-trading fields are not allowed in v0 research backtests: {fields}"
             )
         return value
 
@@ -488,6 +487,7 @@ class WalkForwardResult(BaseModel):
     start_timestamp: datetime
     end_timestamp: datetime
     row_count: int = Field(..., ge=0)
+    trade_count: int = Field(default=0, ge=0)
     status: ValidationSplitStatus
     mode_metrics: list[ModeMetrics] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)

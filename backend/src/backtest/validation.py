@@ -1,7 +1,11 @@
+from dataclasses import dataclass
 from datetime import datetime
 from itertools import product
+from pathlib import Path
 
-from src.backtest.engine import BacktestEngine
+import polars as pl
+
+from src.backtest.engine import BacktestEngine, BacktestFeatureNotFoundError
 from src.backtest.report_store import ReportStore
 from src.models.backtest import (
     BacktestRunRequest,
@@ -21,14 +25,28 @@ from src.models.backtest import (
     ValidationRunListResponse,
     ValidationRunRequest,
     ValidationSensitivityResponse,
+    ValidationSplitStatus,
     ValidationStressResponse,
     ValidationWalkForwardResponse,
+    WalkForwardConfig,
+    WalkForwardResult,
 )
 from src.reports.writer import RESEARCH_ONLY_WARNING
 
 MAX_SENSITIVITY_GRID_SIZE = 64
 HIGH_FEE_RATE = 0.001
 HIGH_SLIPPAGE_RATE = 0.001
+
+
+@dataclass(frozen=True)
+class WalkForwardFeatureSplit:
+    split_id: str
+    frame: pl.DataFrame
+    start_timestamp: datetime
+    end_timestamp: datetime
+    row_count: int
+    status: ValidationSplitStatus
+    notes: list[str]
 
 
 class ValidationExecutionNotImplementedError(NotImplementedError):
@@ -40,11 +58,16 @@ class ValidationReportService:
         self.report_store = report_store or ReportStore()
 
     def run(self, request: ValidationRunRequest) -> ValidationRun:
+        validation_run_id = _validation_run_id(request)
         base_result = self._run_backtest(request.base_config)
         stress_results = self.run_cost_stress(request)
         sensitivity_results = self.run_parameter_sensitivity(request)
+        walk_forward_results = self.run_walk_forward(
+            request=request,
+            validation_run_id=validation_run_id,
+        )
         validation_run = ValidationRun(
-            validation_run_id=_validation_run_id(request),
+            validation_run_id=validation_run_id,
             status=BacktestStatus.COMPLETED,
             created_at=datetime.utcnow(),
             completed_at=datetime.utcnow(),
@@ -56,9 +79,14 @@ class ValidationReportService:
             mode_metrics=_mode_metrics_from_response(base_result),
             stress_results=stress_results,
             sensitivity_results=sensitivity_results,
+            walk_forward_results=walk_forward_results,
             warnings=[
                 RESEARCH_ONLY_WARNING,
                 "Cost stress and parameter sensitivity outputs are bounded research checks only.",
+                (
+                    "Walk-forward outputs are chronological validation windows only; "
+                    "no model training occurred."
+                ),
             ],
         )
         return self.report_store.write_validation_outputs(validation_run)
@@ -141,6 +169,67 @@ class ValidationReportService:
 
         return apply_fragility_flags(results)
 
+    def run_walk_forward(
+        self,
+        request: ValidationRunRequest,
+        validation_run_id: str,
+    ) -> list[WalkForwardResult]:
+        features = _load_validation_features(request.base_config)
+        splits = generate_walk_forward_splits(features, request.walk_forward)
+        results: list[WalkForwardResult] = []
+
+        for split in splits:
+            if split.status == ValidationSplitStatus.INSUFFICIENT_DATA:
+                results.append(
+                    WalkForwardResult(
+                        split_id=split.split_id,
+                        start_timestamp=split.start_timestamp,
+                        end_timestamp=split.end_timestamp,
+                        row_count=split.row_count,
+                        trade_count=0,
+                        status=split.status,
+                        mode_metrics=[],
+                        notes=split.notes,
+                    )
+                )
+                continue
+
+            split_path = self._write_walk_forward_features(
+                validation_run_id=validation_run_id,
+                split=split,
+            )
+            split_request = request.base_config.model_copy(update={"feature_path": split_path})
+            response = self._run_backtest(split_request)
+            mode_metrics = _mode_metrics_from_response(response)
+            trade_count = sum(metric.number_of_trades for metric in mode_metrics)
+            results.append(
+                WalkForwardResult(
+                    split_id=split.split_id,
+                    start_timestamp=split.start_timestamp,
+                    end_timestamp=split.end_timestamp,
+                    row_count=split.row_count,
+                    trade_count=trade_count,
+                    status=split.status,
+                    mode_metrics=mode_metrics,
+                    notes=[
+                        "Chronological split evaluated independently; no training, paper trading, "
+                        "shadow trading, or live trading occurred."
+                    ],
+                )
+            )
+
+        return results
+
+    def _write_walk_forward_features(
+        self,
+        validation_run_id: str,
+        split: WalkForwardFeatureSplit,
+    ) -> Path:
+        run_path = self.report_store.create_run_dir(validation_run_id)
+        split_path = run_path / f"{split.split_id}_features.parquet"
+        split.frame.write_parquet(split_path)
+        return split_path
+
     def _run_backtest(self, request: BacktestRunRequest) -> BacktestRunResponse:
         return BacktestEngine(report_store=self.report_store).run(request)
 
@@ -210,7 +299,9 @@ def build_cost_stress_profiles(
             name=CostStressProfileName.WORST_REASONABLE_COST,
             fee_rate=high_fee_rate,
             slippage_rate=high_slippage_rate,
-            description="Combined higher fee and higher slippage assumptions for local research stress.",
+            description=(
+                "Combined higher fee and higher slippage assumptions for local research stress."
+            ),
         ),
     }
     names = selected_names or list(CostStressProfileName)
@@ -227,9 +318,7 @@ def validate_sensitivity_grid_size(
     size *= _grid_axis_size(grid.breakout_risk_reward_multiple)
     size *= _grid_axis_size(grid.fee_slippage_profile)
     if size > max_size:
-        raise ValueError(
-            f"parameter grid exceeds local validation limit ({size} > {max_size})"
-        )
+        raise ValueError(f"parameter grid exceeds local validation limit ({size} > {max_size})")
     return size
 
 
@@ -249,9 +338,7 @@ def apply_fragility_flags(
             if item.metrics.total_return_pct is not None and item.metrics.total_return_pct > 0
         ]
         is_fragile = (
-            len(mode_results) > 1
-            and len(positive_results) == 1
-            and result in positive_results
+            len(mode_results) > 1 and len(positive_results) == 1 and result in positive_results
         )
         notes = list(result.notes)
         if is_fragile:
@@ -259,8 +346,73 @@ def apply_fragility_flags(
                 "Isolated positive historical result within the bounded parameter grid; "
                 "treat as fragile research evidence."
             )
-        flagged_results.append(result.model_copy(update={"fragility_flag": is_fragile, "notes": notes}))
+        flagged_results.append(
+            result.model_copy(update={"fragility_flag": is_fragile, "notes": notes})
+        )
     return flagged_results
+
+
+def generate_walk_forward_splits(
+    features: pl.DataFrame,
+    config: WalkForwardConfig,
+) -> list[WalkForwardFeatureSplit]:
+    if features.is_empty():
+        return []
+    if "timestamp" not in features.columns:
+        raise ValueError("walk-forward validation requires a timestamp column")
+
+    sorted_features = features.sort("timestamp")
+    split_sizes = _walk_forward_split_sizes(sorted_features.height, config.split_count)
+    splits: list[WalkForwardFeatureSplit] = []
+    offset = 0
+
+    for index, split_size in enumerate(split_sizes, start=1):
+        frame = sorted_features.slice(offset, split_size)
+        offset += split_size
+        if frame.is_empty():
+            continue
+
+        row_count = frame.height
+        status = (
+            ValidationSplitStatus.EVALUATED
+            if row_count >= config.minimum_rows_per_split
+            else ValidationSplitStatus.INSUFFICIENT_DATA
+        )
+        notes = []
+        if status == ValidationSplitStatus.INSUFFICIENT_DATA:
+            notes.append(
+                f"Split has {row_count} rows, fewer than the configured minimum "
+                f"of {config.minimum_rows_per_split}; no backtest was run for this window."
+            )
+
+        splits.append(
+            WalkForwardFeatureSplit(
+                split_id=f"split_{index:03d}",
+                frame=frame,
+                start_timestamp=frame["timestamp"][0],
+                end_timestamp=frame["timestamp"][-1],
+                row_count=row_count,
+                status=status,
+                notes=notes,
+            )
+        )
+
+    return splits
+
+
+def _walk_forward_split_sizes(row_count: int, split_count: int) -> list[int]:
+    base_size = row_count // split_count
+    remainder = row_count % split_count
+    return [base_size + (1 if index < remainder else 0) for index in range(split_count)]
+
+
+def _load_validation_features(request: BacktestRunRequest) -> pl.DataFrame:
+    if request.feature_path is None:
+        return BacktestEngine()._load_features(request)[0]
+    feature_path = Path(request.feature_path)
+    if not feature_path.exists():
+        raise BacktestFeatureNotFoundError(request.symbol, request.timeframe, feature_path)
+    return pl.read_parquet(feature_path)
 
 
 def _request_with_cost_profile(
@@ -289,7 +441,9 @@ def _request_with_sensitivity_parameters(
         )
         for strategy in request.strategies
     ]
-    return _request_with_cost_profile(request, profile).model_copy(update={"strategies": strategies})
+    return _request_with_cost_profile(request, profile).model_copy(
+        update={"strategies": strategies}
+    )
 
 
 def _strategy_with_sensitivity_parameters(

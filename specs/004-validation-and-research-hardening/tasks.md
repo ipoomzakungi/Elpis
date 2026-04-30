@@ -111,18 +111,18 @@
 
 ### Tests for User Story 3
 
-- [ ] T039 [P] [US3] Add chronological walk-forward split tests in `backend/tests/unit/test_backtest_walk_forward.py`
-- [ ] T040 [P] [US3] Add insufficient-window integration tests in `backend/tests/integration/test_backtest_walk_forward_flow.py`
+- [x] T039 [P] [US3] Add chronological walk-forward split tests in `backend/tests/unit/test_backtest_walk_forward.py`
+- [x] T040 [P] [US3] Add insufficient-window integration tests in `backend/tests/integration/test_backtest_walk_forward_flow.py`
 
 ### Implementation for User Story 3
 
-- [ ] T041 [US3] Implement chronological non-overlapping split generation in `backend/src/backtest/validation.py`
-- [ ] T042 [US3] Implement per-split validation runs, row counts, trade counts, and insufficient-data status in `backend/src/backtest/validation.py`
-- [ ] T043 [US3] Persist walk-forward split output tables in `backend/src/backtest/report_store.py`
-- [ ] T044 [US3] Add walk-forward section to validation report JSON and Markdown in `backend/src/reports/writer.py`
-- [ ] T045 [US3] Add walk-forward validation endpoint in `backend/src/api/routes/backtests.py`
-- [ ] T046 [US3] Add walk-forward frontend types in `frontend/src/types/index.ts`
-- [ ] T047 [US3] Add walk-forward API client method and render chronological split table in `frontend/src/services/api.ts` and `frontend/src/app/backtests/page.tsx`
+- [x] T041 [US3] Implement chronological non-overlapping split generation in `backend/src/backtest/validation.py`
+- [x] T042 [US3] Implement per-split validation runs, row counts, trade counts, and insufficient-data status in `backend/src/backtest/validation.py`
+- [x] T043 [US3] Persist walk-forward split output tables in `backend/src/backtest/report_store.py`
+- [x] T044 [US3] Add walk-forward section to validation report JSON and Markdown in `backend/src/reports/writer.py`
+- [x] T045 [US3] Add walk-forward validation endpoint in `backend/src/api/routes/backtests.py`
+- [x] T046 [US3] Add walk-forward frontend types in `frontend/src/types/index.ts`
+- [x] T047 [US3] Add walk-forward API client method and render chronological split table in `frontend/src/services/api.ts` and `frontend/src/app/backtests/page.tsx`
 
 **Checkpoint**: US3 should show chronological validation windows and clearly mark insufficient windows without hidden omissions.
 

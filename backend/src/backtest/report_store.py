@@ -152,9 +152,7 @@ class ReportStore:
                     provider=run.provider,
                     timeframe=run.timeframe,
                     strategy_modes=[
-                        strategy.mode
-                        for strategy in run.config.strategies
-                        if strategy.enabled
+                        strategy.mode for strategy in run.config.strategies if strategy.enabled
                     ],
                     baseline_modes=list(run.config.baselines),
                     total_return_pct=metrics.total_return_pct if metrics else None,
@@ -178,7 +176,9 @@ class ReportStore:
         return runs
 
     def list_validation_runs(self) -> list[ValidationRun]:
-        return [ValidationRun.model_validate(metadata) for metadata in self.list_validation_metadata()]
+        return [
+            ValidationRun.model_validate(metadata) for metadata in self.list_validation_metadata()
+        ]
 
     def list_validation_run_summaries(self) -> list[ValidationRunSummary]:
         summaries = []
@@ -192,7 +192,9 @@ class ReportStore:
                     provider=run.provider,
                     timeframe=run.timeframe,
                     mode_count=len(run.mode_metrics),
-                    stress_profile_count=len({result.profile.name for result in run.stress_results}),
+                    stress_profile_count=len(
+                        {result.profile.name for result in run.stress_results}
+                    ),
                     walk_forward_split_count=len(run.walk_forward_results),
                     warnings=run.warnings,
                 )
@@ -235,6 +237,12 @@ class ReportStore:
                 _validation_sensitivity_frame(validation_run),
                 ReportArtifactType.VALIDATION_SENSITIVITY,
             ),
+            self.write_parquet(
+                validation_run.validation_run_id,
+                "validation_walk_forward.parquet",
+                _validation_walk_forward_frame(validation_run),
+                ReportArtifactType.VALIDATION_WALK_FORWARD,
+            ),
             self.write_json(
                 validation_run.validation_run_id,
                 "validation_report.json",
@@ -255,7 +263,9 @@ class ReportStore:
     def read_metrics_summary(self, run_id: str) -> MetricsSummary:
         return MetricsSummary.model_validate(self.read_json(run_id, "metrics.json"))
 
-    def read_trades_log(self, run_id: str, limit: int, offset: int) -> tuple[list[TradeRecord], int]:
+    def read_trades_log(
+        self, run_id: str, limit: int, offset: int
+    ) -> tuple[list[TradeRecord], int]:
         frame = self.read_parquet(run_id, "trades.parquet")
         total = frame.height
         rows = frame.slice(offset, limit).to_dicts()
@@ -523,6 +533,25 @@ def _validation_sensitivity_frame(validation_run: ValidationRun) -> pl.DataFrame
     return pl.DataFrame(records, schema=_validation_sensitivity_schema(), strict=False)
 
 
+def _validation_walk_forward_frame(validation_run: ValidationRun) -> pl.DataFrame:
+    records = []
+    for result in validation_run.walk_forward_results:
+        records.append(
+            {
+                "validation_run_id": validation_run.validation_run_id,
+                "split_id": result.split_id,
+                "start_timestamp": result.start_timestamp,
+                "end_timestamp": result.end_timestamp,
+                "row_count": result.row_count,
+                "trade_count": result.trade_count,
+                "status": result.status.value,
+                "mode_count": len(result.mode_metrics),
+                "notes": json.dumps(result.notes, sort_keys=True),
+            }
+        )
+    return pl.DataFrame(records, schema=_validation_walk_forward_schema(), strict=False)
+
+
 def _validation_stress_schema() -> dict[str, pl.DataType]:
     return {
         "validation_run_id": pl.Utf8,
@@ -554,6 +583,20 @@ def _validation_sensitivity_schema() -> dict[str, pl.DataType]:
         "max_drawdown_pct": pl.Float64,
         "number_of_trades": pl.Int64,
         "fragility_flag": pl.Boolean,
+        "notes": pl.Utf8,
+    }
+
+
+def _validation_walk_forward_schema() -> dict[str, pl.DataType]:
+    return {
+        "validation_run_id": pl.Utf8,
+        "split_id": pl.Utf8,
+        "start_timestamp": pl.Datetime,
+        "end_timestamp": pl.Datetime,
+        "row_count": pl.Int64,
+        "trade_count": pl.Int64,
+        "status": pl.Utf8,
+        "mode_count": pl.Int64,
         "notes": pl.Utf8,
     }
 

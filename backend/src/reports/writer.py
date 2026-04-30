@@ -201,6 +201,16 @@ def compose_validation_report_json(
             ),
         },
         "walk_forward_results": run_payload.get("walk_forward_results", []),
+        "walk_forward_summary": {
+            "row_count": len(run_payload.get("walk_forward_results", [])),
+            "insufficient_count": len(
+                [
+                    row
+                    for row in run_payload.get("walk_forward_results", [])
+                    if row.get("status") == "insufficient_data"
+                ]
+            ),
+        },
         "regime_coverage": run_payload.get("regime_coverage", {}),
         "concentration_report": run_payload.get("concentration_report", {}),
         "notional_cap_events": run_payload.get("notional_cap_events", []),
@@ -260,6 +270,21 @@ def compose_validation_report_markdown(
             f"- {row.get('parameter_set_id')} / {row.get('strategy_mode')}: "
             f"total return % {metrics.get('total_return_pct')}, "
             f"fragile {row.get('fragility_flag')}"
+        )
+    lines.extend(
+        [
+            "",
+            "## Walk-Forward Splits",
+            "",
+            "Chronological validation windows only; no model training, paper trading, "
+            "shadow trading, or live trading occurred.",
+        ]
+    )
+    for row in report["walk_forward_results"]:
+        lines.append(
+            f"- {row.get('split_id')}: {row.get('start_timestamp')} to "
+            f"{row.get('end_timestamp')}, rows {row.get('row_count')}, "
+            f"trades {row.get('trade_count')}, status {row.get('status')}"
         )
     lines.extend(
         [

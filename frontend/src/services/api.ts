@@ -24,6 +24,7 @@ import {
   ValidationRunListResponse,
   ValidationSensitivityResponse,
   ValidationStressResponse,
+  ValidationWalkForwardResponse,
 } from '@/types';
 
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
@@ -185,5 +186,11 @@ export const api = {
     validationRunId: string,
   ): Promise<ValidationSensitivityResponse> => {
     return fetchApi(`/backtests/validation/${encodeURIComponent(validationRunId)}/sensitivity`);
+  },
+
+  getValidationWalkForward: async (
+    validationRunId: string,
+  ): Promise<ValidationWalkForwardResponse> => {
+    return fetchApi(`/backtests/validation/${encodeURIComponent(validationRunId)}/walk-forward`);
   },
 };

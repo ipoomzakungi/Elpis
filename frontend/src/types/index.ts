@@ -428,6 +428,7 @@ export interface WalkForwardResult {
   start_timestamp: string;
   end_timestamp: string;
   row_count: number;
+  trade_count: number;
   status: ValidationSplitStatus;
   mode_metrics: ModeMetrics[];
   notes: string[];
@@ -502,6 +503,7 @@ export interface ValidationSensitivityResponse {
 
 export type ValidationStressTableRow = StressResult;
 export type ValidationSensitivityTableRow = ParameterSensitivityResult;
+export type ValidationWalkForwardTableRow = WalkForwardResult;
 
 export interface ValidationWalkForwardResponse {
   validation_run_id: string;
