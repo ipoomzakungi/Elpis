@@ -124,6 +124,16 @@ Invoke-RestMethod http://localhost:8000/api/v1/backtests/validation/<validation_
 Invoke-RestMethod http://localhost:8000/api/v1/backtests/validation/<validation_run_id>/concentration
 ```
 
+Final endpoint names:
+
+- `POST /api/v1/backtests/validation/run`
+- `GET /api/v1/backtests/validation`
+- `GET /api/v1/backtests/validation/{validation_run_id}`
+- `GET /api/v1/backtests/validation/{validation_run_id}/stress`
+- `GET /api/v1/backtests/validation/{validation_run_id}/sensitivity`
+- `GET /api/v1/backtests/validation/{validation_run_id}/walk-forward`
+- `GET /api/v1/backtests/validation/{validation_run_id}/concentration`
+
 ## Dashboard Check
 
 Start frontend:
@@ -186,15 +196,21 @@ npm run build
 Run before committing:
 
 ```powershell
-git status --short --untracked-files=all
-git check-ignore -v data/reports/placeholder 2>$null
-git check-ignore -v data/processed/placeholder 2>$null
+powershell -ExecutionPolicy Bypass -File scripts/check_generated_artifacts.ps1
 ```
 
 Expected:
 
 - `data/reports`, `data/processed`, `node_modules`, `.venv`, `.env*`, Parquet files, DuckDB files, and build outputs are not committed.
 - Validation artifacts generated during smoke tests remain ignored.
+
+## CI Commands
+
+The repository workflow `.github/workflows/validation.yml` runs without private secrets:
+
+- Backend: `pip install -e ".[dev]"`, backend import, and `pytest tests/ -q`
+- Frontend: `npm install` and `npm run build`
+- Artifact guard: `scripts/check_generated_artifacts.ps1`
 
 ## v0 Guardrails
 

@@ -21,8 +21,10 @@ import {
   ProcessRequest,
   Regime,
   TaskResponse,
-  ValidationRunListResponse,
   ValidationConcentrationResponse,
+  ValidationRun,
+  ValidationRunListResponse,
+  ValidationRunRequest,
   ValidationSensitivityResponse,
   ValidationStressResponse,
   ValidationWalkForwardResponse,
@@ -177,6 +179,17 @@ export const api = {
   // Validation report stress and sensitivity sections
   getValidationReports: async (): Promise<ValidationRunListResponse> => {
     return fetchApi('/backtests/validation');
+  },
+
+  runValidationReport: async (request: ValidationRunRequest): Promise<ValidationRun> => {
+    return fetchApi('/backtests/validation/run', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  getValidationReport: async (validationRunId: string): Promise<ValidationRun> => {
+    return fetchApi(`/backtests/validation/${encodeURIComponent(validationRunId)}`);
   },
 
   getValidationStress: async (validationRunId: string): Promise<ValidationStressResponse> => {

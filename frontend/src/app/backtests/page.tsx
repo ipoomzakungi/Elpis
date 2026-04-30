@@ -15,6 +15,7 @@ import {
   RegimeCoverageReport,
   StressResult,
   TradeConcentrationReport,
+  ValidationRun,
   ValidationRunSummary,
   WalkForwardResult,
 } from '@/types'
@@ -30,6 +31,7 @@ export default function BacktestsPage() {
   const [equity, setEquity] = useState<BacktestEquityPoint[]>([])
   const [validationRuns, setValidationRuns] = useState<ValidationRunSummary[]>([])
   const [selectedValidationRunId, setSelectedValidationRunId] = useState<string | null>(null)
+  const [validationRun, setValidationRun] = useState<ValidationRun | null>(null)
   const [stressResults, setStressResults] = useState<StressResult[]>([])
   const [sensitivityResults, setSensitivityResults] = useState<ParameterSensitivityResult[]>([])
   const [walkForwardResults, setWalkForwardResults] = useState<WalkForwardResult[]>([])
@@ -120,6 +122,7 @@ export default function BacktestsPage() {
 
   useEffect(() => {
     if (!selectedValidationRunId) {
+      setValidationRun(null)
       setStressResults([])
       setSensitivityResults([])
       setWalkForwardResults([])
@@ -131,13 +134,15 @@ export default function BacktestsPage() {
     let active = true
     setLoadingValidation(true)
     Promise.all([
+      api.getValidationReport(selectedValidationRunId),
       api.getValidationStress(selectedValidationRunId),
       api.getValidationSensitivity(selectedValidationRunId),
       api.getValidationWalkForward(selectedValidationRunId),
       api.getValidationConcentration(selectedValidationRunId),
     ])
-      .then(([stressResponse, sensitivityResponse, walkForwardResponse, concentrationResponse]) => {
+      .then(([detailResponse, stressResponse, sensitivityResponse, walkForwardResponse, concentrationResponse]) => {
         if (!active) return
+        setValidationRun(detailResponse)
         setStressResults(stressResponse.data)
         setSensitivityResults(sensitivityResponse.data)
         setWalkForwardResults(walkForwardResponse.data)
@@ -146,6 +151,7 @@ export default function BacktestsPage() {
       })
       .catch(() => {
         if (!active) return
+        setValidationRun(null)
         setStressResults([])
         setSensitivityResults([])
         setWalkForwardResults([])
@@ -313,7 +319,30 @@ export default function BacktestsPage() {
                 {loadingValidation ? (
                   <p className="text-sm text-gray-400">Loading validation tables...</p>
                 ) : (
-                  <div className="grid grid-cols-1 gap-6 2xl:grid-cols-2">
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                      <div>
+                        <h4 className="mb-3 text-sm font-semibold text-gray-200">Validation Source</h4>
+                        <KeyValueTable rows={objectRows(validationRun?.data_identity ?? {})} />
+                      </div>
+                      <div>
+                        <h4 className="mb-3 text-sm font-semibold text-gray-200">Validation Warnings</h4>
+                        {validationRun?.warnings.length ? (
+                          <ul className="list-disc space-y-2 pl-5 text-sm text-amber-100">
+                            {validationRun.warnings.map((warning) => (
+                              <li key={warning}>{warning}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-gray-400">No validation warnings recorded.</p>
+                        )}
+                        <p className="mt-3 text-sm text-gray-400">
+                          Validation outputs are historical research checks only, not profitability
+                          evidence, predictive proof, safety evidence, or live-readiness evidence.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-6 2xl:grid-cols-2">
                     <MetricTable
                       rows={stressRows(stressResults)}
                       columns={[
@@ -369,6 +398,7 @@ export default function BacktestsPage() {
                         { key: 'value', label: 'Value' },
                       ]}
                     />
+                    </div>
                   </div>
                 )}
               </ReportSection>

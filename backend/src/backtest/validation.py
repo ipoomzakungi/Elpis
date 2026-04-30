@@ -61,6 +61,7 @@ class ValidationReportService:
         self.report_store = report_store or ReportStore()
 
     def run(self, request: ValidationRunRequest) -> ValidationRun:
+        request = _preflight_validation_request(request)
         validation_run_id = _validation_run_id(request)
         base_result = self._run_backtest(request.base_config)
         stress_results = self.run_cost_stress(request)
@@ -80,6 +81,7 @@ class ValidationReportService:
             trades=base_trades,
             equity_curve=base_equity,
         )
+        data_identity = _validation_data_identity(base_result.data_identity, request)
         validation_run = ValidationRun(
             validation_run_id=validation_run_id,
             status=BacktestStatus.COMPLETED,
@@ -89,7 +91,7 @@ class ValidationReportService:
             provider=request.base_config.provider,
             timeframe=request.base_config.timeframe,
             source_backtest_config=request.base_config,
-            data_identity=base_result.data_identity,
+            data_identity=data_identity,
             mode_metrics=_mode_metrics_from_response(base_result),
             stress_results=stress_results,
             sensitivity_results=sensitivity_results,
@@ -98,10 +100,18 @@ class ValidationReportService:
             concentration_report=concentration_report,
             warnings=[
                 RESEARCH_ONLY_WARNING,
+                (
+                    "Historical simulation outputs only; not profitability evidence, predictive "
+                    "proof, safety evidence, or live-readiness evidence."
+                ),
                 "Cost stress and parameter sensitivity outputs are bounded research checks only.",
                 (
                     "Walk-forward outputs are chronological validation windows only; "
                     "no model training occurred."
+                ),
+                (
+                    "Validation data source is existing processed feature data; inspect provider "
+                    "limitations, date range, row count, and content hash before using results."
                 ),
             ],
         )
@@ -499,6 +509,55 @@ def _load_validation_features(request: BacktestRunRequest) -> pl.DataFrame:
     if not feature_path.exists():
         raise BacktestFeatureNotFoundError(request.symbol, request.timeframe, feature_path)
     return pl.read_parquet(feature_path)
+
+
+def _preflight_validation_request(request: ValidationRunRequest) -> ValidationRunRequest:
+    if not request.include_real_data_check:
+        return request
+
+    base_config = request.base_config
+    if base_config.feature_path is not None:
+        feature_path = Path(base_config.feature_path)
+    else:
+        feature_path = BacktestEngine()._default_feature_path(
+            base_config.symbol,
+            base_config.timeframe,
+        )
+
+    if not feature_path.exists():
+        raise BacktestFeatureNotFoundError(
+            base_config.symbol,
+            base_config.timeframe,
+            feature_path,
+        )
+    return request
+
+
+def _validation_data_identity(
+    base_identity: dict,
+    request: ValidationRunRequest,
+) -> dict:
+    identity = dict(base_identity)
+    source_kind = (
+        "explicit_feature_path"
+        if request.base_config.feature_path is not None
+        else "processed_features"
+    )
+    identity.update(
+        {
+            "source_kind": source_kind,
+            "real_data_check": request.include_real_data_check,
+            "source_label": (
+                f"{request.base_config.provider or 'unknown'}:"
+                f"{request.base_config.symbol}:{request.base_config.timeframe}"
+            ),
+            "limitations": [
+                "Processed feature data is reused from the existing research pipeline.",
+                "Validation output is historical research evidence only, not a trading signal.",
+            ],
+        }
+    )
+    return identity
 
 
 def _request_with_cost_profile(

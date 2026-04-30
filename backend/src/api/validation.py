@@ -36,6 +36,42 @@ def validation_report_not_found(validation_run_id: str) -> None:
     api_error(404, "NOT_FOUND", f"Validation run '{validation_run_id}' was not found")
 
 
+def validation_processed_features_not_found(
+    symbol: str,
+    timeframe: str,
+    feature_path: str,
+) -> None:
+    api_error(
+        404,
+        "NOT_FOUND",
+        f"Processed features not found for {symbol} {timeframe}",
+        [
+            {
+                "field": "feature_path",
+                "message": (
+                    f"Expected processed feature file {feature_path}. "
+                    "Run the existing public-data research flow first: "
+                    "POST /api/v1/download, then POST /api/v1/process."
+                ),
+            },
+            {
+                "field": "download",
+                "message": (
+                    "Use POST /api/v1/download with the required symbol/timeframe before "
+                    "running validation."
+                ),
+            },
+            {
+                "field": "process",
+                "message": (
+                    "Use POST /api/v1/process to create "
+                    f"{symbol.lower()}_{timeframe}_features.parquet."
+                ),
+            },
+        ],
+    )
+
+
 def validation_not_implemented() -> None:
     api_error(
         501,

@@ -4,6 +4,67 @@ from src.main import app
 from tests.helpers.test_backtest_validation_data import write_validation_features
 
 
+def test_validation_run_list_and_detail_contracts(isolated_data_paths):
+    feature_path = isolated_data_paths / "processed" / "contract_features.parquet"
+    write_validation_features(feature_path, row_count=18)
+
+    client = TestClient(app)
+    run_response = client.post(
+        "/api/v1/backtests/validation/run",
+        json=_validation_payload(feature_path),
+    )
+
+    assert run_response.status_code == 200, run_response.text
+    run_body = run_response.json()
+    validation_run_id = run_body["validation_run_id"]
+    assert run_body["status"] == "completed"
+    assert run_body["data_identity"]["row_count"] == 18
+    assert run_body["data_identity"]["source_kind"] in {
+        "explicit_feature_path",
+        "processed_features",
+    }
+    assert run_body["warnings"]
+    assert any("Historical simulation outputs only" in item for item in run_body["warnings"])
+    assert {artifact["artifact_type"] for artifact in run_body["artifacts"]} >= {
+        "validation_metadata",
+        "validation_report_json",
+        "validation_report_markdown",
+    }
+
+    list_response = client.get("/api/v1/backtests/validation")
+    assert list_response.status_code == 200
+    listed = [
+        item
+        for item in list_response.json()["runs"]
+        if item["validation_run_id"] == validation_run_id
+    ]
+    assert len(listed) == 1
+    assert listed[0]["mode_count"] == len(run_body["mode_metrics"])
+    assert listed[0]["stress_profile_count"] == 1
+    assert listed[0]["walk_forward_split_count"] == 3
+
+    detail_response = client.get(f"/api/v1/backtests/validation/{validation_run_id}")
+    assert detail_response.status_code == 200
+    detail_body = detail_response.json()
+    assert detail_body["validation_run_id"] == validation_run_id
+    assert detail_body["data_identity"]["content_hash"]
+    assert {artifact["artifact_type"] for artifact in detail_body["artifacts"]} >= {
+        "validation_config",
+        "validation_report_json",
+        "validation_report_markdown",
+    }
+
+
+def test_validation_detail_endpoint_returns_structured_missing_report_error():
+    client = TestClient(app)
+
+    response = client.get("/api/v1/backtests/validation/missing-run")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "NOT_FOUND"
+    assert "Validation run 'missing-run' was not found" in response.json()["error"]["message"]
+
+
 def test_validation_concentration_endpoint_returns_coverage_and_concentration_sections(
     isolated_data_paths,
 ):

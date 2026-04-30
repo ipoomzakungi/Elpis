@@ -8,6 +8,7 @@ from src.api.validation import (
     invalid_validation_config,
     processed_features_not_found,
     validation_not_implemented,
+    validation_processed_features_not_found,
     validation_report_not_found,
 )
 from src.backtest.engine import BacktestEngine, BacktestFeatureNotFoundError
@@ -68,6 +69,12 @@ async def run_validation_report(request: ValidationRunRequest) -> ValidationRun:
     """Run a synchronous local research validation report."""
     try:
         return ValidationReportService().run(request)
+    except BacktestFeatureNotFoundError as exc:
+        validation_processed_features_not_found(
+            symbol=exc.symbol,
+            timeframe=exc.timeframe,
+            feature_path=exc.feature_path.as_posix(),
+        )
     except ValidationExecutionNotImplementedError:
         validation_not_implemented()
     except ValueError as exc:

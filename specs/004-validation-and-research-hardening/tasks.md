@@ -164,21 +164,21 @@
 
 ### Tests for User Story 5
 
-- [ ] T060 [P] [US5] Add validation run/list/detail API contract tests in `backend/tests/contract/test_backtest_validation_contracts.py`
-- [ ] T061 [P] [US5] Add real-data validation success and missing-data instruction tests in `backend/tests/integration/test_real_data_validation_flow.py`
-- [ ] T062 [P] [US5] Add generated artifact guard tests for ignored outputs in `backend/tests/integration/test_generated_artifact_guard.py`
+- [x] T060 [P] [US5] Add validation run/list/detail API contract tests in `backend/tests/contract/test_backtest_validation_contracts.py`
+- [x] T061 [P] [US5] Add real-data validation success and missing-data instruction tests in `backend/tests/integration/test_real_data_validation_flow.py`
+- [x] T062 [P] [US5] Add generated artifact guard tests for ignored outputs in `backend/tests/integration/test_generated_artifact_guard.py`
 
 ### Implementation for User Story 5
 
-- [ ] T063 [US5] Implement full validation run/list/detail endpoint behavior in `backend/src/api/routes/backtests.py`
-- [ ] T064 [US5] Implement real-data processed feature preflight and actionable missing-data instructions in `backend/src/backtest/validation.py`
-- [ ] T065 [US5] Add validation-specific not-found and invalid-config helpers in `backend/src/api/validation.py`
-- [ ] T066 [US5] Store full validation report metadata, warnings, source identity, and artifact references in `backend/src/backtest/report_store.py`
-- [ ] T067 [US5] Add frontend validation run/list/detail API client methods in `frontend/src/services/api.ts`
-- [ ] T068 [US5] Render validation report selector, warnings, source identity, and research-only disclaimers in `frontend/src/app/backtests/page.tsx`
-- [ ] T069 [US5] Implement generated artifact guard script checks for `data/reports`, `data/processed`, `*.parquet`, `*.duckdb`, `.env*`, `.venv`, `.next`, and `node_modules` in `scripts/check_generated_artifacts.ps1`
-- [ ] T070 [US5] Add GitHub Actions backend, frontend, and artifact guard workflow in `.github/workflows/validation.yml`
-- [ ] T071 [US5] Update validation quickstart with final endpoint names and CI commands in `specs/004-validation-and-research-hardening/quickstart.md`
+- [x] T063 [US5] Implement full validation run/list/detail endpoint behavior in `backend/src/api/routes/backtests.py`
+- [x] T064 [US5] Implement real-data processed feature preflight and actionable missing-data instructions in `backend/src/backtest/validation.py`
+- [x] T065 [US5] Add validation-specific not-found and invalid-config helpers in `backend/src/api/validation.py`
+- [x] T066 [US5] Store full validation report metadata, warnings, source identity, and artifact references in `backend/src/backtest/report_store.py`
+- [x] T067 [US5] Add frontend validation run/list/detail API client methods in `frontend/src/services/api.ts`
+- [x] T068 [US5] Render validation report selector, warnings, source identity, and research-only disclaimers in `frontend/src/app/backtests/page.tsx`
+- [x] T069 [US5] Implement generated artifact guard script checks for `data/reports`, `data/processed`, `*.parquet`, `*.duckdb`, `.env*`, `.venv`, `.next`, and `node_modules` in `scripts/check_generated_artifacts.ps1`
+- [x] T070 [US5] Add GitHub Actions backend, frontend, and artifact guard workflow in `.github/workflows/validation.yml`
+- [x] T071 [US5] Update validation quickstart with final endpoint names and CI commands in `specs/004-validation-and-research-hardening/quickstart.md`
 
 **Checkpoint**: US5 should validate real-data readiness, give clear missing-data instructions, and provide repeatable automated checks without secrets.
 
