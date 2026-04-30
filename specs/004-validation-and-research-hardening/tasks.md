@@ -188,13 +188,15 @@
 
 **Purpose**: Final verification, documentation alignment, and guardrail review across all stories.
 
-- [ ] T072 [P] Run backend import and full pytest validation documented in `specs/004-validation-and-research-hardening/quickstart.md`
-- [ ] T073 [P] Run frontend install and production build documented in `frontend/package.json`
-- [ ] T074 Run validation API smoke flow documented in `specs/004-validation-and-research-hardening/quickstart.md`
-- [ ] T075 Run dashboard validation smoke flow documented in `specs/004-validation-and-research-hardening/quickstart.md`
-- [ ] T076 Review dependencies and source for forbidden v0 scope in `backend/pyproject.toml`, `frontend/package.json`, and `.github/workflows/validation.yml`
-- [ ] T077 Review generated artifact exclusions in `.gitignore` and `scripts/check_generated_artifacts.ps1`
-- [ ] T078 Update task completion status and notes in `specs/004-validation-and-research-hardening/tasks.md`
+- [x] T072 [P] Run backend import and full pytest validation documented in `specs/004-validation-and-research-hardening/quickstart.md`
+- [x] T073 [P] Run frontend install and production build documented in `frontend/package.json`
+- [x] T074 Run validation API smoke flow documented in `specs/004-validation-and-research-hardening/quickstart.md`
+- [x] T075 Run dashboard validation smoke flow documented in `specs/004-validation-and-research-hardening/quickstart.md`
+- [x] T076 Review dependencies and source for forbidden v0 scope in `backend/pyproject.toml`, `frontend/package.json`, and `.github/workflows/validation.yml`
+- [x] T077 Review generated artifact exclusions in `.gitignore` and `scripts/check_generated_artifacts.ps1`
+- [x] T078 Update task completion status and notes in `specs/004-validation-and-research-hardening/tasks.md`
+
+**Final validation checkpoint**: Backend import and full pytest passed, frontend install/build passed, generated artifact guard passed after smoke artifacts were created, validation API smoke passed for run `val_20260430_080435_149740_btcusdt_15m`, dashboard smoke rendered validation report selector and all validation tables/disclaimers, and forbidden-scope review found no forbidden dependencies or capabilities.
 
 ---
 
