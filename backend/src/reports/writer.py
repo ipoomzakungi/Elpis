@@ -409,6 +409,12 @@ def compose_research_report_markdown(
             f"- {asset.get('symbol')} ({asset.get('provider')}): "
             f"{asset.get('status')} / {asset.get('classification')}"
         )
+        preflight = asset.get("preflight", {})
+        instructions = preflight.get("instructions", []) if isinstance(preflight, dict) else []
+        for instruction in instructions:
+            lines.append(f"  - {instruction}")
+    lines.extend(["", "## Warnings", ""])
+    lines.extend(f"- {warning}" for warning in report["warnings"])
     lines.extend(["", "## Limitations", ""])
     lines.extend(f"- {limitation}" for limitation in report["limitations"])
     lines.extend(["", "## Notes", ""])

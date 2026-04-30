@@ -60,23 +60,23 @@
 
 ### Tests for User Story 1
 
-- [ ] T018 [P] [US1] Add research config validation tests in `backend/tests/unit/test_research_config.py`
-- [ ] T019 [P] [US1] Add missing-data preflight tests in `backend/tests/unit/test_research_preflight.py`
-- [ ] T020 [P] [US1] Add research run/list/detail API contract tests in `backend/tests/contract/test_research_api_contracts.py`
-- [ ] T021 [P] [US1] Add mixed available/missing asset integration test in `backend/tests/integration/test_research_multi_asset_flow.py`
+- [X] T018 [P] [US1] Add research config validation tests in `backend/tests/unit/test_research_config.py`
+- [X] T019 [P] [US1] Add missing-data preflight tests in `backend/tests/unit/test_research_preflight.py`
+- [X] T020 [P] [US1] Add research run/list/detail API contract tests in `backend/tests/contract/test_research_api_contracts.py`
+- [X] T021 [P] [US1] Add mixed available/missing asset integration test in `backend/tests/integration/test_research_multi_asset_flow.py`
 
 ### Implementation for User Story 1
 
-- [ ] T022 [US1] Implement normalized research config validation and forbidden field rejection in `backend/src/models/research.py`
-- [ ] T023 [US1] Implement processed feature path resolution and path safety in `backend/src/research/preflight.py`
-- [ ] T024 [US1] Implement missing-data and unreadable-file preflight statuses in `backend/src/research/preflight.py`
-- [ ] T025 [US1] Implement missing-data instruction generation in `backend/src/research/preflight.py`
-- [ ] T026 [US1] Implement grouped research run id creation and request normalization in `backend/src/research/orchestration.py`
-- [ ] T027 [US1] Implement orchestration for ready assets and blocked assets in `backend/src/research/orchestration.py`
-- [ ] T028 [US1] Persist research metadata, config, and asset summary artifacts in `backend/src/research/report_store.py`
-- [ ] T029 [US1] Implement grouped research report JSON and Markdown output for run status and blocked assets in `backend/src/reports/writer.py`
-- [ ] T030 [US1] Implement run, list, and detail endpoints in `backend/src/api/routes/research.py`
-- [ ] T031 [US1] Add research list/detail API client methods in `frontend/src/services/api.ts`
+- [X] T022 [US1] Implement normalized research config validation and forbidden field rejection in `backend/src/models/research.py`
+- [X] T023 [US1] Implement processed feature path resolution and path safety in `backend/src/research/preflight.py`
+- [X] T024 [US1] Implement missing-data and unreadable-file preflight statuses in `backend/src/research/preflight.py`
+- [X] T025 [US1] Implement missing-data instruction generation in `backend/src/research/preflight.py`
+- [X] T026 [US1] Implement grouped research run id creation and request normalization in `backend/src/research/orchestration.py`
+- [X] T027 [US1] Implement orchestration for ready assets and blocked assets in `backend/src/research/orchestration.py`
+- [X] T028 [US1] Persist research metadata, config, and asset summary artifacts in `backend/src/research/report_store.py`
+- [X] T029 [US1] Implement grouped research report JSON and Markdown output for run status and blocked assets in `backend/src/reports/writer.py`
+- [X] T030 [US1] Implement run, list, and detail endpoints in `backend/src/api/routes/research.py`
+- [X] T031 [US1] Add research list/detail API client methods in `frontend/src/services/api.ts`
 
 **Checkpoint**: US1 is independently usable as an MVP grouped research run with completed and blocked asset rows.
 
