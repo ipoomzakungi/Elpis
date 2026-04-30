@@ -20,6 +20,12 @@ import {
   ProvidersResponse,
   ProcessRequest,
   Regime,
+  ResearchAssetSummaryResponse,
+  ResearchComparisonResponse,
+  ResearchRun,
+  ResearchRunListResponse,
+  ResearchRunRequest,
+  ResearchValidationAggregationResponse,
   TaskResponse,
   ValidationConcentrationResponse,
   ValidationRun,
@@ -212,5 +218,39 @@ export const api = {
     validationRunId: string,
   ): Promise<ValidationConcentrationResponse> => {
     return fetchApi(`/backtests/validation/${encodeURIComponent(validationRunId)}/concentration`);
+  },
+
+  // Multi-asset research reports
+  runResearchReport: async (request: ResearchRunRequest): Promise<ResearchRun> => {
+    return fetchApi('/research/runs', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  getResearchReports: async (): Promise<ResearchRunListResponse> => {
+    return fetchApi('/research/runs');
+  },
+
+  getResearchReport: async (researchRunId: string): Promise<ResearchRun> => {
+    return fetchApi(`/research/runs/${encodeURIComponent(researchRunId)}`);
+  },
+
+  getResearchAssets: async (
+    researchRunId: string,
+  ): Promise<ResearchAssetSummaryResponse> => {
+    return fetchApi(`/research/runs/${encodeURIComponent(researchRunId)}/assets`);
+  },
+
+  getResearchComparison: async (
+    researchRunId: string,
+  ): Promise<ResearchComparisonResponse> => {
+    return fetchApi(`/research/runs/${encodeURIComponent(researchRunId)}/comparison`);
+  },
+
+  getResearchValidation: async (
+    researchRunId: string,
+  ): Promise<ResearchValidationAggregationResponse> => {
+    return fetchApi(`/research/runs/${encodeURIComponent(researchRunId)}/validation`);
   },
 };

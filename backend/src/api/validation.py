@@ -84,6 +84,29 @@ def invalid_validation_config(message: str, details: list[dict[str, str]] | None
     api_error(400, "VALIDATION_ERROR", message, details)
 
 
+def invalid_research_config(message: str, details: list[dict[str, str]] | None = None) -> None:
+    api_error(400, "VALIDATION_ERROR", message, details)
+
+
+def research_report_not_found(research_run_id: str) -> None:
+    api_error(404, "NOT_FOUND", f"Research run '{research_run_id}' was not found")
+
+
+def research_not_implemented() -> None:
+    api_error(
+        501,
+        "NOT_IMPLEMENTED",
+        "Multi-asset research report execution is not implemented in this phase",
+    )
+
+
+def unsupported_research_capability(
+    message: str,
+    details: list[dict[str, str]] | None = None,
+) -> None:
+    api_error(400, "UNSUPPORTED_CAPABILITY", message, details)
+
+
 def processed_features_not_found(symbol: str, timeframe: str, feature_path: str) -> None:
     api_error(
         404,

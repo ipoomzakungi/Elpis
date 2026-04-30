@@ -19,11 +19,11 @@
 
 **Purpose**: Create the minimal research package, test fixture locations, and frontend route shell needed by later phases.
 
-- [ ] T001 Create research package directory and `backend/src/research/__init__.py`
-- [ ] T002 [P] Create frontend research route directory and placeholder `frontend/src/app/research/page.tsx`
-- [ ] T003 [P] Create shared research test fixture helpers in `backend/tests/helpers/research_data.py`
-- [ ] T004 [P] Create research test package marker in `backend/tests/helpers/__init__.py`
-- [ ] T005 Review generated artifact paths for research reports in `scripts/check_generated_artifacts.ps1`
+- [X] T001 Create research package directory and `backend/src/research/__init__.py`
+- [X] T002 [P] Create frontend research route directory and placeholder `frontend/src/app/research/page.tsx`
+- [X] T003 [P] Create shared research test fixture helpers in `backend/tests/helpers/research_data.py`
+- [X] T004 [P] Create research test package marker in `backend/tests/helpers/__init__.py`
+- [X] T005 Review generated artifact paths for research reports in `scripts/check_generated_artifacts.ps1`
 
 **Checkpoint**: Research package and fixture locations exist; no runtime behavior is changed yet.
 
@@ -35,18 +35,18 @@
 
 **Critical**: No user story implementation should begin until this phase is complete.
 
-- [ ] T006 Add research request, asset config, capability, preflight, result, and summary schemas in `backend/src/models/research.py`
-- [ ] T007 Add research report artifact enum values or mapping support in `backend/src/models/backtest.py`
-- [ ] T008 Create grouped research report store skeleton in `backend/src/research/report_store.py`
-- [ ] T009 Create preflight module skeleton in `backend/src/research/preflight.py`
-- [ ] T010 Create aggregation module skeleton in `backend/src/research/aggregation.py`
-- [ ] T011 Create orchestration service skeleton in `backend/src/research/orchestration.py`
-- [ ] T012 Add research-specific API validation helpers in `backend/src/api/validation.py`
-- [ ] T013 Create research API route skeleton in `backend/src/api/routes/research.py`
-- [ ] T014 Register research routes in `backend/src/main.py`
-- [ ] T015 Add grouped research report JSON/Markdown writer entry points in `backend/src/reports/writer.py`
-- [ ] T016 Add frontend research response and table types in `frontend/src/types/index.ts`
-- [ ] T017 Add research API client method placeholders in `frontend/src/services/api.ts`
+- [X] T006 Add research request, asset config, capability, preflight, result, and summary schemas in `backend/src/models/research.py`
+- [X] T007 Add research report artifact enum values or mapping support in `backend/src/models/backtest.py`
+- [X] T008 Create grouped research report store skeleton in `backend/src/research/report_store.py`
+- [X] T009 Create preflight module skeleton in `backend/src/research/preflight.py`
+- [X] T010 Create aggregation module skeleton in `backend/src/research/aggregation.py`
+- [X] T011 Create orchestration service skeleton in `backend/src/research/orchestration.py`
+- [X] T012 Add research-specific API validation helpers in `backend/src/api/validation.py`
+- [X] T013 Create research API route skeleton in `backend/src/api/routes/research.py`
+- [X] T014 Register research routes in `backend/src/main.py`
+- [X] T015 Add grouped research report JSON/Markdown writer entry points in `backend/src/reports/writer.py`
+- [X] T016 Add frontend research response and table types in `frontend/src/types/index.ts`
+- [X] T017 Add research API client method placeholders in `frontend/src/services/api.ts`
 
 **Checkpoint**: Shared schemas and route/store skeletons are ready for story implementation.
 

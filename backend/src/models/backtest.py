@@ -157,6 +157,16 @@ class ReportArtifactType(StrEnum):
     VALIDATION_CONCENTRATION = "validation_concentration"
     VALIDATION_REPORT_JSON = "validation_report_json"
     VALIDATION_REPORT_MARKDOWN = "validation_report_markdown"
+    RESEARCH_METADATA = "research_metadata"
+    RESEARCH_CONFIG = "research_config"
+    RESEARCH_ASSET_SUMMARY = "research_asset_summary"
+    RESEARCH_COMPARISON = "research_comparison"
+    RESEARCH_STRESS_SUMMARY = "research_stress_summary"
+    RESEARCH_WALK_FORWARD_SUMMARY = "research_walk_forward_summary"
+    RESEARCH_REGIME_COVERAGE_SUMMARY = "research_regime_coverage_summary"
+    RESEARCH_CONCENTRATION_SUMMARY = "research_concentration_summary"
+    RESEARCH_REPORT_JSON = "research_report_json"
+    RESEARCH_REPORT_MARKDOWN = "research_report_markdown"
 
 
 class ArtifactFormat(StrEnum):

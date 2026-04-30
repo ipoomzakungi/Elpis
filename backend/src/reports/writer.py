@@ -3,6 +3,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from src.models.backtest import BacktestRun, MetricsSummary, ValidationRun
+from src.models.research import ResearchRun
 
 RESEARCH_ONLY_WARNING = (
     "Backtest results are historical simulation outputs under documented assumptions only; "
@@ -358,5 +359,58 @@ def compose_validation_report_markdown(
             "",
         ]
     )
+    lines.extend(f"- {note}" for note in report["notes"])
+    return "\n".join(lines) + "\n"
+
+
+def compose_research_report_json(
+    research_run: ResearchRun | dict[str, Any],
+    extra_notes: list[str] | None = None,
+) -> dict[str, Any]:
+    """Compose a grouped multi-asset research report payload.
+
+    Phase 1/2 exposes the report contract only; story phases populate the
+    asset-level and aggregation sections.
+    """
+    notes = [RESEARCH_ONLY_WARNING]
+    if extra_notes:
+        notes.extend(extra_notes)
+
+    run_payload = _to_jsonable(research_run)
+    return {
+        "research_run": run_payload,
+        "research_disclaimer": RESEARCH_ONLY_WARNING,
+        "assets": run_payload.get("assets", []),
+        "warnings": run_payload.get("warnings", []),
+        "limitations": run_payload.get("limitations", []),
+        "notes": notes,
+    }
+
+
+def compose_research_report_markdown(
+    research_run: ResearchRun | dict[str, Any],
+    extra_notes: list[str] | None = None,
+) -> str:
+    report = compose_research_report_json(research_run, extra_notes=extra_notes)
+    run_payload = report["research_run"]
+    lines = [
+        "# Multi-Asset Research Report",
+        "",
+        f"Research Run ID: {run_payload.get('research_run_id', 'unknown')}",
+        f"Status: {run_payload.get('status', 'unknown')}",
+        f"Completed assets: {run_payload.get('completed_count', 0)}",
+        f"Blocked assets: {run_payload.get('blocked_count', 0)}",
+        "",
+        "## Assets",
+        "",
+    ]
+    for asset in report["assets"]:
+        lines.append(
+            f"- {asset.get('symbol')} ({asset.get('provider')}): "
+            f"{asset.get('status')} / {asset.get('classification')}"
+        )
+    lines.extend(["", "## Limitations", ""])
+    lines.extend(f"- {limitation}" for limitation in report["limitations"])
+    lines.extend(["", "## Notes", ""])
     lines.extend(f"- {note}" for note in report["notes"])
     return "\n".join(lines) + "\n"
