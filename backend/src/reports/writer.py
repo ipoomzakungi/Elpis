@@ -212,7 +212,31 @@ def compose_validation_report_json(
             ),
         },
         "regime_coverage": run_payload.get("regime_coverage", {}),
+        "regime_coverage_summary": {
+            "bar_counts": run_payload.get("regime_coverage", {}).get("bar_counts", {}),
+            "trades_per_regime": run_payload.get("regime_coverage", {}).get(
+                "trades_per_regime", {}
+            ),
+            "notes": run_payload.get("regime_coverage", {}).get("coverage_notes", []),
+        },
         "concentration_report": run_payload.get("concentration_report", {}),
+        "concentration_summary": {
+            "top_1_profit_contribution_pct": run_payload.get(
+                "concentration_report", {}
+            ).get("top_1_profit_contribution_pct"),
+            "top_5_profit_contribution_pct": run_payload.get(
+                "concentration_report", {}
+            ).get("top_5_profit_contribution_pct"),
+            "top_10_profit_contribution_pct": run_payload.get(
+                "concentration_report", {}
+            ).get("top_10_profit_contribution_pct"),
+            "max_consecutive_losses": run_payload.get("concentration_report", {}).get(
+                "max_consecutive_losses", 0
+            ),
+            "drawdown_recovery_status": run_payload.get("concentration_report", {}).get(
+                "drawdown_recovery_status"
+            ),
+        },
         "notional_cap_events": run_payload.get("notional_cap_events", []),
         "warnings": run_payload.get("warnings", []),
         "notes": notes,
@@ -286,6 +310,37 @@ def compose_validation_report_markdown(
             f"{row.get('end_timestamp')}, rows {row.get('row_count')}, "
             f"trades {row.get('trade_count')}, status {row.get('status')}"
         )
+    lines.extend(
+        [
+            "",
+            "## Regime Coverage",
+            "",
+        ]
+    )
+    coverage = report["regime_coverage"]
+    for regime, count in coverage.get("bar_counts", {}).items():
+        trade_count = coverage.get("trades_per_regime", {}).get(regime, 0)
+        lines.append(f"- {regime}: bars {count}, trades {trade_count}")
+    lines.extend(
+        [
+            "",
+            "## Trade Concentration",
+            "",
+        ]
+    )
+    concentration = report["concentration_report"]
+    lines.extend(
+        [
+            f"Top 1 profit contribution %: "
+            f"{concentration.get('top_1_profit_contribution_pct')}",
+            f"Top 5 profit contribution %: "
+            f"{concentration.get('top_5_profit_contribution_pct')}",
+            f"Top 10 profit contribution %: "
+            f"{concentration.get('top_10_profit_contribution_pct')}",
+            f"Max consecutive losses: {concentration.get('max_consecutive_losses')}",
+            f"Drawdown recovery status: {concentration.get('drawdown_recovery_status')}",
+        ]
+    )
     lines.extend(
         [
             "",

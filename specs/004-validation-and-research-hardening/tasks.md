@@ -136,21 +136,21 @@
 
 ### Tests for User Story 4
 
-- [ ] T048 [P] [US4] Add regime coverage tests for expected and unknown regimes in `backend/tests/unit/test_backtest_regime_coverage.py`
-- [ ] T049 [P] [US4] Add trade concentration and drawdown recovery tests in `backend/tests/unit/test_backtest_concentration.py`
-- [ ] T050 [P] [US4] Add concentration endpoint contract tests in `backend/tests/contract/test_backtest_validation_contracts.py`
+- [x] T048 [P] [US4] Add regime coverage tests for expected and unknown regimes in `backend/tests/unit/test_backtest_regime_coverage.py`
+- [x] T049 [P] [US4] Add trade concentration and drawdown recovery tests in `backend/tests/unit/test_backtest_concentration.py`
+- [x] T050 [P] [US4] Add concentration endpoint contract tests in `backend/tests/contract/test_backtest_validation_contracts.py`
 
 ### Implementation for User Story 4
 
-- [ ] T051 [US4] Implement regime bar counts, trades per regime, and return by regime in `backend/src/backtest/validation.py`
-- [ ] T052 [US4] Implement top 1, top 5, and top 10 trade profit contribution plus best/worst trade extraction in `backend/src/backtest/metrics.py`
-- [ ] T053 [US4] Implement maximum consecutive losses and drawdown recovery status/time helpers in `backend/src/backtest/metrics.py`
-- [ ] T054 [US4] Assemble regime coverage and trade concentration report sections in `backend/src/backtest/validation.py`
-- [ ] T055 [US4] Persist coverage and concentration artifacts in `backend/src/backtest/report_store.py`
-- [ ] T056 [US4] Add coverage and concentration sections to validation report JSON and Markdown in `backend/src/reports/writer.py`
-- [ ] T057 [US4] Add concentration and coverage endpoint in `backend/src/api/routes/backtests.py`
-- [ ] T058 [US4] Add coverage and concentration frontend types in `frontend/src/types/index.ts`
-- [ ] T059 [US4] Render regime coverage, best/worst trades, concentration warnings, and drawdown recovery status in `frontend/src/app/backtests/page.tsx`
+- [x] T051 [US4] Implement regime bar counts, trades per regime, and return by regime in `backend/src/backtest/validation.py`
+- [x] T052 [US4] Implement top 1, top 5, and top 10 trade profit contribution plus best/worst trade extraction in `backend/src/backtest/metrics.py`
+- [x] T053 [US4] Implement maximum consecutive losses and drawdown recovery status/time helpers in `backend/src/backtest/metrics.py`
+- [x] T054 [US4] Assemble regime coverage and trade concentration report sections in `backend/src/backtest/validation.py`
+- [x] T055 [US4] Persist coverage and concentration artifacts in `backend/src/backtest/report_store.py`
+- [x] T056 [US4] Add coverage and concentration sections to validation report JSON and Markdown in `backend/src/reports/writer.py`
+- [x] T057 [US4] Add concentration and coverage endpoint in `backend/src/api/routes/backtests.py`
+- [x] T058 [US4] Add coverage and concentration frontend types in `frontend/src/types/index.ts`
+- [x] T059 [US4] Render regime coverage, best/worst trades, concentration warnings, and drawdown recovery status in `frontend/src/app/backtests/page.tsx`
 
 **Checkpoint**: US4 should expose concentration and regime weaknesses directly in API/report/dashboard output.
 

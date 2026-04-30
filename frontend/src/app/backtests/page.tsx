@@ -12,7 +12,9 @@ import {
   BacktestRunSummary,
   BacktestTrade,
   ParameterSensitivityResult,
+  RegimeCoverageReport,
   StressResult,
+  TradeConcentrationReport,
   ValidationRunSummary,
   WalkForwardResult,
 } from '@/types'
@@ -31,6 +33,8 @@ export default function BacktestsPage() {
   const [stressResults, setStressResults] = useState<StressResult[]>([])
   const [sensitivityResults, setSensitivityResults] = useState<ParameterSensitivityResult[]>([])
   const [walkForwardResults, setWalkForwardResults] = useState<WalkForwardResult[]>([])
+  const [regimeCoverage, setRegimeCoverage] = useState<RegimeCoverageReport | null>(null)
+  const [concentrationReport, setConcentrationReport] = useState<TradeConcentrationReport | null>(null)
   const [loadingRuns, setLoadingRuns] = useState(true)
   const [loadingReport, setLoadingReport] = useState(false)
   const [loadingValidation, setLoadingValidation] = useState(false)
@@ -119,6 +123,8 @@ export default function BacktestsPage() {
       setStressResults([])
       setSensitivityResults([])
       setWalkForwardResults([])
+      setRegimeCoverage(null)
+      setConcentrationReport(null)
       return
     }
 
@@ -128,18 +134,23 @@ export default function BacktestsPage() {
       api.getValidationStress(selectedValidationRunId),
       api.getValidationSensitivity(selectedValidationRunId),
       api.getValidationWalkForward(selectedValidationRunId),
+      api.getValidationConcentration(selectedValidationRunId),
     ])
-      .then(([stressResponse, sensitivityResponse, walkForwardResponse]) => {
+      .then(([stressResponse, sensitivityResponse, walkForwardResponse, concentrationResponse]) => {
         if (!active) return
         setStressResults(stressResponse.data)
         setSensitivityResults(sensitivityResponse.data)
         setWalkForwardResults(walkForwardResponse.data)
+        setRegimeCoverage(concentrationResponse.regime_coverage)
+        setConcentrationReport(concentrationResponse.concentration_report)
       })
       .catch(() => {
         if (!active) return
         setStressResults([])
         setSensitivityResults([])
         setWalkForwardResults([])
+        setRegimeCoverage(null)
+        setConcentrationReport(null)
       })
       .finally(() => {
         if (active) setLoadingValidation(false)
@@ -341,9 +352,45 @@ export default function BacktestsPage() {
                         { key: 'notes', label: 'Notes' },
                       ]}
                     />
+                    <MetricTable
+                      rows={regimeCoverageRows(regimeCoverage)}
+                      columns={[
+                        { key: 'regime', label: 'Regime' },
+                        { key: 'bars', label: 'Bars' },
+                        { key: 'trades', label: 'Trades' },
+                        { key: 'net_pnl', label: 'Net PnL', format: formatNumber },
+                        { key: 'return_pct', label: 'Return %', format: formatNumber },
+                      ]}
+                    />
+                    <MetricTable
+                      rows={concentrationRows(concentrationReport)}
+                      columns={[
+                        { key: 'metric', label: 'Metric' },
+                        { key: 'value', label: 'Value' },
+                      ]}
+                    />
                   </div>
                 )}
               </ReportSection>
+
+              {concentrationReport && (
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                  <ReportSection title="Best Trades">
+                    <TradeTable trades={concentrationReport.best_trades} />
+                  </ReportSection>
+                  <ReportSection title="Worst Trades">
+                    <TradeTable trades={concentrationReport.worst_trades} />
+                  </ReportSection>
+                </div>
+              )}
+
+              {regimeCoverage?.coverage_notes.length || concentrationReport?.notes.length ? (
+                <div className="rounded-md border border-yellow-900 bg-yellow-950 p-4 text-sm text-yellow-100">
+                  {[...(regimeCoverage?.coverage_notes ?? []), ...(concentrationReport?.notes ?? [])].map((note) => (
+                    <p key={note}>{note}</p>
+                  ))}
+                </div>
+              ) : null}
 
               {notes.length > 0 && (
                 <div className="rounded-md border border-amber-900 bg-amber-950 p-4 text-sm text-amber-100">
@@ -537,4 +584,33 @@ function walkForwardRows(results: WalkForwardResult[]): Array<Record<string, unk
     status: row.status,
     notes: row.notes.join(' '),
   }))
+}
+
+function regimeCoverageRows(report: RegimeCoverageReport | null): Array<Record<string, unknown>> {
+  if (!report) return []
+  return Object.entries(report.bar_counts).map(([regime, bars]) => {
+    const summary = report.return_by_regime[regime] ?? {}
+    return {
+      regime,
+      bars,
+      trades: report.trades_per_regime[regime] ?? 0,
+      net_pnl: summary.net_pnl ?? null,
+      return_pct: summary.return_pct_display ?? null,
+    }
+  })
+}
+
+function concentrationRows(report: TradeConcentrationReport | null): Array<Record<string, unknown>> {
+  if (!report) return []
+  return [
+    { metric: 'Top 1 Profit Contribution %', value: formatNumber(report.top_1_profit_contribution_pct) },
+    { metric: 'Top 5 Profit Contribution %', value: formatNumber(report.top_5_profit_contribution_pct) },
+    { metric: 'Top 10 Profit Contribution %', value: formatNumber(report.top_10_profit_contribution_pct) },
+    { metric: 'Max Consecutive Losses', value: report.max_consecutive_losses },
+    { metric: 'Drawdown Recovery Status', value: report.drawdown_recovery_status },
+    {
+      metric: 'Drawdown Recovery Bars',
+      value: report.drawdown_recovery_bars ?? 'n/a',
+    },
+  ]
 }

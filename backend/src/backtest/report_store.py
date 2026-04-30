@@ -245,6 +245,15 @@ class ReportStore:
             ),
             self.write_json(
                 validation_run.validation_run_id,
+                "validation_concentration.json",
+                {
+                    "regime_coverage": validation_run.regime_coverage,
+                    "concentration_report": validation_run.concentration_report,
+                },
+                ReportArtifactType.VALIDATION_CONCENTRATION,
+            ),
+            self.write_json(
+                validation_run.validation_run_id,
                 "validation_report.json",
                 compose_validation_report_json(validation_run),
                 ReportArtifactType.VALIDATION_REPORT_JSON,
@@ -269,13 +278,11 @@ class ReportStore:
         frame = self.read_parquet(run_id, "trades.parquet")
         total = frame.height
         rows = frame.slice(offset, limit).to_dicts()
-        trades = []
-        for row in rows:
-            snapshot = row.get("assumptions_snapshot")
-            if isinstance(snapshot, str):
-                row["assumptions_snapshot"] = json.loads(snapshot)
-            trades.append(TradeRecord.model_validate(row))
-        return trades, min(max(total - offset, 0), limit)
+        return _trade_records_from_rows(rows), min(max(total - offset, 0), limit)
+
+    def read_all_trades(self, run_id: str) -> list[TradeRecord]:
+        frame = self.read_parquet(run_id, "trades.parquet")
+        return _trade_records_from_rows(frame.to_dicts())
 
     def read_equity_curve(self, run_id: str) -> list[EquityPoint]:
         frame = self.read_parquet(run_id, "equity.parquet")
@@ -376,9 +383,23 @@ class ReportStore:
         )
 
 
-def _to_jsonable(value: dict[str, Any] | BaseModel) -> dict[str, Any]:
+def _trade_records_from_rows(rows: list[dict[str, Any]]) -> list[TradeRecord]:
+        trades = []
+        for row in rows:
+            snapshot = row.get("assumptions_snapshot")
+            if isinstance(snapshot, str):
+                row["assumptions_snapshot"] = json.loads(snapshot)
+            trades.append(TradeRecord.model_validate(row))
+        return trades
+
+
+def _to_jsonable(value: Any) -> Any:
     if isinstance(value, BaseModel):
         return value.model_dump(mode="json")
+    if isinstance(value, list):
+        return [_to_jsonable(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _to_jsonable(item) for key, item in value.items()}
     return value
 
 

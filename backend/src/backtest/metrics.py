@@ -1,7 +1,14 @@
 from collections.abc import Sequence
 from typing import Any
 
-from src.models.backtest import EquityPoint, MetricsSummary, StrategyMode, TradeRecord
+from src.models.backtest import (
+    DrawdownRecoveryStatus,
+    EquityPoint,
+    MetricsSummary,
+    StrategyMode,
+    TradeConcentrationReport,
+    TradeRecord,
+)
 
 BASELINE_MODES = {
     StrategyMode.BUY_HOLD,
@@ -92,6 +99,79 @@ def _max_consecutive_losses(trades: Sequence[TradeRecord]) -> int:
         else:
             current = 0
     return longest
+
+
+def calculate_trade_concentration(
+    trades: Sequence[TradeRecord],
+    equity_curve: Sequence[EquityPoint],
+) -> TradeConcentrationReport:
+    positive_trades = sorted(
+        [trade for trade in trades if trade.net_pnl > 0],
+        key=lambda trade: trade.net_pnl,
+        reverse=True,
+    )
+    total_positive_profit = sum(trade.net_pnl for trade in positive_trades)
+    best_trades = sorted(trades, key=lambda trade: trade.net_pnl, reverse=True)[:10]
+    worst_trades = sorted(trades, key=lambda trade: trade.net_pnl)[:10]
+    recovery_status, recovery_bars, recovery_notes = _drawdown_recovery(equity_curve)
+
+    notes = list(recovery_notes)
+    top_1 = _profit_contribution(positive_trades, total_positive_profit, 1)
+    top_5 = _profit_contribution(positive_trades, total_positive_profit, 5)
+    top_10 = _profit_contribution(positive_trades, total_positive_profit, 10)
+    if top_1 is not None:
+        notes.append(
+            "top trade contribution is calculated from gross positive trade profit only; "
+            "it is a concentration diagnostic, not evidence of strategy quality."
+        )
+    if not trades:
+        notes.append("No completed trades were available for concentration analysis.")
+
+    return TradeConcentrationReport(
+        top_1_profit_contribution_pct=top_1,
+        top_5_profit_contribution_pct=top_5,
+        top_10_profit_contribution_pct=top_10,
+        best_trades=best_trades,
+        worst_trades=worst_trades,
+        max_consecutive_losses=_max_consecutive_losses(trades),
+        drawdown_recovery_bars=recovery_bars,
+        drawdown_recovery_status=recovery_status,
+        notes=notes,
+    )
+
+
+def _profit_contribution(
+    positive_trades: Sequence[TradeRecord],
+    total_positive_profit: float,
+    count: int,
+) -> float | None:
+    if total_positive_profit <= 0:
+        return None
+    return sum(trade.net_pnl for trade in positive_trades[:count]) / total_positive_profit * 100
+
+
+def _drawdown_recovery(
+    equity_curve: Sequence[EquityPoint],
+) -> tuple[DrawdownRecoveryStatus, int | None, list[str]]:
+    drawdown_start_index: int | None = None
+    for index, point in enumerate(equity_curve):
+        if point.drawdown_pct < 0 and drawdown_start_index is None:
+            drawdown_start_index = index
+        if drawdown_start_index is not None and index > drawdown_start_index:
+            if point.drawdown_pct >= 0:
+                return DrawdownRecoveryStatus.RECOVERED, index - drawdown_start_index, []
+
+    if drawdown_start_index is None:
+        return (
+            DrawdownRecoveryStatus.NOT_APPLICABLE,
+            None,
+            ["No drawdown occurred in the supplied equity curve."],
+        )
+    return (
+        DrawdownRecoveryStatus.NOT_RECOVERED,
+        None,
+        ["Drawdown did not recover within the supplied equity curve."],
+    )
 
 
 def _strategy_modes(

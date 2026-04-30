@@ -6,6 +6,7 @@ from pathlib import Path
 import polars as pl
 
 from src.backtest.engine import BacktestEngine, BacktestFeatureNotFoundError
+from src.backtest.metrics import calculate_trade_concentration
 from src.backtest.report_store import ReportStore
 from src.models.backtest import (
     BacktestRunRequest,
@@ -15,11 +16,13 @@ from src.models.backtest import (
     CostStressProfileName,
     ModeMetrics,
     ParameterSensitivityResult,
+    RegimeCoverageReport,
     SensitivityGrid,
     StrategyConfig,
     StrategyMode,
     StressOutcome,
     StressResult,
+    TradeRecord,
     ValidationConcentrationResponse,
     ValidationRun,
     ValidationRunListResponse,
@@ -66,6 +69,17 @@ class ValidationReportService:
             request=request,
             validation_run_id=validation_run_id,
         )
+        base_features = _load_validation_features(request.base_config)
+        base_trades = self.report_store.read_all_trades(base_result.run_id)
+        base_equity = self.report_store.read_equity_curve(base_result.run_id)
+        regime_coverage = calculate_regime_coverage(
+            features=base_features,
+            trades=base_trades,
+        )
+        concentration_report = calculate_trade_concentration(
+            trades=base_trades,
+            equity_curve=base_equity,
+        )
         validation_run = ValidationRun(
             validation_run_id=validation_run_id,
             status=BacktestStatus.COMPLETED,
@@ -80,6 +94,8 @@ class ValidationReportService:
             stress_results=stress_results,
             sensitivity_results=sensitivity_results,
             walk_forward_results=walk_forward_results,
+            regime_coverage=regime_coverage,
+            concentration_report=concentration_report,
             warnings=[
                 RESEARCH_ONLY_WARNING,
                 "Cost stress and parameter sensitivity outputs are bounded research checks only.",
@@ -398,6 +414,76 @@ def generate_walk_forward_splits(
         )
 
     return splits
+
+
+EXPECTED_REGIMES = ("RANGE", "BREAKOUT_UP", "BREAKOUT_DOWN", "AVOID")
+
+
+def calculate_regime_coverage(
+    features: pl.DataFrame,
+    trades: list[TradeRecord],
+) -> RegimeCoverageReport:
+    bar_counts = {regime: 0 for regime in EXPECTED_REGIMES}
+    bar_counts["UNKNOWN"] = 0
+    coverage_notes: list[str] = []
+
+    if "regime" not in features.columns:
+        bar_counts["UNKNOWN"] = features.height
+        coverage_notes.append(
+            "Feature data did not include regime labels; all bars were counted as UNKNOWN."
+        )
+    else:
+        for value in features["regime"].to_list():
+            regime = _normalize_regime(value)
+            if regime in EXPECTED_REGIMES:
+                bar_counts[regime] += 1
+            else:
+                bar_counts["UNKNOWN"] += 1
+        if bar_counts["UNKNOWN"]:
+            coverage_notes.append(
+                "Feature data contained unknown regime labels; they were grouped as UNKNOWN."
+            )
+
+    trades_by_regime: dict[str, list[TradeRecord]] = {}
+    for trade in trades:
+        regime = _normalize_regime(trade.regime_at_signal)
+        if regime not in EXPECTED_REGIMES:
+            regime = "UNKNOWN"
+        trades_by_regime.setdefault(regime, []).append(trade)
+
+    return RegimeCoverageReport(
+        bar_counts=bar_counts,
+        trades_per_regime={
+            regime: len(trades_by_regime.get(regime, []))
+            for regime in (*EXPECTED_REGIMES, "UNKNOWN")
+        },
+        return_by_regime={
+            regime: _trade_group_summary(trades_by_regime.get(regime, []))
+            for regime in (*EXPECTED_REGIMES, "UNKNOWN")
+            if trades_by_regime.get(regime)
+        },
+        coverage_notes=coverage_notes,
+    )
+
+
+def _normalize_regime(value) -> str:
+    if value is None:
+        return "UNKNOWN"
+    normalized = str(value).strip().upper()
+    return normalized or "UNKNOWN"
+
+
+def _trade_group_summary(trades: list[TradeRecord]) -> dict[str, float | int | None]:
+    net_pnl = sum(trade.net_pnl for trade in trades)
+    notional = sum(trade.notional for trade in trades)
+    wins = [trade for trade in trades if trade.net_pnl > 0]
+    return {
+        "number_of_trades": len(trades),
+        "net_pnl": net_pnl,
+        "return_pct": net_pnl / notional if notional else 0.0,
+        "return_pct_display": (net_pnl / notional * 100) if notional else 0.0,
+        "win_rate": len(wins) / len(trades) if trades else None,
+    }
 
 
 def _walk_forward_split_sizes(row_count: int, split_count: int) -> list[int]:

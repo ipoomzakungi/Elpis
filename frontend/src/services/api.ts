@@ -22,6 +22,7 @@ import {
   Regime,
   TaskResponse,
   ValidationRunListResponse,
+  ValidationConcentrationResponse,
   ValidationSensitivityResponse,
   ValidationStressResponse,
   ValidationWalkForwardResponse,
@@ -192,5 +193,11 @@ export const api = {
     validationRunId: string,
   ): Promise<ValidationWalkForwardResponse> => {
     return fetchApi(`/backtests/validation/${encodeURIComponent(validationRunId)}/walk-forward`);
+  },
+
+  getValidationConcentration: async (
+    validationRunId: string,
+  ): Promise<ValidationConcentrationResponse> => {
+    return fetchApi(`/backtests/validation/${encodeURIComponent(validationRunId)}/concentration`);
   },
 };

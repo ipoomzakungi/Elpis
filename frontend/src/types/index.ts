@@ -437,7 +437,7 @@ export interface WalkForwardResult {
 export interface RegimeCoverageReport {
   bar_counts: Record<string, number>;
   trades_per_regime: Record<string, number>;
-  return_by_regime: Record<string, unknown>;
+  return_by_regime: Record<string, Record<string, unknown>>;
   coverage_notes: string[];
 }
 
@@ -514,4 +514,17 @@ export interface ValidationConcentrationResponse {
   validation_run_id: string;
   regime_coverage: RegimeCoverageReport;
   concentration_report: TradeConcentrationReport;
+}
+
+export interface RegimeCoverageTableRow {
+  regime: string;
+  bars: number;
+  trades: number;
+  net_pnl: number | null;
+  return_pct: number | null;
+}
+
+export interface TradeConcentrationSummaryRow {
+  metric: string;
+  value: number | string | null;
 }
