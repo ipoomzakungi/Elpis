@@ -281,3 +281,12 @@ class ResearchExecutionRunSummary(StrictModel):
     failed_workflow_count: int = Field(default=0, ge=0)
     created_at: datetime
     artifact_root: str
+
+
+class ResearchExecutionRunListResponse(StrictModel):
+    runs: list[ResearchExecutionRunSummary] = Field(default_factory=list)
+
+
+class ResearchExecutionMissingDataResponse(StrictModel):
+    execution_run_id: str
+    missing_data_checklist: list[str] = Field(default_factory=list)

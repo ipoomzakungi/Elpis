@@ -23,6 +23,11 @@ import {
   ResearchAssetSummaryResponse,
   ResearchComparisonResponse,
   ResearchDashboardData,
+  ResearchEvidenceSummary,
+  ResearchExecutionMissingDataResponse,
+  ResearchExecutionRun,
+  ResearchExecutionRunListResponse,
+  ResearchExecutionRunRequest,
   ResearchRun,
   ResearchRunListResponse,
   ResearchRunRequest,
@@ -272,6 +277,40 @@ export const api = {
       ),
     ]);
     return { run, assets, comparison, validation };
+  },
+
+  // Research execution evidence reports
+  runResearchExecution: async (
+    request: ResearchExecutionRunRequest,
+  ): Promise<ResearchExecutionRun> => {
+    return fetchApi('/research/execution-runs', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  getResearchExecutionRuns: async (): Promise<ResearchExecutionRunListResponse> => {
+    return fetchApi('/research/execution-runs');
+  },
+
+  getResearchExecutionRun: async (
+    executionRunId: string,
+  ): Promise<ResearchExecutionRun> => {
+    return fetchApi(`/research/execution-runs/${encodeURIComponent(executionRunId)}`);
+  },
+
+  getResearchExecutionEvidence: async (
+    executionRunId: string,
+  ): Promise<ResearchEvidenceSummary> => {
+    return fetchApi(`/research/execution-runs/${encodeURIComponent(executionRunId)}/evidence`);
+  },
+
+  getResearchExecutionMissingData: async (
+    executionRunId: string,
+  ): Promise<ResearchExecutionMissingDataResponse> => {
+    return fetchApi(
+      `/research/execution-runs/${encodeURIComponent(executionRunId)}/missing-data`,
+    );
   },
 
   // XAU Vol-OI reports

@@ -19,9 +19,9 @@
 
 - [X] T001 Create `backend/src/research_execution/__init__.py` package marker
 - [X] T002 [P] Create `backend/src/models/research_execution.py` placeholder for execution schemas
-- [ ] T003 [P] Create `backend/src/api/routes/research_execution.py` route placeholder
-- [ ] T004 [P] Create `/evidence` placeholder page in `frontend/src/app/evidence/page.tsx`
-- [ ] T005 [P] Create shared synthetic evidence fixtures in `backend/tests/helpers/test_research_execution_data.py`
+- [X] T003 [P] Create `backend/src/api/routes/research_execution.py` route placeholder
+- [X] T004 [P] Create `/evidence` placeholder page in `frontend/src/app/evidence/page.tsx`
+- [X] T005 [P] Create shared synthetic evidence fixtures in `backend/tests/helpers/test_research_execution_data.py`
 
 ---
 
@@ -32,17 +32,17 @@
 **Critical**: No user story implementation should start until this phase is complete.
 
 - [X] T006 Implement workflow status, decision, workflow type, request, config, preflight, result, evidence, run, and summary schemas in `backend/src/models/research_execution.py`
-- [ ] T007 [P] Create execution report store skeleton and artifact path helpers in `backend/src/research_execution/report_store.py`
+- [X] T007 [P] Create execution report store skeleton and artifact path helpers in `backend/src/research_execution/report_store.py`
 - [X] T008 [P] Create execution preflight skeleton and shared result builders in `backend/src/research_execution/preflight.py`
 - [X] T009 [P] Create evidence aggregation skeleton and decision-rule placeholders in `backend/src/research_execution/aggregation.py`
-- [ ] T010 [P] Create execution orchestration skeleton in `backend/src/research_execution/orchestration.py`
-- [ ] T011 Add research execution API validation helpers in `backend/src/api/validation.py`
-- [ ] T012 Register research execution router in `backend/src/main.py`
-- [ ] T013 Add grouped evidence JSON and Markdown writer skeleton hooks in `backend/src/reports/writer.py`
-- [ ] T014 [P] Add research execution frontend type placeholders in `frontend/src/types/index.ts`
-- [ ] T015 Add research execution API client placeholders in `frontend/src/services/api.ts`
-- [ ] T016 Verify research execution generated report exclusions in `.gitignore` and `scripts/check_generated_artifacts.ps1`
-- [ ] T017 [P] Create research execution API contract test scaffold in `backend/tests/contract/test_research_execution_api_contracts.py`
+- [X] T010 [P] Create execution orchestration skeleton in `backend/src/research_execution/orchestration.py`
+- [X] T011 Add research execution API validation helpers in `backend/src/api/validation.py`
+- [X] T012 Register research execution router in `backend/src/main.py`
+- [X] T013 Add grouped evidence JSON and Markdown writer skeleton hooks in `backend/src/reports/writer.py`
+- [X] T014 [P] Add research execution frontend type placeholders in `frontend/src/types/index.ts`
+- [X] T015 Add research execution API client placeholders in `frontend/src/services/api.ts`
+- [X] T016 Verify research execution generated report exclusions in `.gitignore` and `scripts/check_generated_artifacts.ps1`
+- [X] T017 [P] Create research execution API contract test scaffold in `backend/tests/contract/test_research_execution_api_contracts.py`
 
 **Checkpoint**: Foundation ready. Backend imports should still pass before user-story work begins.
 

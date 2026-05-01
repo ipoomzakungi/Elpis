@@ -517,6 +517,76 @@ def compose_research_report_markdown(
     return "\n".join(lines) + "\n"
 
 
+def compose_research_execution_evidence_json(
+    execution_run: BaseModel | dict[str, Any],
+    extra_notes: list[str] | None = None,
+) -> dict[str, Any]:
+    """Compose a research-only execution evidence report payload."""
+
+    notes = [RESEARCH_ONLY_WARNING]
+    if extra_notes:
+        notes.extend(extra_notes)
+
+    run_payload = _to_jsonable(execution_run)
+    evidence = run_payload.get("evidence_summary") or run_payload
+    return {
+        "execution_run": run_payload,
+        "evidence_summary": evidence,
+        "research_disclaimer": (
+            "Evidence labels are research decisions only and do not imply profitability, "
+            "predictive power, safety, or live readiness."
+        ),
+        "workflow_results": evidence.get("workflow_results", []),
+        "missing_data_checklist": evidence.get("missing_data_checklist", []),
+        "limitations": evidence.get("limitations", []),
+        "research_only_warnings": evidence.get("research_only_warnings", []),
+        "notes": notes,
+    }
+
+
+def compose_research_execution_evidence_markdown(
+    execution_run: BaseModel | dict[str, Any],
+    extra_notes: list[str] | None = None,
+) -> str:
+    """Compose a research-only execution evidence Markdown report."""
+
+    report = compose_research_execution_evidence_json(execution_run, extra_notes=extra_notes)
+    run_payload = report["execution_run"]
+    evidence = report["evidence_summary"]
+    lines = [
+        "# Research Execution Evidence Report",
+        "",
+        f"Execution Run ID: {run_payload.get('execution_run_id', 'unknown')}",
+        f"Status: {evidence.get('status', run_payload.get('status', 'unknown'))}",
+        f"Decision: {evidence.get('decision', run_payload.get('decision', 'unknown'))}",
+        "",
+        "## Research-Only Disclaimer",
+        "",
+        report["research_disclaimer"],
+        "",
+        "## Workflow Results",
+        "",
+    ]
+    if not report["workflow_results"]:
+        lines.append("- No workflow evidence rows were generated.")
+    for workflow in report["workflow_results"]:
+        lines.append(
+            f"- {workflow.get('workflow_type')}: {workflow.get('status')} / "
+            f"{workflow.get('decision')} - {workflow.get('decision_reason')}"
+        )
+    lines.extend(["", "## Missing Data Checklist", ""])
+    if not report["missing_data_checklist"]:
+        lines.append("- None")
+    lines.extend(f"- {item}" for item in report["missing_data_checklist"])
+    lines.extend(["", "## Limitations", ""])
+    if not report["limitations"]:
+        lines.append("- None")
+    lines.extend(f"- {limitation}" for limitation in report["limitations"])
+    lines.extend(["", "## Notes", ""])
+    lines.extend(f"- {note}" for note in report["notes"])
+    return "\n".join(lines) + "\n"
+
+
 def compose_xau_report_json(
     xau_report: BaseModel | dict[str, Any],
     extra_notes: list[str] | None = None,
