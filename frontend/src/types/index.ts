@@ -1099,3 +1099,95 @@ export interface XauDashboardData {
   walls: XauWallTableResponse;
   zones: XauZoneTableResponse;
 }
+
+export type DataSourceProviderType =
+  | 'binance_public'
+  | 'yahoo_finance'
+  | 'local_file'
+  | 'kaiko_optional'
+  | 'tardis_optional'
+  | 'coinglass_optional'
+  | 'cryptoquant_optional'
+  | 'cme_quikstrike_local_or_optional'
+  | 'forbidden_private_trading';
+
+export type DataSourceReadinessStatus =
+  | 'ready'
+  | 'configured'
+  | 'missing'
+  | 'unavailable_optional'
+  | 'unsupported'
+  | 'blocked'
+  | 'forbidden';
+
+export type DataSourceTier =
+  | 'tier_0_public_local'
+  | 'tier_1_optional_paid_research'
+  | 'tier_2_forbidden_v0';
+
+export type DataSourceWorkflowType =
+  | 'crypto_multi_asset'
+  | 'proxy_ohlcv'
+  | 'xau_vol_oi'
+  | 'optional_vendor'
+  | 'first_evidence_run';
+
+export type FirstEvidenceRunStatus = 'completed' | 'partial' | 'blocked' | 'failed';
+export type MissingDataSeverity = 'blocking' | 'optional' | 'informational';
+
+export interface DataSourceCapability {
+  provider_type: DataSourceProviderType;
+  display_name: string;
+  tier: DataSourceTier;
+  supports: string[];
+  unsupported: string[];
+  requires_key: boolean;
+  requires_local_file: boolean;
+  is_optional: boolean;
+  limitations: string[];
+  forbidden_reason: string | null;
+}
+
+export interface DataSourceMissingDataAction {
+  action_id: string;
+  workflow_type: DataSourceWorkflowType;
+  provider_type: DataSourceProviderType;
+  asset: string | null;
+  severity: MissingDataSeverity;
+  title: string;
+  instructions: string[];
+  required_columns: string[];
+  optional_columns: string[];
+  blocking: boolean;
+}
+
+export interface DataSourceProviderStatus {
+  provider_type: DataSourceProviderType;
+  status: DataSourceReadinessStatus;
+  configured: boolean;
+  env_var_name: string | null;
+  secret_value_returned: boolean;
+  capabilities: DataSourceCapability;
+  warnings: string[];
+  limitations: string[];
+  missing_actions: DataSourceMissingDataAction[];
+}
+
+export interface DataSourceReadiness {
+  generated_at: string;
+  provider_statuses: DataSourceProviderStatus[];
+  capability_matrix: DataSourceCapability[];
+  public_sources_available: boolean;
+  optional_sources_missing: DataSourceProviderType[];
+  forbidden_sources_detected: DataSourceProviderType[];
+  missing_data_actions: DataSourceMissingDataAction[];
+  research_only_warnings: string[];
+}
+
+export interface DataSourceCapabilityListResponse {
+  capabilities: DataSourceCapability[];
+}
+
+export interface DataSourceMissingDataResponse {
+  actions: DataSourceMissingDataAction[];
+}

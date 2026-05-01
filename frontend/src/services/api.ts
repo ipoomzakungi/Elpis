@@ -8,6 +8,9 @@ import {
   BacktestRunListResponse,
   BacktestTradesResponse,
   DataQualityResponse,
+  DataSourceCapabilityListResponse,
+  DataSourceMissingDataResponse,
+  DataSourceReadiness,
   DownloadRequest,
   Feature,
   FundingRate,
@@ -165,6 +168,19 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(request),
     });
+  },
+
+  // Data-source onboarding
+  getDataSourceReadiness: async (): Promise<DataSourceReadiness> => {
+    return fetchApi('/data-sources/readiness');
+  },
+
+  getDataSourceCapabilities: async (): Promise<DataSourceCapabilityListResponse> => {
+    return fetchApi('/data-sources/capabilities');
+  },
+
+  getDataSourceMissingData: async (): Promise<DataSourceMissingDataResponse> => {
+    return fetchApi('/data-sources/missing-data');
   },
 
   // Backtest reports

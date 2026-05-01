@@ -17,16 +17,16 @@
 
 **Purpose**: Create the feature shell without implementing user-story behavior.
 
-- [ ] T001 Create backend data-source package marker in backend/src/data_sources/__init__.py
-- [ ] T002 Create data-source schema module shell in backend/src/models/data_sources.py
-- [ ] T003 Create data-source API route skeleton in backend/src/api/routes/data_sources.py
-- [ ] T004 Create /data-sources dashboard placeholder route in frontend/src/app/data-sources/page.tsx
-- [ ] T005 [P] Create shared data-source test fixtures in backend/tests/helpers/test_data_source_data.py
-- [ ] T006 Verify generated data-source artifacts remain covered by .gitignore and scripts/check_generated_artifacts.ps1
-- [ ] T007 Add data-source structured error helpers in backend/src/api/validation.py
-- [ ] T008 Register data-source API router in backend/src/main.py
-- [ ] T009 Add data-source frontend type placeholders in frontend/src/types/index.ts
-- [ ] T010 Add data-source API client placeholders in frontend/src/services/api.ts
+- [X] T001 Create backend data-source package marker in backend/src/data_sources/__init__.py
+- [X] T002 Create data-source schema module shell in backend/src/models/data_sources.py
+- [X] T003 Create data-source API route skeleton in backend/src/api/routes/data_sources.py
+- [X] T004 Create /data-sources dashboard placeholder route in frontend/src/app/data-sources/page.tsx
+- [X] T005 [P] Create shared data-source test fixtures in backend/tests/helpers/test_data_source_data.py
+- [X] T006 Verify generated data-source artifacts remain covered by .gitignore and scripts/check_generated_artifacts.ps1
+- [X] T007 Add data-source structured error helpers in backend/src/api/validation.py
+- [X] T008 Register data-source API router in backend/src/main.py
+- [X] T009 Add data-source frontend type placeholders in frontend/src/types/index.ts
+- [X] T010 Add data-source API client placeholders in frontend/src/services/api.ts
 
 ---
 
@@ -36,11 +36,11 @@
 
 **CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T011 Implement DataSourceProviderType, DataSourceReadinessStatus, DataSourceTier, DataSourceWorkflowType, and FirstEvidenceRunStatus enums in backend/src/models/data_sources.py
-- [ ] T012 Implement DataSourceCapability, DataSourceProviderStatus, DataSourceMissingDataAction, DataSourceReadiness, DataSourcePreflightRequest, DataSourcePreflightResult, FirstEvidenceRunRequest, and FirstEvidenceRunResult schemas in backend/src/models/data_sources.py
-- [ ] T013 [P] Create static provider capability matrix skeleton in backend/src/data_sources/capabilities.py
-- [ ] T014 [P] Create readiness service skeleton with env-presence helper in backend/src/data_sources/readiness.py
-- [ ] T015 [P] Create missing-data instruction service skeleton in backend/src/data_sources/missing_data.py
+- [X] T011 Implement DataSourceProviderType, DataSourceReadinessStatus, DataSourceTier, DataSourceWorkflowType, and FirstEvidenceRunStatus enums in backend/src/models/data_sources.py
+- [X] T012 Implement DataSourceCapability, DataSourceProviderStatus, DataSourceMissingDataAction, DataSourceReadiness, DataSourcePreflightRequest, DataSourcePreflightResult, FirstEvidenceRunRequest, and FirstEvidenceRunResult schemas in backend/src/models/data_sources.py
+- [X] T013 [P] Create static provider capability matrix skeleton in backend/src/data_sources/capabilities.py
+- [X] T014 [P] Create readiness service skeleton with env-presence helper in backend/src/data_sources/readiness.py
+- [X] T015 [P] Create missing-data instruction service skeleton in backend/src/data_sources/missing_data.py
 - [ ] T016 [P] Create preflight service skeleton in backend/src/data_sources/preflight.py
 - [ ] T017 [P] Create first evidence run orchestration skeleton in backend/src/data_sources/first_run.py
 
@@ -56,19 +56,19 @@
 
 ### Tests for User Story 1
 
-- [ ] T018 [P] [US1] Add provider readiness and optional key detection tests in backend/tests/unit/test_data_source_readiness.py
-- [ ] T019 [US1] Add no-secret-leakage tests for readiness payloads in backend/tests/unit/test_data_source_readiness.py
-- [ ] T020 [P] [US1] Add provider capability matrix tests in backend/tests/unit/test_data_source_capabilities.py
+- [X] T018 [P] [US1] Add provider readiness and optional key detection tests in backend/tests/unit/test_data_source_readiness.py
+- [X] T019 [US1] Add no-secret-leakage tests for readiness payloads in backend/tests/unit/test_data_source_readiness.py
+- [X] T020 [P] [US1] Add provider capability matrix tests in backend/tests/unit/test_data_source_capabilities.py
 - [ ] T021 [US1] Add readiness and capabilities API contract tests in backend/tests/contract/test_data_sources_api_contracts.py
 
 ### Implementation for User Story 1
 
-- [ ] T022 [US1] Implement Binance, Yahoo, local, optional vendor, CME/QuikStrike, and forbidden credential capability rows in backend/src/data_sources/capabilities.py
-- [ ] T023 [US1] Implement unsupported capability label helpers for Yahoo and forbidden v0 credentials in backend/src/data_sources/capabilities.py
-- [ ] T024 [US1] Implement provider readiness detection with presence-only optional env var checks in backend/src/data_sources/readiness.py
-- [ ] T025 [US1] Implement no-secret serialization safeguards for provider status output in backend/src/models/data_sources.py
-- [ ] T026 [US1] Implement GET /api/v1/data-sources/readiness in backend/src/api/routes/data_sources.py
-- [ ] T027 [US1] Implement GET /api/v1/data-sources/capabilities in backend/src/api/routes/data_sources.py
+- [X] T022 [US1] Implement Binance, Yahoo, local, optional vendor, CME/QuikStrike, and forbidden credential capability rows in backend/src/data_sources/capabilities.py
+- [X] T023 [US1] Implement unsupported capability label helpers for Yahoo and forbidden v0 credentials in backend/src/data_sources/capabilities.py
+- [X] T024 [US1] Implement provider readiness detection with presence-only optional env var checks in backend/src/data_sources/readiness.py
+- [X] T025 [US1] Implement no-secret serialization safeguards for provider status output in backend/src/models/data_sources.py
+- [X] T026 [US1] Implement GET /api/v1/data-sources/readiness in backend/src/api/routes/data_sources.py
+- [X] T027 [US1] Implement GET /api/v1/data-sources/capabilities in backend/src/api/routes/data_sources.py
 
 **Checkpoint**: User Story 1 should pass unit and contract tests independently.
 
@@ -82,7 +82,7 @@
 
 ### Tests for User Story 2
 
-- [ ] T028 [P] [US2] Add missing-data instruction tests for crypto, proxy, XAU, and optional vendors in backend/tests/unit/test_data_source_missing_data.py
+- [X] T028 [P] [US2] Add missing-data instruction tests for crypto, proxy, XAU, and optional vendors in backend/tests/unit/test_data_source_missing_data.py
 - [ ] T029 [P] [US2] Add local-file schema capability detection tests in backend/tests/unit/test_data_source_preflight.py
 - [ ] T030 [US2] Add preflight API contract tests in backend/tests/contract/test_data_sources_api_contracts.py
 - [ ] T031 [P] [US2] Add public/no-key MVP preflight integration test in backend/tests/integration/test_data_source_public_mvp_flow.py
@@ -91,10 +91,10 @@
 
 ### Implementation for User Story 2
 
-- [ ] T034 [US2] Implement crypto Binance download/process missing-data instructions in backend/src/data_sources/missing_data.py
-- [ ] T035 [US2] Implement proxy Yahoo OHLCV missing-data instructions and OHLCV-only limitations in backend/src/data_sources/missing_data.py
-- [ ] T036 [US2] Implement XAU local options OI schema instructions and optional columns in backend/src/data_sources/missing_data.py
-- [ ] T037 [US2] Implement optional paid vendor configuration instructions without requiring keys in backend/src/data_sources/missing_data.py
+- [X] T034 [US2] Implement crypto Binance download/process missing-data instructions in backend/src/data_sources/missing_data.py
+- [X] T035 [US2] Implement proxy Yahoo OHLCV missing-data instructions and OHLCV-only limitations in backend/src/data_sources/missing_data.py
+- [X] T036 [US2] Implement XAU local options OI schema instructions and optional columns in backend/src/data_sources/missing_data.py
+- [X] T037 [US2] Implement optional paid vendor configuration instructions without requiring keys in backend/src/data_sources/missing_data.py
 - [ ] T038 [US2] Implement crypto processed feature readiness checks and path safety in backend/src/data_sources/preflight.py
 - [ ] T039 [US2] Implement proxy OHLCV readiness checks and unsupported capability labeling in backend/src/data_sources/preflight.py
 - [ ] T040 [US2] Implement XAU local file schema readiness by reusing feature 006 validation in backend/src/data_sources/preflight.py

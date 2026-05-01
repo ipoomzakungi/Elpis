@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from src.api.routes import (
     backtests,
     data_quality,
+    data_sources,
     features,
     market_data,
     providers,
@@ -39,6 +40,7 @@ app.include_router(features.router, prefix="/api/v1", tags=["features"])
 app.include_router(regimes.router, prefix="/api/v1", tags=["regimes"])
 app.include_router(data_quality.router, prefix="/api/v1", tags=["data-quality"])
 app.include_router(backtests.router, prefix="/api/v1", tags=["backtests"])
+app.include_router(data_sources.router, prefix="/api/v1", tags=["data-sources"])
 app.include_router(research.router, prefix="/api/v1", tags=["research"])
 app.include_router(research_execution.router, prefix="/api/v1", tags=["research-execution"])
 app.include_router(xau.router, prefix="/api/v1", tags=["xau"])
