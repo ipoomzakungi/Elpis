@@ -18,7 +18,8 @@ from src.models.research_execution import (
 from src.models.xau import XauVolOiReport, XauVolOiReportRequest
 from src.reports.writer import RESEARCH_ONLY_WARNING
 from src.research_execution.aggregation import (
-    classify_preflight_decision,
+    classify_final_evidence,
+    classify_workflow_evidence,
     summarize_preflight_assets,
     summarize_proxy_preflight,
     summarize_xau_evidence,
@@ -160,7 +161,6 @@ def _crypto_workflow_result(
     config: CryptoResearchWorkflowConfig,
     preflight_results: list[ResearchExecutionPreflightResult],
 ) -> ResearchExecutionWorkflowResult:
-    decision = classify_preflight_decision(preflight_results)
     status = _workflow_status(preflight_results)
     report_ids = []
     if config.existing_research_run_id:
@@ -192,6 +192,13 @@ def _crypto_workflow_result(
         for result in preflight_results
         if result.status == ResearchExecutionWorkflowStatus.BLOCKED and result.asset
     ]
+    decision = classify_workflow_evidence(
+        preflight_results,
+        report_ids=report_ids,
+        warnings=warnings,
+        limitations=limitations,
+        missing_data_actions=missing_actions,
+    )
     reason = decision.reason
     if ready_assets and blocked_assets:
         reason = (
@@ -220,7 +227,6 @@ def _proxy_workflow_result(
     config: ProxyResearchWorkflowConfig,
     preflight_results: list[ResearchExecutionPreflightResult],
 ) -> ResearchExecutionWorkflowResult:
-    decision = classify_preflight_decision(preflight_results)
     status = _workflow_status(preflight_results)
     report_ids = []
     if config.existing_research_run_id:
@@ -252,6 +258,13 @@ def _proxy_workflow_result(
         for result in preflight_results
         if result.status == ResearchExecutionWorkflowStatus.BLOCKED and result.asset
     ]
+    decision = classify_workflow_evidence(
+        preflight_results,
+        report_ids=report_ids,
+        warnings=warnings,
+        limitations=limitations,
+        missing_data_actions=missing_actions,
+    )
     reason = decision.reason
     if ready_assets and blocked_assets:
         reason = (
@@ -281,10 +294,13 @@ def _xau_workflow_result(
     preflight_results: list[ResearchExecutionPreflightResult],
     xau_report: XauVolOiReport | None,
 ) -> ResearchExecutionWorkflowResult:
-    decision = classify_preflight_decision(preflight_results)
     status = _workflow_status(preflight_results)
     report_ids = [xau_report.report_id] if xau_report is not None else []
-    if xau_report is None and config.existing_xau_report_id and status != "blocked":
+    if (
+        xau_report is None
+        and config.existing_xau_report_id
+        and status != ResearchExecutionWorkflowStatus.BLOCKED
+    ):
         report_ids.append(config.existing_xau_report_id)
 
     missing_actions = _flatten_unique(
@@ -316,6 +332,13 @@ def _xau_workflow_result(
                 "futures OI, IV, or XAUUSD execution sources."
             ),
         ]
+    )
+    decision = classify_workflow_evidence(
+        preflight_results,
+        report_ids=report_ids,
+        warnings=warnings,
+        limitations=limitations,
+        missing_data_actions=missing_actions,
     )
     reason = decision.reason
     if xau_report is not None:
@@ -405,20 +428,7 @@ def _overall_status(
 def _overall_decision(
     workflow_results: list[ResearchExecutionWorkflowResult],
 ) -> ResearchEvidenceDecision:
-    if not workflow_results:
-        return ResearchEvidenceDecision.INCONCLUSIVE
-    decisions = [result.decision for result in workflow_results]
-    if all(decision == ResearchEvidenceDecision.DATA_BLOCKED for decision in decisions):
-        return ResearchEvidenceDecision.DATA_BLOCKED
-    if any(decision == ResearchEvidenceDecision.REFINE for decision in decisions):
-        return ResearchEvidenceDecision.REFINE
-    if any(decision == ResearchEvidenceDecision.DATA_BLOCKED for decision in decisions):
-        return ResearchEvidenceDecision.REFINE
-    if any(decision == ResearchEvidenceDecision.REJECT for decision in decisions):
-        return ResearchEvidenceDecision.REJECT
-    if all(decision == ResearchEvidenceDecision.CONTINUE for decision in decisions):
-        return ResearchEvidenceDecision.CONTINUE
-    return ResearchEvidenceDecision.INCONCLUSIVE
+    return classify_final_evidence(workflow_results).decision
 
 
 def _execution_run_id(created_at: datetime) -> str:

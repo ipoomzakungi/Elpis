@@ -142,24 +142,24 @@
 
 ### Tests for User Story 4
 
-- [ ] T056 [P] [US4] Add evidence decision rule tests in `backend/tests/unit/test_research_execution_aggregation.py`
-- [ ] T057 [P] [US4] Add final evidence endpoint contract tests in `backend/tests/contract/test_research_execution_api_contracts.py`
-- [ ] T058 [P] [US4] Add final mixed-workflow evidence integration test in `backend/tests/integration/test_research_execution_flow.py`
-- [ ] T059 [P] [US4] Add frontend evidence type coverage through production build expectations in `frontend/src/types/index.ts`
+- [X] T056 [P] [US4] Add evidence decision rule tests in `backend/tests/unit/test_research_execution_aggregation.py`
+- [X] T057 [P] [US4] Add final evidence endpoint contract tests in `backend/tests/contract/test_research_execution_api_contracts.py`
+- [X] T058 [P] [US4] Add final mixed-workflow evidence integration test in `backend/tests/integration/test_research_execution_flow.py`
+- [X] T059 [P] [US4] Add frontend evidence type coverage through production build expectations in `frontend/src/types/index.ts`
 
 ### Implementation for User Story 4
 
-- [ ] T060 [US4] Implement continue, refine, reject, data_blocked, and inconclusive decision rules in `backend/src/research_execution/aggregation.py`
-- [ ] T061 [US4] Assemble final evidence summary across crypto, proxy, XAU, warnings, limitations, and missing-data actions in `backend/src/research_execution/orchestration.py`
-- [ ] T062 [US4] Persist evidence summary JSON, Markdown, and missing-data checklist in `backend/src/research_execution/report_store.py`
-- [ ] T063 [US4] Implement evidence and missing-data endpoints in `backend/src/api/routes/research_execution.py`
-- [ ] T064 [US4] Add full execution run, evidence, and missing-data API client methods in `frontend/src/services/api.ts`
-- [ ] T065 [US4] Add complete research execution frontend response types in `frontend/src/types/index.ts`
-- [ ] T066 [US4] Implement `/evidence` run selector and workflow status cards in `frontend/src/app/evidence/page.tsx`
-- [ ] T067 [US4] Render linked multi-asset and XAU report IDs in `frontend/src/app/evidence/page.tsx`
-- [ ] T068 [US4] Render evidence decision table and missing-data checklist in `frontend/src/app/evidence/page.tsx`
-- [ ] T069 [US4] Render limitations and research-only disclaimers in `frontend/src/app/evidence/page.tsx`
-- [ ] T070 [US4] Add Evidence navigation link in `frontend/src/components/ui/Header.tsx`
+- [X] T060 [US4] Implement continue, refine, reject, data_blocked, and inconclusive decision rules in `backend/src/research_execution/aggregation.py`
+- [X] T061 [US4] Assemble final evidence summary across crypto, proxy, XAU, warnings, limitations, and missing-data actions in `backend/src/research_execution/orchestration.py`
+- [X] T062 [US4] Persist evidence summary JSON, Markdown, and missing-data checklist in `backend/src/research_execution/report_store.py`
+- [X] T063 [US4] Implement evidence and missing-data endpoints in `backend/src/api/routes/research_execution.py`
+- [X] T064 [US4] Add full execution run, evidence, and missing-data API client methods in `frontend/src/services/api.ts`
+- [X] T065 [US4] Add complete research execution frontend response types in `frontend/src/types/index.ts`
+- [X] T066 [US4] Implement `/evidence` run selector and workflow status cards in `frontend/src/app/evidence/page.tsx`
+- [X] T067 [US4] Render linked multi-asset and XAU report IDs in `frontend/src/app/evidence/page.tsx`
+- [X] T068 [US4] Render evidence decision table and missing-data checklist in `frontend/src/app/evidence/page.tsx`
+- [X] T069 [US4] Render limitations and research-only disclaimers in `frontend/src/app/evidence/page.tsx`
+- [X] T070 [US4] Add Evidence navigation link in `frontend/src/components/ui/Header.tsx`
 
 **Checkpoint**: User Story 4 is independently testable through the API and `/evidence` dashboard.
 

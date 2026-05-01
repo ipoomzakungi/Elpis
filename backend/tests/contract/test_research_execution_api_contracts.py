@@ -141,6 +141,53 @@ def test_research_execution_missing_data_returns_structured_not_found():
     assert response.json()["error"]["code"] == "NOT_FOUND"
 
 
+def test_research_execution_evidence_and_missing_data_endpoints_return_final_sections(
+    isolated_data_paths,
+):
+    feature_path = isolated_data_paths / "processed" / "btcusdt_15m_features.parquet"
+    from tests.helpers.test_research_execution_data import write_synthetic_execution_features
+
+    write_synthetic_execution_features(feature_path, rows=10)
+    client = TestClient(app)
+
+    create_response = client.post(
+        "/api/v1/research/execution-runs",
+        json={
+            "name": "final evidence contract",
+            "research_only_acknowledged": True,
+            "crypto": {
+                "enabled": True,
+                "primary_assets": ["BTCUSDT", "ETHUSDT"],
+                "processed_feature_root": str(isolated_data_paths / "processed"),
+                "existing_research_run_id": "research_contract_ready",
+            },
+        },
+    )
+
+    assert create_response.status_code == 201
+    run_id = create_response.json()["execution_run_id"]
+
+    evidence_response = client.get(f"/api/v1/research/execution-runs/{run_id}/evidence")
+    assert evidence_response.status_code == 200
+    evidence = evidence_response.json()
+    assert evidence["execution_run_id"] == run_id
+    assert evidence["status"] == "partial"
+    assert evidence["decision"] == "refine"
+    assert evidence["workflow_results"][0]["report_ids"] == ["research_contract_ready"]
+    assert evidence["workflow_results"][0]["decision"] == "refine"
+    assert any(
+        "research decisions only" in warning
+        for warning in evidence["research_only_warnings"]
+    )
+    assert any("ETHUSDT" in action for action in evidence["missing_data_checklist"])
+
+    missing_response = client.get(f"/api/v1/research/execution-runs/{run_id}/missing-data")
+    assert missing_response.status_code == 200
+    missing_data = missing_response.json()
+    assert missing_data["execution_run_id"] == run_id
+    assert missing_data["missing_data_checklist"] == evidence["missing_data_checklist"]
+
+
 def test_research_execution_run_accepts_existing_xau_report_reference(isolated_data_paths):
     source_path = isolated_data_paths / "raw" / "xau" / "gold_options.csv"
     source_path.parent.mkdir(parents=True, exist_ok=True)

@@ -838,6 +838,7 @@ export interface ResearchExecutionPreflightResult {
   date_end: string | null;
   missing_data_actions: string[];
   unsupported_capabilities: string[];
+  capability_snapshot: Record<string, unknown>;
   warnings: string[];
   limitations: string[];
 }
@@ -899,6 +900,21 @@ export interface ResearchExecutionRunListResponse {
 export interface ResearchExecutionMissingDataResponse {
   execution_run_id: string;
   missing_data_checklist: string[];
+}
+
+export interface ResearchExecutionWorkflowStatusCounts {
+  completed: number;
+  partial: number;
+  blocked: number;
+  skipped: number;
+  failed: number;
+}
+
+export interface ResearchExecutionDashboardData {
+  run: ResearchExecutionRun;
+  evidence: ResearchEvidenceSummary;
+  missingData: ResearchExecutionMissingDataResponse;
+  statusCounts: ResearchExecutionWorkflowStatusCounts;
 }
 
 export type XauReferenceType = 'spot' | 'proxy' | 'futures' | 'manual';

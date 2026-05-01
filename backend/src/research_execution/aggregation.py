@@ -6,6 +6,7 @@ from src.models.research_execution import (
     ResearchEvidenceDecision,
     ResearchEvidenceDecisionResult,
     ResearchExecutionPreflightResult,
+    ResearchExecutionWorkflowResult,
     ResearchExecutionWorkflowStatus,
 )
 from src.models.xau import XauVolatilitySource, XauVolOiReport
@@ -16,13 +17,32 @@ def classify_preflight_decision(
 ) -> ResearchEvidenceDecisionResult:
     """Classify preflight-only evidence until full aggregation is implemented."""
 
+    return classify_workflow_evidence(preflight_results, report_ids=[])
+
+
+def classify_workflow_evidence(
+    preflight_results: list[ResearchExecutionPreflightResult],
+    *,
+    report_ids: list[str] | None = None,
+    warnings: list[str] | None = None,
+    limitations: list[str] | None = None,
+    missing_data_actions: list[str] | None = None,
+) -> ResearchEvidenceDecisionResult:
+    """Classify one workflow using bounded research-only evidence labels."""
+
     if not preflight_results:
         return ResearchEvidenceDecisionResult(
             decision=ResearchEvidenceDecision.INCONCLUSIVE,
-            reason="No workflow preflight results are available yet.",
+            reason="No workflow preflight results or report evidence are available.",
         )
 
     statuses = [result.status for result in preflight_results]
+    if any(status == ResearchExecutionWorkflowStatus.FAILED for status in statuses):
+        return ResearchEvidenceDecisionResult(
+            decision=ResearchEvidenceDecision.REJECT,
+            reason="At least one workflow evidence rule failed during preflight.",
+        )
+
     if all(status == ResearchExecutionWorkflowStatus.BLOCKED for status in statuses):
         return ResearchEvidenceDecisionResult(
             decision=ResearchEvidenceDecision.DATA_BLOCKED,
@@ -32,20 +52,105 @@ def classify_preflight_decision(
     if any(status == ResearchExecutionWorkflowStatus.BLOCKED for status in statuses):
         return ResearchEvidenceDecisionResult(
             decision=ResearchEvidenceDecision.REFINE,
-            reason="Some workflow inputs are ready, but at least one input remains blocked.",
+            reason="Some workflow inputs are usable, but at least one input remains blocked.",
         )
 
-    if any(status == ResearchExecutionWorkflowStatus.FAILED for status in statuses):
+    unsupported = _deduplicate(
+        capability
+        for result in preflight_results
+        for capability in result.unsupported_capabilities
+    )
+    combined_missing = _deduplicate(
+        [
+            *[action for result in preflight_results for action in result.missing_data_actions],
+            *(missing_data_actions or []),
+        ]
+    )
+    combined_limitations = _deduplicate(
+        [
+            *[limitation for result in preflight_results for limitation in result.limitations],
+            *(limitations or []),
+        ]
+    )
+    combined_warnings = _deduplicate(
+        [
+            *[warning for result in preflight_results for warning in result.warnings],
+            *(warnings or []),
+        ]
+    )
+    significant_warnings = [
+        warning for warning in combined_warnings if not _is_research_only_warning(warning)
+    ]
+
+    if unsupported or combined_missing or combined_limitations or significant_warnings:
+        return ResearchEvidenceDecisionResult(
+            decision=ResearchEvidenceDecision.REFINE,
+            reason=(
+                "Workflow evidence is usable, but unsupported capabilities, missing-data "
+                "actions, warnings, or limitations remain."
+            ),
+            warnings=significant_warnings,
+        )
+
+    if not report_ids:
         return ResearchEvidenceDecisionResult(
             decision=ResearchEvidenceDecision.INCONCLUSIVE,
-            reason="At least one workflow preflight failed before evidence aggregation.",
+            reason=(
+                "Preflight passed, but linked report evidence is not available yet."
+            ),
+        )
+
+    return ResearchEvidenceDecisionResult(
+        decision=ResearchEvidenceDecision.CONTINUE,
+        reason="Workflow evidence sections are present and acceptable under research assumptions.",
+    )
+
+
+def classify_final_evidence(
+    workflow_results: list[ResearchExecutionWorkflowResult],
+) -> ResearchEvidenceDecisionResult:
+    """Classify the final execution evidence across workflow results."""
+
+    if not workflow_results:
+        return ResearchEvidenceDecisionResult(
+            decision=ResearchEvidenceDecision.INCONCLUSIVE,
+            reason="No workflow results are available for final evidence classification.",
+        )
+
+    decisions = [result.decision for result in workflow_results]
+    if any(decision == ResearchEvidenceDecision.REJECT for decision in decisions):
+        return ResearchEvidenceDecisionResult(
+            decision=ResearchEvidenceDecision.REJECT,
+            reason="At least one workflow produced a failed evidence rule.",
+        )
+
+    if all(decision == ResearchEvidenceDecision.DATA_BLOCKED for decision in decisions):
+        return ResearchEvidenceDecisionResult(
+            decision=ResearchEvidenceDecision.DATA_BLOCKED,
+            reason="All requested workflows are blocked by missing required inputs.",
+        )
+
+    if any(
+        decision in {ResearchEvidenceDecision.DATA_BLOCKED, ResearchEvidenceDecision.REFINE}
+        for decision in decisions
+    ):
+        return ResearchEvidenceDecisionResult(
+            decision=ResearchEvidenceDecision.REFINE,
+            reason=(
+                "Some evidence is usable, but missing data, unsupported capabilities, "
+                "warnings, or limitations remain."
+            ),
+        )
+
+    if all(decision == ResearchEvidenceDecision.CONTINUE for decision in decisions):
+        return ResearchEvidenceDecisionResult(
+            decision=ResearchEvidenceDecision.CONTINUE,
+            reason="All workflow evidence sections are acceptable under research assumptions.",
         )
 
     return ResearchEvidenceDecisionResult(
         decision=ResearchEvidenceDecision.INCONCLUSIVE,
-        reason=(
-            "Preflight passed, but strategy and validation evidence has not been aggregated yet."
-        ),
+        reason="Workflow evidence is incomplete or insufficient for a stronger decision label.",
     )
 
 
@@ -222,3 +327,14 @@ def _deduplicate(values) -> list[str]:
         if value and value not in result:
             result.append(value)
     return result
+
+
+def _is_research_only_warning(value: str) -> bool:
+    lowered = value.lower()
+    return (
+        "research-only" in lowered
+        or "research decisions only" in lowered
+        or "does not imply profitability" in lowered
+        or "do not claim profitability" in lowered
+        or "not trading approvals" in lowered
+    )

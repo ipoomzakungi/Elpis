@@ -23,6 +23,7 @@ import {
   ResearchAssetSummaryResponse,
   ResearchComparisonResponse,
   ResearchDashboardData,
+  ResearchExecutionDashboardData,
   ResearchEvidenceSummary,
   ResearchExecutionMissingDataResponse,
   ResearchExecutionRun,
@@ -311,6 +312,27 @@ export const api = {
     return fetchApi(
       `/research/execution-runs/${encodeURIComponent(executionRunId)}/missing-data`,
     );
+  },
+
+  getResearchExecutionDashboardData: async (
+    executionRunId: string,
+  ): Promise<ResearchExecutionDashboardData> => {
+    const encodedRunId = encodeURIComponent(executionRunId);
+    const [run, evidence, missingData] = await Promise.all([
+      fetchApi<ResearchExecutionRun>(`/research/execution-runs/${encodedRunId}`),
+      fetchApi<ResearchEvidenceSummary>(`/research/execution-runs/${encodedRunId}/evidence`),
+      fetchApi<ResearchExecutionMissingDataResponse>(
+        `/research/execution-runs/${encodedRunId}/missing-data`,
+      ),
+    ]);
+    const statusCounts = evidence.workflow_results.reduce(
+      (counts, workflow) => ({
+        ...counts,
+        [workflow.status]: counts[workflow.status] + 1,
+      }),
+      { completed: 0, partial: 0, blocked: 0, skipped: 0, failed: 0 },
+    );
+    return { run, evidence, missingData, statusCounts };
   },
 
   // XAU Vol-OI reports

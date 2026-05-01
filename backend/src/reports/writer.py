@@ -529,6 +529,8 @@ def compose_research_execution_evidence_json(
 
     run_payload = _to_jsonable(execution_run)
     evidence = run_payload.get("evidence_summary") or run_payload
+    workflow_results = evidence.get("workflow_results", [])
+    report_references = _research_execution_report_references(workflow_results)
     return {
         "execution_run": run_payload,
         "evidence_summary": evidence,
@@ -536,7 +538,8 @@ def compose_research_execution_evidence_json(
             "Evidence labels are research decisions only and do not imply profitability, "
             "predictive power, safety, or live readiness."
         ),
-        "workflow_results": evidence.get("workflow_results", []),
+        "workflow_results": workflow_results,
+        "report_references": report_references,
         "crypto_summary": evidence.get("crypto_summary"),
         "proxy_summary": evidence.get("proxy_summary"),
         "xau_summary": evidence.get("xau_summary"),
@@ -577,6 +580,29 @@ def compose_research_execution_evidence_markdown(
             f"- {workflow.get('workflow_type')}: {workflow.get('status')} / "
             f"{workflow.get('decision')} - {workflow.get('decision_reason')}"
         )
+    lines.extend(["", "## Evidence Decision Table", ""])
+    if not report["workflow_results"]:
+        lines.append("- No bounded evidence decisions were generated.")
+    else:
+        lines.extend(
+            [
+                "| Workflow | Status | Decision | Reason |",
+                "| --- | --- | --- | --- |",
+            ]
+        )
+    for workflow in report["workflow_results"]:
+        lines.append(
+            "| "
+            f"{workflow.get('workflow_type', 'unknown')} | "
+            f"{workflow.get('status', 'unknown')} | "
+            f"{workflow.get('decision', 'unknown')} | "
+            f"{workflow.get('decision_reason', '')} |"
+        )
+    lines.extend(["", "## Linked Report IDs", ""])
+    if not report["report_references"]:
+        lines.append("- None")
+    for reference in report["report_references"]:
+        lines.append(f"- {reference['workflow_type']}: {reference['report_id']}")
     lines.extend(["", "## Crypto Workflow", ""])
     crypto_summary = report["crypto_summary"] or {}
     if not crypto_summary:
@@ -642,6 +668,21 @@ def compose_research_execution_evidence_markdown(
     lines.extend(["", "## Notes", ""])
     lines.extend(f"- {note}" for note in report["notes"])
     return "\n".join(lines) + "\n"
+
+
+def _research_execution_report_references(
+    workflow_results: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    references: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for workflow in workflow_results:
+        workflow_type = str(workflow.get("workflow_type", "unknown"))
+        for report_id in workflow.get("report_ids", []):
+            key = (workflow_type, str(report_id))
+            if key not in seen:
+                references.append({"workflow_type": key[0], "report_id": key[1]})
+                seen.add(key)
+    return references
 
 
 def compose_xau_report_json(
