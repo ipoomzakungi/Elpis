@@ -170,14 +170,24 @@
 
 **Purpose**: Final validation, compatibility checks, guardrail review, and documentation alignment.
 
-- [ ] T068 Run backend import check from `backend/src/main.py`
-- [ ] T069 Run full backend pytest suite for `backend/tests/`
-- [ ] T070 Run frontend install and production build using `frontend/package.json`
-- [ ] T071 Run generated artifact guard using `scripts/check_generated_artifacts.ps1`
-- [ ] T072 Run research API smoke flow from `specs/005-real-multi-asset-research-report/quickstart.md`
-- [ ] T073 Run dashboard smoke flow for `/research` from `specs/005-real-multi-asset-research-report/quickstart.md`
-- [ ] T074 Review forbidden v0 scope in `backend/pyproject.toml`, `frontend/package.json`, `.github/workflows/validation.yml`, `backend/src/`, and `frontend/src/`
-- [ ] T075 Update final validation notes in `specs/005-real-multi-asset-research-report/tasks.md`
+- [X] T068 Run backend import check from `backend/src/main.py`
+- [X] T069 Run full backend pytest suite for `backend/tests/`
+- [X] T070 Run frontend install and production build using `frontend/package.json`
+- [X] T071 Run generated artifact guard using `scripts/check_generated_artifacts.ps1`
+- [X] T072 Run research API smoke flow from `specs/005-real-multi-asset-research-report/quickstart.md`
+- [X] T073 Run dashboard smoke flow for `/research` from `specs/005-real-multi-asset-research-report/quickstart.md`
+- [X] T074 Review forbidden v0 scope in `backend/pyproject.toml`, `frontend/package.json`, `.github/workflows/validation.yml`, `backend/src/`, and `frontend/src/`
+- [X] T075 Update final validation notes in `specs/005-real-multi-asset-research-report/tasks.md`
+
+### Final Validation Notes
+
+- Backend import passed with `backend import ok`.
+- Backend pytest passed with 157 tests.
+- Frontend `npm install` completed and `npm run build` passed.
+- Generated artifact guard passed before and after smoke validation.
+- Research API smoke used ignored synthetic processed feature files only and verified run, list, detail, assets, comparison, and validation endpoints.
+- Dashboard smoke loaded `/research` in Edge headless and verified the grouped report selector, summaries, tables, warnings, source limitations, and research-only disclaimer rendered.
+- Forbidden-scope review found only guardrail/disclaimer text, forbidden-field rejection terms, or benign source text; no forbidden v0 dependency or infrastructure additions were introduced.
 
 ---
 
