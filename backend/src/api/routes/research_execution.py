@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, status
 
 from src.api.validation import (
     invalid_research_execution_config,
@@ -21,7 +21,11 @@ from src.research_execution.report_store import ResearchExecutionReportStore
 router = APIRouter()
 
 
-@router.post("/research/execution-runs", response_model=ResearchExecutionRun)
+@router.post(
+    "/research/execution-runs",
+    response_model=ResearchExecutionRun,
+    status_code=status.HTTP_201_CREATED,
+)
 async def run_research_execution(
     request: ResearchExecutionRunRequest,
 ) -> ResearchExecutionRun:

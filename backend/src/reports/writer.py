@@ -537,6 +537,7 @@ def compose_research_execution_evidence_json(
             "predictive power, safety, or live readiness."
         ),
         "workflow_results": evidence.get("workflow_results", []),
+        "crypto_summary": evidence.get("crypto_summary"),
         "missing_data_checklist": evidence.get("missing_data_checklist", []),
         "limitations": evidence.get("limitations", []),
         "research_only_warnings": evidence.get("research_only_warnings", []),
@@ -573,6 +574,22 @@ def compose_research_execution_evidence_markdown(
         lines.append(
             f"- {workflow.get('workflow_type')}: {workflow.get('status')} / "
             f"{workflow.get('decision')} - {workflow.get('decision_reason')}"
+        )
+    lines.extend(["", "## Crypto Workflow", ""])
+    crypto_summary = report["crypto_summary"] or {}
+    if not crypto_summary:
+        lines.append("- No crypto workflow summary was generated.")
+    else:
+        lines.extend(
+            [
+                f"- Completed assets: {crypto_summary.get('completed_asset_count', 0)}",
+                f"- Blocked assets: {crypto_summary.get('blocked_asset_count', 0)}",
+                f"- Ready assets: {', '.join(crypto_summary.get('ready_assets', [])) or 'None'}",
+                (
+                    f"- Blocked asset list: "
+                    f"{', '.join(crypto_summary.get('blocked_assets', [])) or 'None'}"
+                ),
+            ]
         )
     lines.extend(["", "## Missing Data Checklist", ""])
     if not report["missing_data_checklist"]:

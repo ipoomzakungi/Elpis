@@ -58,20 +58,20 @@
 
 - [X] T018 [P] [US1] Add execution config validation and forbidden field tests in `backend/tests/unit/test_research_execution_config.py`
 - [X] T019 [P] [US1] Add crypto processed-feature preflight tests in `backend/tests/unit/test_research_execution_preflight.py`
-- [ ] T020 [US1] Add basic run/list/detail API contract tests in `backend/tests/contract/test_research_execution_api_contracts.py`
-- [ ] T021 [P] [US1] Add mixed ready/missing crypto integration test in `backend/tests/integration/test_research_execution_crypto_flow.py`
+- [X] T020 [US1] Add basic run/list/detail API contract tests in `backend/tests/contract/test_research_execution_api_contracts.py`
+- [X] T021 [P] [US1] Add mixed ready/missing crypto integration test in `backend/tests/integration/test_research_execution_crypto_flow.py`
 
 ### Implementation for User Story 1
 
 - [X] T022 [US1] Implement normalized crypto workflow config validation and forbidden field rejection in `backend/src/models/research_execution.py`
 - [X] T023 [US1] Implement processed feature path resolution and path safety for crypto assets in `backend/src/research_execution/preflight.py`
 - [X] T024 [US1] Implement missing, unreadable, empty, and incomplete crypto feature statuses and download/process instructions in `backend/src/research_execution/preflight.py`
-- [ ] T025 [US1] Implement grouped execution run ID creation and request normalization in `backend/src/research_execution/orchestration.py`
-- [ ] T026 [US1] Implement crypto workflow orchestration for ready and blocked assets using existing feature 005 reports in `backend/src/research_execution/orchestration.py`
-- [ ] T027 [US1] Persist execution metadata, normalized config, preflight results, and crypto asset summaries in `backend/src/research_execution/report_store.py`
-- [ ] T028 [US1] Add crypto completed/blocked workflow sections to evidence JSON and Markdown in `backend/src/reports/writer.py`
-- [ ] T029 [US1] Implement POST, list, and detail route behavior for crypto execution runs in `backend/src/api/routes/research_execution.py`
-- [ ] T030 [US1] Add research execution run/list/detail client methods in `frontend/src/services/api.ts`
+- [X] T025 [US1] Implement grouped execution run ID creation and request normalization in `backend/src/research_execution/orchestration.py`
+- [X] T026 [US1] Implement crypto workflow orchestration for ready and blocked assets using existing feature 005 reports in `backend/src/research_execution/orchestration.py`
+- [X] T027 [US1] Persist execution metadata, normalized config, preflight results, and crypto asset summaries in `backend/src/research_execution/report_store.py`
+- [X] T028 [US1] Add crypto completed/blocked workflow sections to evidence JSON and Markdown in `backend/src/reports/writer.py`
+- [X] T029 [US1] Implement POST, list, and detail route behavior for crypto execution runs in `backend/src/api/routes/research_execution.py`
+- [X] T030 [US1] Add research execution run/list/detail client methods in `frontend/src/services/api.ts`
 
 **Checkpoint**: User Story 1 is independently testable with one ready crypto asset and one missing crypto asset.
 
