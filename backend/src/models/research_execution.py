@@ -177,6 +177,39 @@ class XauVolOiWorkflowConfig(ResearchExecutionWorkflowConfig):
         default_factory=lambda: DEFAULT_XAU_CAPABILITIES.copy()
     )
 
+    @field_validator("existing_xau_report_id")
+    @classmethod
+    def normalize_existing_xau_report_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            return None
+        if any(part in {"", ".", ".."} for part in Path(normalized).parts):
+            raise ValueError("existing_xau_report_id must be a safe report id")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_xau_local_path(self) -> "XauVolOiWorkflowConfig":
+        if self.options_oi_file_path is None:
+            return self
+
+        path = Path(self.options_oi_file_path)
+        if ".." in path.parts:
+            raise ValueError("options_oi_file_path must not contain parent traversal")
+        if not path.is_absolute():
+            return self
+
+        from src.config import get_settings
+
+        raw_root = get_settings().data_raw_path.resolve()
+        resolved = path.resolve()
+        try:
+            resolved.relative_to(raw_root)
+        except ValueError as exc:
+            raise ValueError("options_oi_file_path must stay inside data/raw") from exc
+        return self
+
 
 class ResearchExecutionRunRequest(StrictModel):
     name: str | None = None

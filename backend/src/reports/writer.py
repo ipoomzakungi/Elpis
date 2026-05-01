@@ -539,6 +539,7 @@ def compose_research_execution_evidence_json(
         "workflow_results": evidence.get("workflow_results", []),
         "crypto_summary": evidence.get("crypto_summary"),
         "proxy_summary": evidence.get("proxy_summary"),
+        "xau_summary": evidence.get("xau_summary"),
         "missing_data_checklist": evidence.get("missing_data_checklist", []),
         "limitations": evidence.get("limitations", []),
         "research_only_warnings": evidence.get("research_only_warnings", []),
@@ -612,6 +613,24 @@ def compose_research_execution_evidence_markdown(
         unsupported_by_asset = proxy_summary.get("unsupported_capabilities_by_asset", {})
         for asset, capabilities in unsupported_by_asset.items():
             lines.append(f"- {asset} unsupported capabilities: {', '.join(capabilities) or 'None'}")
+    lines.extend(["", "## XAU Vol-OI Workflow", ""])
+    xau_summary = report["xau_summary"] or {}
+    if not xau_summary:
+        lines.append("- No XAU Vol-OI workflow summary was generated.")
+    else:
+        lines.extend(
+            [
+                f"- Status: {xau_summary.get('status', 'unknown')}",
+                f"- Linked XAU report: {xau_summary.get('linked_xau_report_id') or 'None'}",
+                f"- Missing XAU report: {xau_summary.get('missing_report_id') or 'None'}",
+                f"- Basis snapshot: {xau_summary.get('basis_snapshot_status', 'unknown')}",
+                f"- Expected range: {xau_summary.get('expected_range_status', 'unknown')}",
+                f"- Wall rows: {xau_summary.get('wall_count', 0)}",
+                f"- Zone rows: {xau_summary.get('zone_count', 0)}",
+            ]
+        )
+        for limitation in xau_summary.get("limitations", []):
+            lines.append(f"- XAU limitation: {limitation}")
     lines.extend(["", "## Missing Data Checklist", ""])
     if not report["missing_data_checklist"]:
         lines.append("- None")

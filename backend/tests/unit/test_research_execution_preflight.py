@@ -148,3 +148,36 @@ def test_xau_preflight_valid_options_file_is_ready(isolated_data_paths):
     assert result.ready is True
     assert result.row_count == 2
     assert result.missing_data_actions == []
+
+
+def test_xau_config_rejects_options_file_outside_raw_root(isolated_data_paths):
+    outside_path = isolated_data_paths / "outside" / "options.csv"
+
+    try:
+        XauVolOiWorkflowConfig(options_oi_file_path=outside_path)
+    except ValueError as exc:
+        assert "data/raw" in str(exc)
+    else:  # pragma: no cover - defensive assertion path
+        raise AssertionError("XAU options paths outside data/raw should be rejected")
+
+
+def test_xau_config_accepts_existing_report_reference_without_local_file():
+    config = XauVolOiWorkflowConfig(existing_xau_report_id="xau_vol_oi_existing")
+
+    assert config.existing_xau_report_id == "xau_vol_oi_existing"
+    assert config.options_oi_file_path is None
+
+
+def test_xau_preflight_invalid_schema_includes_required_columns(isolated_data_paths):
+    options_path = isolated_data_paths / "raw" / "xau" / "invalid_options.csv"
+    options_path.parent.mkdir(parents=True, exist_ok=True)
+    options_path.write_text("date,strike,option_type\n2026-05-01,2400,call\n", encoding="utf-8")
+    config = XauVolOiWorkflowConfig(options_oi_file_path=options_path)
+
+    result = preflight_xau_options_file(config)
+
+    assert result.status == ResearchExecutionWorkflowStatus.BLOCKED
+    assert result.ready is False
+    assert any("Missing required columns" in action for action in result.missing_data_actions)
+    assert any("expiry" in action for action in result.missing_data_actions)
+    assert any("open_interest" in action for action in result.missing_data_actions)

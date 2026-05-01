@@ -13,18 +13,25 @@ from src.models.research_execution import (
     ResearchExecutionWorkflowResult,
     ResearchExecutionWorkflowStatus,
     ResearchExecutionWorkflowType,
+    XauVolOiWorkflowConfig,
 )
+from src.models.xau import XauVolOiReport, XauVolOiReportRequest
 from src.reports.writer import RESEARCH_ONLY_WARNING
 from src.research_execution.aggregation import (
     classify_preflight_decision,
     summarize_preflight_assets,
     summarize_proxy_preflight,
+    summarize_xau_evidence,
 )
 from src.research_execution.preflight import (
     preflight_crypto_processed_features,
     preflight_proxy_ohlcv_assets,
+    preflight_xau_options_file,
+    xau_missing_data_instructions,
 )
 from src.research_execution.report_store import ResearchExecutionReportStore
+from src.xau.orchestration import XauReportOrchestrator, XauReportValidationError
+from src.xau.report_store import XauReportStore
 
 
 class ResearchExecutionNotImplementedError(NotImplementedError):
@@ -42,7 +49,8 @@ class ResearchExecutionOrchestrator:
 
         if not _has_supported_workflow(request):
             raise ResearchExecutionNotImplementedError(
-                "Only crypto and proxy OHLCV research execution are implemented in this phase"
+                "Only crypto, proxy OHLCV, and XAU Vol-OI research execution are "
+                "implemented in this phase"
             )
 
         created_at = datetime.utcnow()
@@ -54,6 +62,7 @@ class ResearchExecutionOrchestrator:
         workflow_results: list[ResearchExecutionWorkflowResult] = []
         crypto_summary = None
         proxy_summary = None
+        xau_summary = None
         if normalized_request.crypto is not None and normalized_request.crypto.enabled:
             crypto_preflight = preflight_crypto_processed_features(normalized_request.crypto)
             preflight_results.extend(crypto_preflight)
@@ -73,12 +82,31 @@ class ResearchExecutionOrchestrator:
                 normalized_request.proxy.provider,
             )
 
+        if normalized_request.xau is not None and normalized_request.xau.enabled:
+            xau_preflight, xau_report, missing_report_id = self._run_xau_workflow(
+                normalized_request.xau
+            )
+            preflight_results.extend(xau_preflight)
+            workflow_results.append(
+                _xau_workflow_result(
+                    normalized_request.xau,
+                    xau_preflight,
+                    xau_report,
+                )
+            )
+            xau_summary = summarize_xau_evidence(
+                xau_preflight,
+                xau_report,
+                missing_report_id=missing_report_id,
+            )
+
         evidence_summary = _evidence_summary(
             execution_run_id=execution_run_id,
             created_at=created_at,
             workflow_results=workflow_results,
             crypto_summary=crypto_summary,
             proxy_summary=proxy_summary,
+            xau_summary=xau_summary,
         )
         run = ResearchExecutionRun(
             execution_run_id=execution_run_id,
@@ -91,6 +119,41 @@ class ResearchExecutionOrchestrator:
             updated_at=datetime.utcnow(),
         )
         return self.report_store.write_run_outputs(run)
+
+    def _run_xau_workflow(
+        self,
+        config: XauVolOiWorkflowConfig,
+    ) -> tuple[list[ResearchExecutionPreflightResult], XauVolOiReport | None, str | None]:
+        if config.existing_xau_report_id:
+            try:
+                report = XauReportStore().read_report(config.existing_xau_report_id)
+            except FileNotFoundError:
+                return (
+                    [_missing_xau_report_result(config.existing_xau_report_id)],
+                    None,
+                    config.existing_xau_report_id,
+                )
+            return (
+                [_xau_preflight_result_from_report(report, source_identity="xau_vol_oi_report")],
+                report,
+                None,
+            )
+
+        preflight = preflight_xau_options_file(config)
+        if not preflight.ready:
+            return ([preflight], None, None)
+
+        try:
+            request = _xau_report_request(config)
+            report = XauReportOrchestrator().run(request)
+        except XauReportValidationError as exc:
+            return ([_xau_blocked_result_from_validation_error(exc)], None, None)
+
+        return (
+            [_xau_preflight_result_from_report(report, source_identity="local_options_oi")],
+            report,
+            None,
+        )
 
 
 def _crypto_workflow_result(
@@ -213,6 +276,66 @@ def _proxy_workflow_result(
     )
 
 
+def _xau_workflow_result(
+    config: XauVolOiWorkflowConfig,
+    preflight_results: list[ResearchExecutionPreflightResult],
+    xau_report: XauVolOiReport | None,
+) -> ResearchExecutionWorkflowResult:
+    decision = classify_preflight_decision(preflight_results)
+    status = _workflow_status(preflight_results)
+    report_ids = [xau_report.report_id] if xau_report is not None else []
+    if xau_report is None and config.existing_xau_report_id and status != "blocked":
+        report_ids.append(config.existing_xau_report_id)
+
+    missing_actions = _flatten_unique(
+        [
+            *[action for result in preflight_results for action in result.missing_data_actions],
+            *(
+                xau_report.missing_data_instructions
+                if xau_report is not None
+                else []
+            ),
+        ]
+    )
+    warnings = _flatten_unique(
+        [
+            *[warning for result in preflight_results for warning in result.warnings],
+            *(xau_report.warnings if xau_report is not None else []),
+            (
+                "XAU Vol-OI workflow evidence is research-only and does not imply "
+                "profitability, predictive power, safety, or live readiness."
+            ),
+        ]
+    )
+    limitations = _flatten_unique(
+        [
+            *[limitation for result in preflight_results for limitation in result.limitations],
+            *(xau_report.limitations if xau_report is not None else []),
+            (
+                "Yahoo GC=F and GLD are OHLCV proxies only, not gold options OI, "
+                "futures OI, IV, or XAUUSD execution sources."
+            ),
+        ]
+    )
+    reason = decision.reason
+    if xau_report is not None:
+        reason = (
+            f"XAU Vol-OI workflow linked report {xau_report.report_id} with "
+            f"{xau_report.wall_count} wall rows and {xau_report.zone_count} zone rows."
+        )
+    return ResearchExecutionWorkflowResult(
+        workflow_type=ResearchExecutionWorkflowType.XAU_VOL_OI,
+        status=status,
+        decision=decision.decision,
+        decision_reason=reason,
+        report_ids=report_ids,
+        asset_results=preflight_results,
+        warnings=warnings,
+        limitations=limitations,
+        missing_data_actions=missing_actions,
+    )
+
+
 def _evidence_summary(
     *,
     execution_run_id: str,
@@ -220,6 +343,7 @@ def _evidence_summary(
     workflow_results: list[ResearchExecutionWorkflowResult],
     crypto_summary: dict | None,
     proxy_summary: dict | None,
+    xau_summary: dict | None,
 ) -> ResearchEvidenceSummary:
     status = _overall_status(workflow_results)
     decision = _overall_decision(workflow_results)
@@ -236,6 +360,7 @@ def _evidence_summary(
         workflow_results=workflow_results,
         crypto_summary=crypto_summary,
         proxy_summary=proxy_summary,
+        xau_summary=xau_summary,
         missing_data_checklist=missing_data,
         limitations=limitations,
         research_only_warnings=[
@@ -312,4 +437,105 @@ def _has_supported_workflow(request: ResearchExecutionRunRequest) -> bool:
     return bool(
         (request.crypto is not None and request.crypto.enabled)
         or (request.proxy is not None and request.proxy.enabled)
+        or (request.xau is not None and request.xau.enabled)
+    )
+
+
+def _xau_report_request(config: XauVolOiWorkflowConfig) -> XauVolOiReportRequest:
+    if config.options_oi_file_path is None:
+        raise ValueError("options_oi_file_path is required when creating an XAU report")
+    return XauVolOiReportRequest.model_validate(
+        {
+            "options_oi_file_path": config.options_oi_file_path,
+            "spot_reference": config.spot_reference,
+            "futures_reference": config.futures_reference,
+            "manual_basis": config.manual_basis,
+            "volatility_snapshot": config.volatility_snapshot,
+            "include_2sd_range": config.include_2sd_range,
+        }
+    )
+
+
+def _xau_preflight_result_from_report(
+    report: XauVolOiReport,
+    *,
+    source_identity: str,
+) -> ResearchExecutionPreflightResult:
+    rows = report.source_validation.rows
+    timestamps = sorted(row.timestamp for row in rows)
+    return ResearchExecutionPreflightResult(
+        workflow_type=ResearchExecutionWorkflowType.XAU_VOL_OI,
+        status=ResearchExecutionWorkflowStatus.COMPLETED,
+        asset="XAU",
+        source_identity=source_identity,
+        ready=True,
+        feature_path=report.source_validation.file_path,
+        row_count=report.source_validation.accepted_row_count,
+        date_start=timestamps[0] if timestamps else None,
+        date_end=timestamps[-1] if timestamps else None,
+        missing_data_actions=report.missing_data_instructions,
+        capability_snapshot={
+            "source": source_identity,
+            "supports_gold_options_oi": True,
+            "supports_ohlcv": False,
+            "supports_funding": False,
+            "supports_open_interest": False,
+            "basis_mapping_available": bool(
+                report.basis_snapshot and report.basis_snapshot.mapping_available
+            ),
+            "expected_range_available": bool(
+                report.expected_range
+                and getattr(report.expected_range.source, "value", report.expected_range.source)
+                != "unavailable"
+            ),
+            "wall_count": report.wall_count,
+            "zone_count": report.zone_count,
+            "linked_xau_report_id": report.report_id,
+        },
+        warnings=report.warnings,
+        limitations=report.limitations,
+    )
+
+
+def _missing_xau_report_result(report_id: str) -> ResearchExecutionPreflightResult:
+    return ResearchExecutionPreflightResult(
+        workflow_type=ResearchExecutionWorkflowType.XAU_VOL_OI,
+        status=ResearchExecutionWorkflowStatus.BLOCKED,
+        asset="XAU",
+        source_identity="xau_vol_oi_report",
+        ready=False,
+        missing_data_actions=[
+            f"XAU Vol-OI report '{report_id}' was not found.",
+            "Create the report with POST /api/v1/xau/vol-oi/reports before referencing it.",
+            "Alternatively provide options_oi_file_path to create a report during execution.",
+            *xau_missing_data_instructions(None),
+        ],
+        limitations=[
+            (
+                "XAU Vol-OI evidence requires an existing feature 006 report or local "
+                "options OI input."
+            ),
+            "Yahoo GC=F and GLD are OHLCV proxies only and are not gold options OI sources.",
+        ],
+    )
+
+
+def _xau_blocked_result_from_validation_error(
+    exc: XauReportValidationError,
+) -> ResearchExecutionPreflightResult:
+    report = exc.validation_report
+    return ResearchExecutionPreflightResult(
+        workflow_type=ResearchExecutionWorkflowType.XAU_VOL_OI,
+        status=ResearchExecutionWorkflowStatus.BLOCKED,
+        asset="XAU",
+        source_identity="local_options_oi",
+        ready=False,
+        feature_path=report.file_path,
+        row_count=report.accepted_row_count,
+        missing_data_actions=[*report.errors, *report.instructions],
+        warnings=report.warnings,
+        limitations=[
+            "XAU Vol-OI requires a valid local gold options OI CSV or Parquet import.",
+            "Yahoo GC=F and GLD are OHLCV proxies only and are not gold options OI sources.",
+        ],
     )

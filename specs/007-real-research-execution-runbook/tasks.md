@@ -114,21 +114,21 @@
 
 ### Tests for User Story 3
 
-- [ ] T044 [P] [US3] Add XAU workflow config and local file validation tests in `backend/tests/unit/test_research_execution_preflight.py`
-- [ ] T045 [P] [US3] Add missing XAU options OI integration test in `backend/tests/integration/test_research_execution_missing_xau.py`
-- [ ] T046 [P] [US3] Add synthetic XAU local options integration test in `backend/tests/integration/test_research_execution_xau_flow.py`
-- [ ] T047 [US3] Add XAU report reference contract assertions in `backend/tests/contract/test_research_execution_api_contracts.py`
+- [X] T044 [P] [US3] Add XAU workflow config and local file validation tests in `backend/tests/unit/test_research_execution_preflight.py`
+- [X] T045 [P] [US3] Add missing XAU options OI integration test in `backend/tests/integration/test_research_execution_missing_xau.py`
+- [X] T046 [P] [US3] Add synthetic XAU local options integration test in `backend/tests/integration/test_research_execution_xau_flow.py`
+- [X] T047 [US3] Add XAU report reference contract assertions in `backend/tests/contract/test_research_execution_api_contracts.py`
 
 ### Implementation for User Story 3
 
-- [ ] T048 [US3] Implement XAU workflow config validation and local path safety in `backend/src/models/research_execution.py`
-- [ ] T049 [US3] Implement XAU options OI file readiness and required schema instructions in `backend/src/research_execution/preflight.py`
-- [ ] T050 [US3] Implement XAU existing report reference handling and missing report status in `backend/src/research_execution/orchestration.py`
-- [ ] T051 [US3] Implement XAU workflow orchestration using existing feature 006 report store and local input readiness in `backend/src/research_execution/orchestration.py`
-- [ ] T052 [US3] Aggregate XAU source validation, basis, expected range, wall count, zone count, warnings, and limitations in `backend/src/research_execution/aggregation.py`
-- [ ] T053 [US3] Persist XAU workflow report references and evidence summaries in `backend/src/research_execution/report_store.py`
-- [ ] T054 [US3] Add XAU workflow sections to evidence JSON and Markdown in `backend/src/reports/writer.py`
-- [ ] T055 [US3] Return XAU workflow evidence and missing-data actions from execution routes in `backend/src/api/routes/research_execution.py`
+- [X] T048 [US3] Implement XAU workflow config validation and local path safety in `backend/src/models/research_execution.py`
+- [X] T049 [US3] Implement XAU options OI file readiness and required schema instructions in `backend/src/research_execution/preflight.py`
+- [X] T050 [US3] Implement XAU existing report reference handling and missing report status in `backend/src/research_execution/orchestration.py`
+- [X] T051 [US3] Implement XAU workflow orchestration using existing feature 006 report store and local input readiness in `backend/src/research_execution/orchestration.py`
+- [X] T052 [US3] Aggregate XAU source validation, basis, expected range, wall count, zone count, warnings, and limitations in `backend/src/research_execution/aggregation.py`
+- [X] T053 [US3] Persist XAU workflow report references and evidence summaries in `backend/src/research_execution/report_store.py`
+- [X] T054 [US3] Add XAU workflow sections to evidence JSON and Markdown in `backend/src/reports/writer.py`
+- [X] T055 [US3] Return XAU workflow evidence and missing-data actions from execution routes in `backend/src/api/routes/research_execution.py`
 
 **Checkpoint**: User Story 3 is independently testable with a synthetic local XAU options file and a missing XAU file.
 

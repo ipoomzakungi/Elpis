@@ -1,7 +1,9 @@
 from fastapi.testclient import TestClient
 
 from src.main import app
+from src.xau.orchestration import XauReportOrchestrator
 from tests.helpers.research_data import write_synthetic_research_features
+from tests.helpers.test_xau_data import sample_xau_report_request, write_sample_xau_options_csv
 
 
 def test_research_execution_list_placeholder_returns_empty_runs(isolated_data_paths):
@@ -137,3 +139,65 @@ def test_research_execution_missing_data_returns_structured_not_found():
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "NOT_FOUND"
+
+
+def test_research_execution_run_accepts_existing_xau_report_reference(isolated_data_paths):
+    source_path = isolated_data_paths / "raw" / "xau" / "gold_options.csv"
+    source_path.parent.mkdir(parents=True, exist_ok=True)
+    write_sample_xau_options_csv(source_path)
+    existing_report = XauReportOrchestrator().run(sample_xau_report_request(source_path))
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/research/execution-runs",
+        json={
+            "name": "existing xau evidence contract",
+            "research_only_acknowledged": True,
+            "xau": {
+                "enabled": True,
+                "existing_xau_report_id": existing_report.report_id,
+            },
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    xau_summary = body["evidence_summary"]["xau_summary"]
+    workflow = next(
+        result
+        for result in body["evidence_summary"]["workflow_results"]
+        if result["workflow_type"] == "xau_vol_oi"
+    )
+    assert body["evidence_summary"]["status"] == "completed"
+    assert workflow["report_ids"] == [existing_report.report_id]
+    assert xau_summary["linked_xau_report_id"] == existing_report.report_id
+    assert xau_summary["wall_count"] == existing_report.wall_count
+    assert xau_summary["zone_count"] == existing_report.zone_count
+
+
+def test_research_execution_run_labels_missing_xau_report_reference(isolated_data_paths):
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/research/execution-runs",
+        json={
+            "name": "missing xau report contract",
+            "research_only_acknowledged": True,
+            "xau": {
+                "enabled": True,
+                "existing_xau_report_id": "xau_vol_oi_missing_contract",
+            },
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["evidence_summary"]["status"] == "blocked"
+    assert body["evidence_summary"]["decision"] == "data_blocked"
+    assert body["evidence_summary"]["xau_summary"]["missing_report_id"] == (
+        "xau_vol_oi_missing_contract"
+    )
+    assert any(
+        "xau_vol_oi_missing_contract" in item
+        for item in body["evidence_summary"]["missing_data_checklist"]
+    )
