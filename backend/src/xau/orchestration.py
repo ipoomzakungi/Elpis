@@ -11,6 +11,8 @@ from src.xau.basis import build_basis_snapshot
 from src.xau.imports import validate_options_oi_file
 from src.xau.report_store import XauReportStore
 from src.xau.volatility import expected_range_from_snapshot, unavailable_expected_range
+from src.xau.walls import build_oi_walls
+from src.xau.zones import classify_zones
 
 RESEARCH_ONLY_XAU_WARNING = (
     "XAU Vol-OI outputs are research annotations only and do not imply profitability, "
@@ -53,11 +55,19 @@ class XauReportOrchestrator:
             manual_basis=request.manual_basis,
         )
         expected_range = _expected_range(request)
-        warnings = [
-            RESEARCH_ONLY_XAU_WARNING,
-            "Wall scoring and zone classification are not included in this import preflight slice.",
-            *source_validation.warnings,
-        ]
+        walls = build_oi_walls(
+            source_validation.rows,
+            basis_snapshot=basis_snapshot,
+            expected_range=expected_range,
+            min_wall_score=request.min_wall_score,
+        )
+        reference_price = request.spot_reference.price if request.spot_reference else None
+        zones = classify_zones(
+            walls,
+            expected_range=expected_range,
+            reference_price=reference_price,
+        )
+        warnings = [RESEARCH_ONLY_XAU_WARNING, *source_validation.warnings]
         missing_instructions = _missing_data_instructions(
             request=request,
             source_validation=source_validation,
@@ -76,8 +86,10 @@ class XauReportOrchestrator:
             source_row_count=source_validation.source_row_count,
             accepted_row_count=source_validation.accepted_row_count,
             rejected_row_count=source_validation.rejected_row_count,
-            wall_count=0,
-            zone_count=0,
+            wall_count=len(walls),
+            zone_count=len(zones),
+            walls=walls,
+            zones=zones,
             warnings=warnings,
             limitations=[
                 "Local imported options data must be independently verified for completeness.",

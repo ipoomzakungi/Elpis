@@ -96,26 +96,26 @@
 
 ### Tests for User Story 3
 
-- [ ] T048 [P] [US3] Add OI share, expiry weight, freshness factor, and wall score tests in backend/tests/unit/test_xau_walls.py
-- [ ] T049 [P] [US3] Add put wall, call wall, mixed wall, and unknown wall classification tests in backend/tests/unit/test_xau_walls.py
-- [ ] T050 [P] [US3] Add support, resistance, pin-risk, squeeze-risk, breakout, reversal, and no-trade zone tests in backend/tests/unit/test_xau_zones.py
-- [ ] T051 [P] [US3] Add no-profitability and no-live-readiness wording tests for zone notes in backend/tests/unit/test_xau_zones.py
-- [ ] T052 [P] [US3] Add full scoring and zone integration flow assertions in backend/tests/integration/test_xau_vol_oi_flow.py
+- [X] T048 [P] [US3] Add OI share, expiry weight, freshness factor, and wall score tests in backend/tests/unit/test_xau_walls.py
+- [X] T049 [P] [US3] Add put wall, call wall, mixed wall, and unknown wall classification tests in backend/tests/unit/test_xau_walls.py
+- [X] T050 [P] [US3] Add support, resistance, pin-risk, squeeze-risk, breakout, reversal, and no-trade zone tests in backend/tests/unit/test_xau_zones.py
+- [X] T051 [P] [US3] Add no-profitability and no-live-readiness wording tests for zone notes in backend/tests/unit/test_xau_zones.py
+- [X] T052 [P] [US3] Add full scoring and zone integration flow assertions in backend/tests/integration/test_xau_vol_oi_flow.py
 
 ### Implementation for User Story 3
 
-- [ ] T053 [US3] Implement total-expiry OI and OI share calculation in backend/src/xau/walls.py
-- [ ] T054 [US3] Implement bounded near-expiry weighting in backend/src/xau/walls.py
-- [ ] T055 [US3] Implement freshness factor from optional OI change and volume in backend/src/xau/walls.py
-- [ ] T056 [US3] Implement transparent `wall_score = oi_share * expiry_weight * freshness_factor` in backend/src/xau/walls.py
-- [ ] T057 [US3] Implement put, call, mixed, and unknown wall type classification in backend/src/xau/walls.py
-- [ ] T058 [US3] Implement wall limitation notes for missing OI change, volume, IV, and basis in backend/src/xau/walls.py
-- [ ] T059 [US3] Implement support and resistance candidate classification in backend/src/xau/zones.py
-- [ ] T060 [US3] Implement pin-risk and squeeze-risk zone classification in backend/src/xau/zones.py
-- [ ] T061 [US3] Implement breakout candidate, reversal candidate, and no-trade zone classification in backend/src/xau/zones.py
-- [ ] T062 [US3] Implement zone explanation notes, confidence labels, and no-trade warnings in backend/src/xau/zones.py
-- [ ] T063 [US3] Integrate wall scoring and zone classification into backend/src/xau/orchestration.py
-- [ ] T064 [US3] Persist wall and zone tables as Parquet artifacts in backend/src/xau/report_store.py
+- [X] T053 [US3] Implement total-expiry OI and OI share calculation in backend/src/xau/walls.py
+- [X] T054 [US3] Implement bounded near-expiry weighting in backend/src/xau/walls.py
+- [X] T055 [US3] Implement freshness factor from optional OI change and volume in backend/src/xau/walls.py
+- [X] T056 [US3] Implement transparent `wall_score = oi_share * expiry_weight * freshness_factor` in backend/src/xau/walls.py
+- [X] T057 [US3] Implement put, call, mixed, and unknown wall type classification in backend/src/xau/walls.py
+- [X] T058 [US3] Implement wall limitation notes for missing OI change, volume, IV, and basis in backend/src/xau/walls.py
+- [X] T059 [US3] Implement support and resistance candidate classification in backend/src/xau/zones.py
+- [X] T060 [US3] Implement pin-risk and squeeze-risk zone classification in backend/src/xau/zones.py
+- [X] T061 [US3] Implement breakout candidate, reversal candidate, and no-trade zone classification in backend/src/xau/zones.py
+- [X] T062 [US3] Implement zone explanation notes, confidence labels, and no-trade warnings in backend/src/xau/zones.py
+- [X] T063 [US3] Integrate wall scoring and zone classification into backend/src/xau/orchestration.py
+- [X] T064 [US3] Persist wall and zone tables as Parquet artifacts in backend/src/xau/report_store.py
 
 ## Phase 6: User Story 4 - Inspect XAU Wall Reports (Priority: P4)
 

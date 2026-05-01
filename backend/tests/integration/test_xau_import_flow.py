@@ -20,13 +20,15 @@ def test_xau_import_flow_persists_source_validation_for_csv(tmp_path):
     assert report.source_row_count == 2
     assert report.accepted_row_count == 2
     assert report.rejected_row_count == 0
-    assert report.wall_count == 0
-    assert report.zone_count == 0
+    assert report.wall_count == 2
+    assert report.zone_count >= 1
     assert report.basis_snapshot is not None
     assert report.basis_snapshot.basis == 7.0
     assert report.expected_range is not None
     assert report.expected_range.expected_move is not None
     assert saved.report_id == report.report_id
+    assert saved.wall_count == report.wall_count
+    assert saved.zone_count == report.zone_count
     assert any(artifact.artifact_type == "source_validation" for artifact in report.artifacts)
 
 

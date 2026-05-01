@@ -3,6 +3,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import polars as pl
+
 from src.config import get_settings
 from src.models.xau import (
     XauArtifactFormat,
@@ -34,6 +36,8 @@ class XauReportStore:
         source_validation_path = report_dir / "source_validation.json"
         report_json_path = report_dir / "report.json"
         report_markdown_path = report_dir / "report.md"
+        walls_path = report_dir / "walls.parquet"
+        zones_path = report_dir / "zones.parquet"
 
         self._write_json(metadata_path, report.model_dump(mode="json", exclude={"artifacts"}))
         self._write_json(source_validation_path, report.source_validation.model_dump(mode="json"))
@@ -55,6 +59,26 @@ class XauReportStore:
                 XauArtifactFormat.MARKDOWN,
             ),
         ]
+        if report.walls:
+            self._write_parquet(walls_path, [wall.model_dump(mode="json") for wall in report.walls])
+            artifacts.append(
+                self._artifact(
+                    XauArtifactType.WALLS,
+                    walls_path,
+                    XauArtifactFormat.PARQUET,
+                    rows=len(report.walls),
+                )
+            )
+        if report.zones:
+            self._write_parquet(zones_path, [zone.model_dump(mode="json") for zone in report.zones])
+            artifacts.append(
+                self._artifact(
+                    XauArtifactType.ZONES,
+                    zones_path,
+                    XauArtifactFormat.PARQUET,
+                    rows=len(report.zones),
+                )
+            )
         report.artifacts = artifacts
         self._write_json(metadata_path, report.model_dump(mode="json"))
         self._write_json(report_json_path, compose_xau_report_json(report))
@@ -127,3 +151,6 @@ class XauReportStore:
 
     def _write_json(self, path: Path, payload: dict[str, Any]) -> None:
         path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    def _write_parquet(self, path: Path, rows: list[dict[str, Any]]) -> None:
+        pl.DataFrame(rows).write_parquet(path)
