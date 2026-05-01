@@ -14,6 +14,7 @@ from src.models.research import (
     ResearchRunListResponse,
     ResearchRunSummary,
     ResearchValidationAggregationResponse,
+    StrategyComparisonRow,
 )
 from src.reports.writer import compose_research_report_json, compose_research_report_markdown
 from src.research.aggregation import (
@@ -64,10 +65,20 @@ class ResearchReportStore:
         return ResearchAssetSummaryResponse(research_run_id=research_run_id, data=run.assets)
 
     def read_comparison(self, research_run_id: str) -> ResearchComparisonResponse:
-        run = self.read_run(research_run_id)
+        try:
+            frame = self.report_store.read_parquet(
+                research_run_id,
+                "strategy_comparison.parquet",
+            )
+        except FileNotFoundError:
+            run = self.read_run(research_run_id)
+            return ResearchComparisonResponse(
+                research_run_id=research_run_id,
+                data=collect_strategy_comparison(run.assets),
+            )
         return ResearchComparisonResponse(
             research_run_id=research_run_id,
-            data=collect_strategy_comparison(run.assets),
+            data=_comparison_rows_from_frame(frame),
         )
 
     def read_validation_aggregation(
@@ -96,6 +107,12 @@ class ResearchReportStore:
                 "asset_summary.parquet",
                 _asset_summary_frame(research_run),
                 ReportArtifactType.RESEARCH_ASSET_SUMMARY,
+            ),
+            self.report_store.write_parquet(
+                research_run.research_run_id,
+                "strategy_comparison.parquet",
+                _strategy_comparison_frame(research_run),
+                ReportArtifactType.RESEARCH_COMPARISON,
             ),
         ]
         if research_run.request.report_format in {ReportFormat.JSON, ReportFormat.BOTH}:
@@ -163,3 +180,65 @@ def _asset_summary_frame(research_run: ResearchRun) -> pl.DataFrame:
             }
         )
     return pl.DataFrame(records, strict=False)
+
+
+def _strategy_comparison_frame(research_run: ResearchRun) -> pl.DataFrame:
+    records: list[dict[str, Any]] = []
+    for row in collect_strategy_comparison(research_run.assets):
+        records.append(
+            {
+                "research_run_id": research_run.research_run_id,
+                "symbol": row.symbol,
+                "provider": row.provider,
+                "mode": row.mode,
+                "category": row.category,
+                "total_return_pct": row.total_return_pct,
+                "max_drawdown_pct": row.max_drawdown_pct,
+                "number_of_trades": row.number_of_trades,
+                "profit_factor": row.profit_factor,
+                "win_rate": row.win_rate,
+                "notes": json.dumps(row.notes, sort_keys=True),
+            }
+        )
+    return pl.DataFrame(
+        records,
+        schema={
+            "research_run_id": pl.Utf8,
+            "symbol": pl.Utf8,
+            "provider": pl.Utf8,
+            "mode": pl.Utf8,
+            "category": pl.Utf8,
+            "total_return_pct": pl.Float64,
+            "max_drawdown_pct": pl.Float64,
+            "number_of_trades": pl.Int64,
+            "profit_factor": pl.Float64,
+            "win_rate": pl.Float64,
+            "notes": pl.Utf8,
+        },
+        strict=False,
+    )
+
+
+def _comparison_rows_from_frame(frame: pl.DataFrame) -> list[StrategyComparisonRow]:
+    rows: list[StrategyComparisonRow] = []
+    for row in frame.to_dicts():
+        notes = row.get("notes") or "[]"
+        try:
+            parsed_notes = json.loads(notes)
+        except json.JSONDecodeError:
+            parsed_notes = [str(notes)]
+        rows.append(
+            StrategyComparisonRow(
+                symbol=row["symbol"],
+                provider=row["provider"],
+                mode=row["mode"],
+                category=row["category"],
+                total_return_pct=row.get("total_return_pct"),
+                max_drawdown_pct=row.get("max_drawdown_pct"),
+                number_of_trades=row.get("number_of_trades") or 0,
+                profit_factor=row.get("profit_factor"),
+                win_rate=row.get("win_rate"),
+                notes=parsed_notes,
+            )
+        )
+    return rows

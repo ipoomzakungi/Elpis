@@ -4,9 +4,19 @@ import hashlib
 from datetime import datetime
 from pathlib import Path
 
-from src.models.backtest import BacktestStatus
+from src.backtest.engine import BacktestEngine
+from src.models.backtest import (
+    BacktestAssumptions,
+    BacktestRunRequest,
+    BacktestStatus,
+    BaselineMode,
+    ReportFormat,
+    StrategyConfig,
+    StrategyMode,
+)
 from src.models.research import (
     ResearchAssetClassification,
+    ResearchAssetConfig,
     ResearchAssetResult,
     ResearchAssetRunStatus,
     ResearchPreflightResult,
@@ -15,6 +25,7 @@ from src.models.research import (
     ResearchRunRequest,
 )
 from src.reports.writer import RESEARCH_ONLY_WARNING
+from src.research.aggregation import comparison_rows_from_backtest_metrics
 from src.research.preflight import preflight_research_assets
 from src.research.report_store import ResearchReportStore
 
@@ -26,17 +37,33 @@ class ResearchExecutionNotImplementedError(NotImplementedError):
 class ResearchOrchestrator:
     """Skeleton service for multi-asset research orchestration."""
 
-    def __init__(self, report_store: ResearchReportStore | None = None):
+    def __init__(
+        self,
+        report_store: ResearchReportStore | None = None,
+        backtest_engine: BacktestEngine | None = None,
+    ):
         self.report_store = report_store or ResearchReportStore()
+        self.backtest_engine = backtest_engine or BacktestEngine()
 
     def run(self, request: ResearchRunRequest) -> ResearchRun:
         created_at = datetime.utcnow()
         preflight_results = preflight_research_assets(request.assets)
         asset_configs = [asset for asset in request.assets if asset.enabled]
-        assets = [
-            _asset_result(asset_config, preflight)
-            for asset_config, preflight in zip(asset_configs, preflight_results, strict=True)
-        ]
+        assets = []
+        for asset_config, preflight in zip(asset_configs, preflight_results, strict=True):
+            if preflight.status == ResearchPreflightStatus.READY:
+                backtest_response = self.backtest_engine.run(
+                    _backtest_request(asset_config, preflight, request)
+                )
+                comparison_rows = comparison_rows_from_backtest_metrics(
+                    symbol=asset_config.symbol,
+                    provider=asset_config.provider,
+                    metrics=backtest_response.metrics,
+                )
+                assets.append(_asset_result(asset_config, preflight, comparison_rows))
+                continue
+            assets.append(_asset_result(asset_config, preflight))
+
         completed_count = sum(
             1 for asset in assets if asset.status == ResearchAssetRunStatus.COMPLETED
         )
@@ -73,10 +100,12 @@ class ResearchOrchestrator:
 
 
 def _asset_result(
-    asset_config,
+    asset_config: ResearchAssetConfig,
     preflight: ResearchPreflightResult,
+    strategy_comparison=None,
 ) -> ResearchAssetResult:
     if preflight.status == ResearchPreflightStatus.READY:
+        comparison_rows = list(strategy_comparison or [])
         return ResearchAssetResult(
             symbol=asset_config.symbol,
             provider=asset_config.provider,
@@ -90,11 +119,12 @@ def _asset_result(
                 if asset_config.feature_path is not None
                 else "processed_features",
             ),
+            strategy_comparison=comparison_rows,
             warnings=preflight.warnings,
             limitations=[
                 *preflight.capability_snapshot.limitation_notes,
-                "US1 confirms real processed feature availability; strategy comparisons "
-                "are not populated until later phases.",
+                "Strategy and baseline rows are independent comparisons, not a combined "
+                "portfolio result.",
             ],
         )
 
@@ -112,6 +142,51 @@ def _asset_result(
         preflight=preflight,
         warnings=preflight.warnings,
         limitations=preflight.capability_snapshot.limitation_notes,
+    )
+
+
+def _backtest_request(
+    asset_config: ResearchAssetConfig,
+    preflight: ResearchPreflightResult,
+    research_request: ResearchRunRequest,
+) -> BacktestRunRequest:
+    strategies: list[StrategyConfig] = []
+    if research_request.strategy_set.include_grid_range:
+        strategies.append(
+            StrategyConfig(
+                mode=StrategyMode.GRID_RANGE,
+                enabled=True,
+                allow_short=research_request.base_assumptions.allow_short,
+            )
+        )
+    if research_request.strategy_set.include_breakout:
+        strategies.append(
+            StrategyConfig(
+                mode=StrategyMode.BREAKOUT,
+                enabled=True,
+                allow_short=research_request.base_assumptions.allow_short,
+            )
+        )
+
+    baselines = [BaselineMode(mode) for mode in research_request.strategy_set.baselines]
+    return BacktestRunRequest(
+        symbol=asset_config.symbol,
+        provider=asset_config.provider,
+        timeframe=asset_config.timeframe,
+        feature_path=Path(preflight.feature_path),
+        initial_equity=research_request.base_assumptions.initial_equity,
+        assumptions=BacktestAssumptions(
+            fee_rate=research_request.base_assumptions.fee_rate,
+            slippage_rate=research_request.base_assumptions.slippage_rate,
+            risk_per_trade=research_request.base_assumptions.risk_per_trade,
+            allow_short=research_request.base_assumptions.allow_short,
+            leverage=1,
+            allow_compounding=False,
+            max_positions=1,
+        ),
+        strategies=strategies,
+        baselines=baselines,
+        report_format=ReportFormat.JSON,
     )
 
 

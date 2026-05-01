@@ -90,21 +90,21 @@
 
 ### Tests for User Story 2
 
-- [ ] T032 [P] [US2] Add Binance, Yahoo, and local-file capability tests in `backend/tests/unit/test_research_capabilities.py`
-- [ ] T033 [P] [US2] Add Yahoo OHLCV-only integration test in `backend/tests/integration/test_research_yahoo_flow.py`
-- [ ] T034 [P] [US2] Add comparison endpoint contract tests in `backend/tests/contract/test_research_api_contracts.py`
+- [X] T032 [P] [US2] Add Binance, Yahoo, and local-file capability tests in `backend/tests/unit/test_research_capabilities.py`
+- [X] T033 [P] [US2] Add Yahoo OHLCV-only integration test in `backend/tests/integration/test_research_yahoo_flow.py`
+- [X] T034 [P] [US2] Add comparison endpoint contract tests in `backend/tests/contract/test_research_api_contracts.py`
 
 ### Implementation for User Story 2
 
-- [ ] T035 [US2] Implement provider capability snapshot generation in `backend/src/research/preflight.py`
-- [ ] T036 [US2] Implement processed feature column capability detection in `backend/src/research/preflight.py`
-- [ ] T037 [US2] Implement unsupported OI/funding labeling for Yahoo and proxy assets in `backend/src/research/preflight.py`
-- [ ] T038 [US2] Implement gold proxy limitation notes for GC=F and GLD in `backend/src/research/preflight.py`
-- [ ] T039 [US2] Build per-asset backtest and validation requests from research config in `backend/src/research/orchestration.py`
-- [ ] T040 [US2] Aggregate per-strategy and per-baseline comparison rows in `backend/src/research/aggregation.py`
-- [ ] T041 [US2] Persist `strategy_comparison.parquet` in `backend/src/research/report_store.py`
-- [ ] T042 [US2] Add comparison section to grouped JSON and Markdown reports in `backend/src/reports/writer.py`
-- [ ] T043 [US2] Implement comparison endpoint in `backend/src/api/routes/research.py`
+- [X] T035 [US2] Implement provider capability snapshot generation in `backend/src/research/preflight.py`
+- [X] T036 [US2] Implement processed feature column capability detection in `backend/src/research/preflight.py`
+- [X] T037 [US2] Implement unsupported OI/funding labeling for Yahoo and proxy assets in `backend/src/research/preflight.py`
+- [X] T038 [US2] Implement gold proxy limitation notes for GC=F and GLD in `backend/src/research/preflight.py`
+- [X] T039 [US2] Build per-asset backtest and validation requests from research config in `backend/src/research/orchestration.py`
+- [X] T040 [US2] Aggregate per-strategy and per-baseline comparison rows in `backend/src/research/aggregation.py`
+- [X] T041 [US2] Persist `strategy_comparison.parquet` in `backend/src/research/report_store.py`
+- [X] T042 [US2] Add comparison section to grouped JSON and Markdown reports in `backend/src/reports/writer.py`
+- [X] T043 [US2] Implement comparison endpoint in `backend/src/api/routes/research.py`
 
 **Checkpoint**: US2 supports source-aware strategy-vs-baseline comparison without confusing crypto OI/funding research with OHLCV-only proxies.
 

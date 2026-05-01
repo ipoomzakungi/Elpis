@@ -377,10 +377,20 @@ def compose_research_report_json(
         notes.extend(extra_notes)
 
     run_payload = _to_jsonable(research_run)
+    assets = run_payload.get("assets", [])
+    strategy_comparison = []
+    for asset in assets:
+        if isinstance(asset, dict):
+            strategy_comparison.extend(asset.get("strategy_comparison", []))
     return {
         "research_run": run_payload,
         "research_disclaimer": RESEARCH_ONLY_WARNING,
-        "assets": run_payload.get("assets", []),
+        "assets": assets,
+        "strategy_comparison": strategy_comparison,
+        "comparison_semantics": (
+            "Strategy and baseline rows are independent per-asset comparisons, "
+            "not a combined portfolio result."
+        ),
         "warnings": run_payload.get("warnings", []),
         "limitations": run_payload.get("limitations", []),
         "notes": notes,
@@ -413,6 +423,24 @@ def compose_research_report_markdown(
         instructions = preflight.get("instructions", []) if isinstance(preflight, dict) else []
         for instruction in instructions:
             lines.append(f"  - {instruction}")
+    lines.extend(
+        [
+            "",
+            "## Strategy/Baseline Comparison",
+            "",
+            report["comparison_semantics"],
+            "",
+        ]
+    )
+    if not report["strategy_comparison"]:
+        lines.append("- No strategy/baseline comparison rows were generated.")
+    for row in report["strategy_comparison"]:
+        lines.append(
+            f"- {row.get('symbol')} / {row.get('mode')} ({row.get('category')}): "
+            f"total return % {row.get('total_return_pct')}, "
+            f"max drawdown % {row.get('max_drawdown_pct')}, "
+            f"trades {row.get('number_of_trades')}"
+        )
     lines.extend(["", "## Warnings", ""])
     lines.extend(f"- {warning}" for warning in report["warnings"])
     lines.extend(["", "## Limitations", ""])
