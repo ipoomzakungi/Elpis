@@ -88,8 +88,23 @@ def invalid_research_config(message: str, details: list[dict[str, str]] | None =
     api_error(400, "VALIDATION_ERROR", message, details)
 
 
+def invalid_research_execution_config(
+    message: str,
+    details: list[dict[str, str]] | None = None,
+) -> None:
+    api_error(400, "VALIDATION_ERROR", message, details)
+
+
 def research_report_not_found(research_run_id: str) -> None:
     api_error(404, "NOT_FOUND", f"Research run '{research_run_id}' was not found")
+
+
+def research_execution_run_not_found(execution_run_id: str) -> None:
+    api_error(
+        404,
+        "NOT_FOUND",
+        f"Research execution run '{execution_run_id}' was not found",
+    )
 
 
 def research_not_implemented() -> None:
@@ -97,6 +112,14 @@ def research_not_implemented() -> None:
         501,
         "NOT_IMPLEMENTED",
         "Multi-asset research report execution is not implemented in this phase",
+    )
+
+
+def research_execution_not_implemented() -> None:
+    api_error(
+        501,
+        "NOT_IMPLEMENTED",
+        "Research execution runbook orchestration is not implemented in this phase",
     )
 
 
