@@ -169,14 +169,24 @@
 
 **Purpose**: Validate the full feature, smoke-test documented workflows, and verify v0 scope constraints.
 
-- [ ] T071 Run backend import check from `backend/src/main.py`
-- [ ] T072 Run full backend pytest suite for `backend/tests/`
-- [ ] T073 Run frontend install and production build using `frontend/package.json`
-- [ ] T074 Run generated artifact guard using `scripts/check_generated_artifacts.ps1`
-- [ ] T075 Run research execution API smoke flow from `specs/007-real-research-execution-runbook/quickstart.md`
-- [ ] T076 Run Evidence dashboard smoke flow for `/evidence` from `specs/007-real-research-execution-runbook/quickstart.md`
-- [ ] T077 Review forbidden v0 scope in `backend/pyproject.toml`, `frontend/package.json`, `.github/workflows/validation.yml`, `backend/src/`, and `frontend/src/`
-- [ ] T078 Update final validation notes and completion status in `specs/007-real-research-execution-runbook/tasks.md`
+- [X] T071 Run backend import check from `backend/src/main.py`
+- [X] T072 Run full backend pytest suite for `backend/tests/`
+- [X] T073 Run frontend install and production build using `frontend/package.json`
+- [X] T074 Run generated artifact guard using `scripts/check_generated_artifacts.ps1`
+- [X] T075 Run research execution API smoke flow from `specs/007-real-research-execution-runbook/quickstart.md`
+- [X] T076 Run Evidence dashboard smoke flow for `/evidence` from `specs/007-real-research-execution-runbook/quickstart.md`
+- [X] T077 Review forbidden v0 scope in `backend/pyproject.toml`, `frontend/package.json`, `.github/workflows/validation.yml`, `backend/src/`, and `frontend/src/`
+- [X] T078 Update final validation notes and completion status in `specs/007-real-research-execution-runbook/tasks.md`
+
+**Phase 7 Validation Notes**:
+
+- Backend import passed: `backend import ok`.
+- Full backend suite passed: `233 passed`.
+- Frontend install completed and production build passed.
+- Generated artifact guard passed after smoke-generated local data/report files.
+- API smoke passed with crypto, proxy, and XAU workflows plus structured missing-run `NOT_FOUND`.
+- Evidence dashboard smoke passed in the in-app browser with no console errors.
+- Forbidden-scope review found no new forbidden v0 technologies or execution behavior.
 
 ---
 
