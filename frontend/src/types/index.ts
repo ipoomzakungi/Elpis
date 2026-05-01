@@ -754,3 +754,10 @@ export interface ResearchValidationAggregationResponse {
   regime_coverage: RegimeCoverageAssetRow[];
   concentration: ConcentrationAssetRow[];
 }
+
+export interface ResearchDashboardData {
+  run: ResearchRun;
+  assets: ResearchAssetSummaryResponse;
+  comparison: ResearchComparisonResponse;
+  validation: ResearchValidationAggregationResponse;
+}

@@ -22,6 +22,7 @@ import {
   Regime,
   ResearchAssetSummaryResponse,
   ResearchComparisonResponse,
+  ResearchDashboardData,
   ResearchRun,
   ResearchRunListResponse,
   ResearchRunRequest,
@@ -252,5 +253,18 @@ export const api = {
     researchRunId: string,
   ): Promise<ResearchValidationAggregationResponse> => {
     return fetchApi(`/research/runs/${encodeURIComponent(researchRunId)}/validation`);
+  },
+
+  getResearchDashboardData: async (researchRunId: string): Promise<ResearchDashboardData> => {
+    const encodedRunId = encodeURIComponent(researchRunId);
+    const [run, assets, comparison, validation] = await Promise.all([
+      fetchApi<ResearchRun>(`/research/runs/${encodedRunId}`),
+      fetchApi<ResearchAssetSummaryResponse>(`/research/runs/${encodedRunId}/assets`),
+      fetchApi<ResearchComparisonResponse>(`/research/runs/${encodedRunId}/comparison`),
+      fetchApi<ResearchValidationAggregationResponse>(
+        `/research/runs/${encodedRunId}/validation`,
+      ),
+    ]);
+    return { run, assets, comparison, validation };
   },
 };

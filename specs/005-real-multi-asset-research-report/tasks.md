@@ -147,20 +147,20 @@
 
 ### Tests for User Story 4
 
-- [ ] T057 [P] [US4] Add frontend research type coverage through production build expectations in `frontend/src/types/index.ts`
-- [ ] T058 [P] [US4] Add dashboard smoke checklist notes in `specs/005-real-multi-asset-research-report/quickstart.md`
+- [X] T057 [P] [US4] Add frontend research type coverage through production build expectations in `frontend/src/types/index.ts`
+- [X] T058 [P] [US4] Add dashboard smoke checklist notes in `specs/005-real-multi-asset-research-report/quickstart.md`
 
 ### Implementation for User Story 4
 
-- [ ] T059 [US4] Add full research API client methods in `frontend/src/services/api.ts`
-- [ ] T060 [US4] Implement `/research` run selector and status summary in `frontend/src/app/research/page.tsx`
-- [ ] T061 [US4] Render asset summary table and capability badges in `frontend/src/app/research/page.tsx`
-- [ ] T062 [US4] Render missing-data warning panel and source limitation notes in `frontend/src/app/research/page.tsx`
-- [ ] T063 [US4] Render strategy-vs-baseline comparison table in `frontend/src/app/research/page.tsx`
-- [ ] T064 [US4] Render stress survival and walk-forward stability tables in `frontend/src/app/research/page.tsx`
-- [ ] T065 [US4] Render regime coverage and concentration warning tables in `frontend/src/app/research/page.tsx`
-- [ ] T066 [US4] Render research-only disclaimer in `frontend/src/app/research/page.tsx`
-- [ ] T067 [US4] Add navigation link to research reports in `frontend/src/components/ui/Header.tsx`
+- [X] T059 [US4] Add full research API client methods in `frontend/src/services/api.ts`
+- [X] T060 [US4] Implement `/research` run selector and status summary in `frontend/src/app/research/page.tsx`
+- [X] T061 [US4] Render asset summary table and capability badges in `frontend/src/app/research/page.tsx`
+- [X] T062 [US4] Render missing-data warning panel and source limitation notes in `frontend/src/app/research/page.tsx`
+- [X] T063 [US4] Render strategy-vs-baseline comparison table in `frontend/src/app/research/page.tsx`
+- [X] T064 [US4] Render stress survival and walk-forward stability tables in `frontend/src/app/research/page.tsx`
+- [X] T065 [US4] Render regime coverage and concentration warning tables in `frontend/src/app/research/page.tsx`
+- [X] T066 [US4] Render research-only disclaimer in `frontend/src/app/research/page.tsx`
+- [X] T067 [US4] Add navigation link to research reports in `frontend/src/components/ui/Header.tsx`
 
 **Checkpoint**: US4 provides a focused dashboard inspection view without redesigning the app.
 

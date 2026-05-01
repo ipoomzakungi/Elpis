@@ -186,6 +186,16 @@ Verify the page shows:
 - source limitation notes
 - research-only disclaimer
 
+Dashboard smoke checklist:
+
+- Selector can switch between saved grouped research runs without a page reload.
+- Status summary shows total, completed, and blocked asset counts for the selected run.
+- Blocked assets remain visible with actionable download/process instructions.
+- Yahoo Finance and gold proxy assets show OHLCV-only or proxy limitation notes where applicable.
+- Strategy comparison, stress, walk-forward, regime coverage, and concentration sections render empty states or persisted rows without runtime errors.
+- Header navigation includes a Research Reports link to `/research`.
+- The page does not claim profitability, predictive power, safety, or live readiness.
+
 ## 7. Guardrail Review
 
 Before committing implementation:
