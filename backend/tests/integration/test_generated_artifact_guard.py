@@ -1,11 +1,18 @@
+import shutil
 import subprocess
 from pathlib import Path
+
+
+def _powershell_executable() -> str:
+    executable = shutil.which("pwsh") or shutil.which("powershell")
+    assert executable is not None, "PowerShell executable not found; install pwsh or powershell"
+    return executable
 
 
 def test_generated_artifact_guard_passes_for_clean_repository():
     result = subprocess.run(
         [
-            "powershell",
+            _powershell_executable(),
             "-ExecutionPolicy",
             "Bypass",
             "-File",
@@ -38,7 +45,7 @@ def test_generated_artifact_guard_fails_for_tracked_artifacts(tmp_path):
 
     result = subprocess.run(
         [
-            "powershell",
+            _powershell_executable(),
             "-ExecutionPolicy",
             "Bypass",
             "-File",

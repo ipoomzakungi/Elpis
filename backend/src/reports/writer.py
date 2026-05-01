@@ -515,3 +515,115 @@ def compose_research_report_markdown(
     lines.extend(["", "## Notes", ""])
     lines.extend(f"- {note}" for note in report["notes"])
     return "\n".join(lines) + "\n"
+
+
+def compose_xau_report_json(
+    xau_report: BaseModel | dict[str, Any],
+    extra_notes: list[str] | None = None,
+) -> dict[str, Any]:
+    """Compose a research-only XAU Vol-OI report payload.
+
+    Early feature slices populate source validation and preflight metadata. Later
+    slices fill wall and zone rows.
+    """
+
+    notes = [RESEARCH_ONLY_WARNING]
+    if extra_notes:
+        notes.extend(extra_notes)
+
+    report_payload = _to_jsonable(xau_report)
+    return {
+        "report": report_payload,
+        "research_disclaimer": (
+            "XAU Vol-OI walls and zones are research annotations only and do not imply "
+            "profitability, predictive power, safety, or live readiness."
+        ),
+        "source_validation": report_payload.get("source_validation", {}),
+        "basis_snapshot": report_payload.get("basis_snapshot"),
+        "expected_range": report_payload.get("expected_range"),
+        "walls": report_payload.get("walls", []),
+        "zones": report_payload.get("zones", []),
+        "warnings": report_payload.get("warnings", []),
+        "limitations": report_payload.get("limitations", []),
+        "missing_data_instructions": report_payload.get("missing_data_instructions", []),
+        "notes": notes,
+    }
+
+
+def compose_xau_report_markdown(
+    xau_report: BaseModel | dict[str, Any],
+    extra_notes: list[str] | None = None,
+) -> str:
+    report = compose_xau_report_json(xau_report, extra_notes=extra_notes)
+    report_payload = report["report"]
+    source_validation = report["source_validation"]
+    basis_snapshot = report["basis_snapshot"] or {}
+    expected_range = report["expected_range"] or {}
+    lines = [
+        "# XAU Vol-OI Wall Report",
+        "",
+        f"Report ID: {report_payload.get('report_id', 'unknown')}",
+        f"Status: {report_payload.get('status', 'unknown')}",
+        f"Session date: {report_payload.get('session_date')}",
+        "",
+        "## Research-Only Disclaimer",
+        "",
+        report["research_disclaimer"],
+        "",
+        "## Source Validation",
+        "",
+        f"Source rows: {source_validation.get('source_row_count', 0)}",
+        f"Accepted rows: {source_validation.get('accepted_row_count', 0)}",
+        f"Rejected rows: {source_validation.get('rejected_row_count', 0)}",
+        "",
+        "## Basis Snapshot",
+        "",
+        f"Basis: {basis_snapshot.get('basis')}",
+        f"Basis source: {basis_snapshot.get('basis_source')}",
+        f"Mapping available: {basis_snapshot.get('mapping_available')}",
+        "",
+        "## Expected Range",
+        "",
+        f"Source: {expected_range.get('source')}",
+        f"Expected move: {expected_range.get('expected_move')}",
+        f"Lower 1SD: {expected_range.get('lower_1sd')}",
+        f"Upper 1SD: {expected_range.get('upper_1sd')}",
+        f"Lower 2SD: {expected_range.get('lower_2sd')}",
+        f"Upper 2SD: {expected_range.get('upper_2sd')}",
+        f"Unavailable reason: {expected_range.get('unavailable_reason')}",
+        "",
+    ]
+    lines.extend(["## Basis-Adjusted OI Walls", ""])
+    if not report["walls"]:
+        lines.append("- No OI wall rows were generated.")
+    for wall in report["walls"]:
+        lines.append(
+            f"- {wall.get('wall_id')}: {wall.get('option_type')} wall, "
+            f"expiry {wall.get('expiry')}, strike {wall.get('strike')}, "
+            f"spot-equivalent {wall.get('spot_equivalent_level')}, "
+            f"score {wall.get('wall_score')}, freshness {wall.get('freshness_status')}"
+        )
+
+    lines.extend(["", "## Zone Classification", ""])
+    if not report["zones"]:
+        lines.append("- No zone rows were generated.")
+    for zone in report["zones"]:
+        lines.append(
+            f"- {zone.get('zone_id')}: {zone.get('zone_type')}, "
+            f"level {zone.get('level')}, confidence {zone.get('confidence')}, "
+            f"no-trade warning {zone.get('no_trade_warning')}"
+        )
+        for note in zone.get("notes", []):
+            lines.append(f"  - {note}")
+
+    lines.extend(["", "## Missing Data Instructions", ""])
+    if not report["missing_data_instructions"]:
+        lines.append("- None")
+    lines.extend(f"- {instruction}" for instruction in report["missing_data_instructions"])
+    lines.extend(["", "## Warnings", ""])
+    lines.extend(f"- {warning}" for warning in report["warnings"])
+    lines.extend(["", "## Limitations", ""])
+    lines.extend(f"- {limitation}" for limitation in report["limitations"])
+    lines.extend(["", "## Notes", ""])
+    lines.extend(f"- {note}" for note in report["notes"])
+    return "\n".join(lines) + "\n"

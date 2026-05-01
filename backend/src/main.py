@@ -11,6 +11,7 @@ from src.api.routes import (
     providers,
     regimes,
     research,
+    xau,
 )
 from src.config import get_settings
 from src.providers.errors import ProviderError
@@ -38,6 +39,7 @@ app.include_router(regimes.router, prefix="/api/v1", tags=["regimes"])
 app.include_router(data_quality.router, prefix="/api/v1", tags=["data-quality"])
 app.include_router(backtests.router, prefix="/api/v1", tags=["backtests"])
 app.include_router(research.router, prefix="/api/v1", tags=["research"])
+app.include_router(xau.router, prefix="/api/v1", tags=["xau"])
 
 
 @app.exception_handler(RequestValidationError)

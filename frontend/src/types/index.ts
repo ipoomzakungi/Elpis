@@ -761,3 +761,186 @@ export interface ResearchDashboardData {
   comparison: ResearchComparisonResponse;
   validation: ResearchValidationAggregationResponse;
 }
+
+export type XauReferenceType = 'spot' | 'proxy' | 'futures' | 'manual';
+export type XauFreshnessStatus = 'fresh' | 'stale' | 'unknown';
+export type XauBasisSource = 'computed' | 'manual' | 'unavailable';
+export type XauTimestampAlignmentStatus = 'aligned' | 'mismatched' | 'unknown';
+export type XauOptionType = 'call' | 'put' | 'unknown';
+export type XauVolatilitySource = 'iv' | 'realized_volatility' | 'manual' | 'unavailable';
+export type XauWallType = 'call' | 'put' | 'mixed' | 'unknown';
+export type XauFreshnessFactorStatus = 'confirmed' | 'neutral' | 'stale' | 'unavailable';
+export type XauZoneType =
+  | 'support_candidate'
+  | 'resistance_candidate'
+  | 'pin_risk_zone'
+  | 'squeeze_risk_zone'
+  | 'breakout_candidate'
+  | 'reversal_candidate'
+  | 'no_trade_zone';
+export type XauZoneConfidence = 'high' | 'medium' | 'low' | 'unavailable';
+export type XauReportStatus = 'completed' | 'partial' | 'blocked';
+export type XauReportFormat = 'json' | 'markdown' | 'both';
+
+export interface XauReferencePrice {
+  source: string;
+  symbol: string;
+  price: number;
+  timestamp: string | null;
+  reference_type: XauReferenceType;
+  freshness_status: XauFreshnessStatus;
+  notes: string[];
+}
+
+export interface XauBasisSnapshot {
+  basis: number | null;
+  basis_source: XauBasisSource;
+  futures_reference: XauReferencePrice | null;
+  spot_reference: XauReferencePrice | null;
+  timestamp_alignment_status: XauTimestampAlignmentStatus;
+  mapping_available: boolean;
+  notes: string[];
+}
+
+export interface XauVolatilitySnapshot {
+  implied_volatility: number | null;
+  realized_volatility: number | null;
+  manual_expected_move: number | null;
+  source: XauVolatilitySource;
+  days_to_expiry: number | null;
+  notes: string[];
+}
+
+export interface XauExpectedRange {
+  source: XauVolatilitySource;
+  reference_price: number | null;
+  expected_move: number | null;
+  lower_1sd: number | null;
+  upper_1sd: number | null;
+  lower_2sd: number | null;
+  upper_2sd: number | null;
+  days_to_expiry: number | null;
+  unavailable_reason: string | null;
+  notes: string[];
+}
+
+export interface XauVolOiReportRequest {
+  options_oi_file_path: string;
+  session_date?: string | null;
+  spot_reference?: XauReferencePrice | null;
+  futures_reference?: XauReferencePrice | null;
+  manual_basis?: number | null;
+  volatility_snapshot?: XauVolatilitySnapshot | null;
+  include_2sd_range?: boolean;
+  min_wall_score?: number;
+  report_format?: XauReportFormat;
+}
+
+export interface XauOptionsImportReport {
+  file_path: string;
+  is_valid: boolean;
+  source_row_count: number;
+  accepted_row_count: number;
+  rejected_row_count: number;
+  required_columns_missing: string[];
+  optional_columns_present: string[];
+  timestamp_column: string | null;
+  errors: string[];
+  warnings: string[];
+  instructions: string[];
+}
+
+export interface XauReportArtifact {
+  artifact_type: string;
+  path: string;
+  format: 'json' | 'markdown' | 'parquet';
+  rows: number | null;
+  created_at: string;
+}
+
+export interface XauOiWall {
+  wall_id: string;
+  expiry: string;
+  strike: number;
+  spot_equivalent_level: number | null;
+  basis: number | null;
+  option_type: XauWallType;
+  open_interest: number;
+  total_expiry_open_interest: number;
+  oi_share: number;
+  expiry_weight: number;
+  freshness_factor: number;
+  wall_score: number;
+  freshness_status: XauFreshnessFactorStatus;
+  notes: string[];
+  limitations: string[];
+}
+
+export interface XauZone {
+  zone_id: string;
+  zone_type: XauZoneType;
+  level: number | null;
+  lower_bound: number | null;
+  upper_bound: number | null;
+  linked_wall_ids: string[];
+  wall_score: number | null;
+  pin_risk_score: number | null;
+  squeeze_risk_score: number | null;
+  confidence: XauZoneConfidence;
+  no_trade_warning: boolean;
+  notes: string[];
+  limitations: string[];
+}
+
+export interface XauVolOiReport {
+  report_id: string;
+  status: XauReportStatus;
+  created_at: string;
+  session_date: string | null;
+  request: XauVolOiReportRequest;
+  source_validation: XauOptionsImportReport;
+  basis_snapshot: XauBasisSnapshot | null;
+  expected_range: XauExpectedRange | null;
+  source_row_count: number;
+  accepted_row_count: number;
+  rejected_row_count: number;
+  wall_count: number;
+  zone_count: number;
+  warnings: string[];
+  limitations: string[];
+  missing_data_instructions: string[];
+  walls: XauOiWall[];
+  zones: XauZone[];
+  artifacts: XauReportArtifact[];
+}
+
+export interface XauVolOiReportSummary {
+  report_id: string;
+  status: XauReportStatus;
+  created_at: string;
+  session_date: string | null;
+  source_row_count: number;
+  wall_count: number;
+  zone_count: number;
+  warning_count: number;
+}
+
+export interface XauVolOiReportListResponse {
+  reports: XauVolOiReportSummary[];
+}
+
+export interface XauWallTableResponse {
+  report_id: string;
+  data: XauOiWall[];
+}
+
+export interface XauZoneTableResponse {
+  report_id: string;
+  data: XauZone[];
+}
+
+export interface XauDashboardData {
+  report: XauVolOiReport;
+  walls: XauWallTableResponse;
+  zones: XauZoneTableResponse;
+}

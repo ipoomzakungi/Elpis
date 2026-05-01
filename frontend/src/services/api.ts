@@ -35,6 +35,12 @@ import {
   ValidationSensitivityResponse,
   ValidationStressResponse,
   ValidationWalkForwardResponse,
+  XauVolOiReport,
+  XauDashboardData,
+  XauVolOiReportListResponse,
+  XauVolOiReportRequest,
+  XauWallTableResponse,
+  XauZoneTableResponse,
 } from '@/types';
 
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
@@ -266,5 +272,39 @@ export const api = {
       ),
     ]);
     return { run, assets, comparison, validation };
+  },
+
+  // XAU Vol-OI reports
+  runXauVolOiReport: async (request: XauVolOiReportRequest): Promise<XauVolOiReport> => {
+    return fetchApi('/xau/vol-oi/reports', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  getXauVolOiReports: async (): Promise<XauVolOiReportListResponse> => {
+    return fetchApi('/xau/vol-oi/reports');
+  },
+
+  getXauVolOiReport: async (reportId: string): Promise<XauVolOiReport> => {
+    return fetchApi(`/xau/vol-oi/reports/${encodeURIComponent(reportId)}`);
+  },
+
+  getXauVolOiWalls: async (reportId: string): Promise<XauWallTableResponse> => {
+    return fetchApi(`/xau/vol-oi/reports/${encodeURIComponent(reportId)}/walls`);
+  },
+
+  getXauVolOiZones: async (reportId: string): Promise<XauZoneTableResponse> => {
+    return fetchApi(`/xau/vol-oi/reports/${encodeURIComponent(reportId)}/zones`);
+  },
+
+  getXauVolOiDashboardData: async (reportId: string): Promise<XauDashboardData> => {
+    const encodedReportId = encodeURIComponent(reportId);
+    const [report, walls, zones] = await Promise.all([
+      fetchApi<XauVolOiReport>(`/xau/vol-oi/reports/${encodedReportId}`),
+      fetchApi<XauWallTableResponse>(`/xau/vol-oi/reports/${encodedReportId}/walls`),
+      fetchApi<XauZoneTableResponse>(`/xau/vol-oi/reports/${encodedReportId}/zones`),
+    ]);
+    return { report, walls, zones };
   },
 };

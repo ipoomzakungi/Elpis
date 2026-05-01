@@ -410,5 +410,5 @@ After smoke test passes:
 - report files changed, commands run, results, commit hash, and remaining risks.
 
 <!-- SPECKIT START -->
-Active Speckit plan: specs/005-real-multi-asset-research-report/plan.md
+Active Speckit plan: specs/006-xau-vol-oi-wall-engine/plan.md
 <!-- SPECKIT END -->

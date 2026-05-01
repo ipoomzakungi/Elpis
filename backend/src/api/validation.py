@@ -116,6 +116,25 @@ def processed_features_not_found(symbol: str, timeframe: str, feature_path: str)
     )
 
 
+def invalid_xau_config(message: str, details: list[dict[str, str]] | None = None) -> None:
+    api_error(400, "VALIDATION_ERROR", message, details)
+
+
+def xau_report_not_found(report_id: str) -> None:
+    api_error(404, "NOT_FOUND", f"XAU Vol-OI report '{report_id}' was not found")
+
+
+def xau_missing_data(message: str, details: list[dict[str, str]] | None = None) -> None:
+    api_error(400, "MISSING_DATA", message, details)
+
+
+def xau_options_file_invalid(
+    message: str,
+    details: list[dict[str, str]] | None = None,
+) -> None:
+    api_error(400, "VALIDATION_ERROR", message, details)
+
+
 def validate_symbol(symbol: str) -> str:
     normalized = symbol.upper().strip()
     if normalized not in SUPPORTED_SYMBOLS:
