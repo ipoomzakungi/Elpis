@@ -87,6 +87,27 @@ class XauReportFormat(StrEnum):
     BOTH = "both"
 
 
+class XauReportStatus(StrEnum):
+    COMPLETED = "completed"
+    PARTIAL = "partial"
+    BLOCKED = "blocked"
+
+
+class XauArtifactType(StrEnum):
+    METADATA = "metadata"
+    SOURCE_VALIDATION = "source_validation"
+    REPORT_JSON = "report_json"
+    REPORT_MARKDOWN = "report_markdown"
+    WALLS = "walls"
+    ZONES = "zones"
+
+
+class XauArtifactFormat(StrEnum):
+    JSON = "json"
+    MARKDOWN = "markdown"
+    PARQUET = "parquet"
+
+
 class XauReferencePrice(XauBaseModel):
     """Spot, proxy, futures, or manual price reference used in wall analysis."""
 
@@ -285,3 +306,64 @@ class XauOptionsImportReport(XauBaseModel):
     errors: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     instructions: list[str] = Field(default_factory=list)
+
+
+class XauReportArtifact(XauBaseModel):
+    """Persisted XAU report artifact reference."""
+
+    artifact_type: XauArtifactType
+    path: str
+    format: XauArtifactFormat
+    rows: int | None = Field(default=None, ge=0)
+    created_at: datetime
+
+
+class XauVolOiReport(XauBaseModel):
+    """Persisted XAU Vol-OI report metadata."""
+
+    report_id: str
+    status: XauReportStatus
+    created_at: datetime
+    session_date: date | None = None
+    request: XauVolOiReportRequest
+    source_validation: XauOptionsImportReport
+    basis_snapshot: XauBasisSnapshot | None = None
+    expected_range: XauExpectedRange | None = None
+    source_row_count: int = Field(..., ge=0)
+    accepted_row_count: int = Field(..., ge=0)
+    rejected_row_count: int = Field(..., ge=0)
+    wall_count: int = Field(default=0, ge=0)
+    zone_count: int = Field(default=0, ge=0)
+    walls: list[XauOiWall] = Field(default_factory=list)
+    zones: list[XauZone] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+    missing_data_instructions: list[str] = Field(default_factory=list)
+    artifacts: list[XauReportArtifact] = Field(default_factory=list)
+
+
+class XauVolOiReportSummary(XauBaseModel):
+    """List row for saved XAU Vol-OI reports."""
+
+    report_id: str
+    status: XauReportStatus
+    created_at: datetime
+    session_date: date | None = None
+    source_row_count: int = Field(..., ge=0)
+    wall_count: int = Field(..., ge=0)
+    zone_count: int = Field(..., ge=0)
+    warning_count: int = Field(..., ge=0)
+
+
+class XauVolOiReportListResponse(XauBaseModel):
+    reports: list[XauVolOiReportSummary] = Field(default_factory=list)
+
+
+class XauWallTableResponse(XauBaseModel):
+    report_id: str
+    data: list[XauOiWall] = Field(default_factory=list)
+
+
+class XauZoneTableResponse(XauBaseModel):
+    report_id: str
+    data: list[XauZone] = Field(default_factory=list)

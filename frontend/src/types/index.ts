@@ -761,3 +761,123 @@ export interface ResearchDashboardData {
   comparison: ResearchComparisonResponse;
   validation: ResearchValidationAggregationResponse;
 }
+
+export type XauReferenceType = 'spot' | 'proxy' | 'futures' | 'manual';
+export type XauFreshnessStatus = 'fresh' | 'stale' | 'unknown';
+export type XauBasisSource = 'computed' | 'manual' | 'unavailable';
+export type XauTimestampAlignmentStatus = 'aligned' | 'mismatched' | 'unknown';
+export type XauOptionType = 'call' | 'put' | 'unknown';
+export type XauVolatilitySource = 'iv' | 'realized_volatility' | 'manual' | 'unavailable';
+export type XauReportStatus = 'completed' | 'partial' | 'blocked';
+export type XauReportFormat = 'json' | 'markdown' | 'both';
+
+export interface XauReferencePrice {
+  source: string;
+  symbol: string;
+  price: number;
+  timestamp: string | null;
+  reference_type: XauReferenceType;
+  freshness_status: XauFreshnessStatus;
+  notes: string[];
+}
+
+export interface XauBasisSnapshot {
+  basis: number | null;
+  basis_source: XauBasisSource;
+  futures_reference: XauReferencePrice | null;
+  spot_reference: XauReferencePrice | null;
+  timestamp_alignment_status: XauTimestampAlignmentStatus;
+  mapping_available: boolean;
+  notes: string[];
+}
+
+export interface XauVolatilitySnapshot {
+  implied_volatility: number | null;
+  realized_volatility: number | null;
+  manual_expected_move: number | null;
+  source: XauVolatilitySource;
+  days_to_expiry: number | null;
+  notes: string[];
+}
+
+export interface XauExpectedRange {
+  source: XauVolatilitySource;
+  reference_price: number | null;
+  expected_move: number | null;
+  lower_1sd: number | null;
+  upper_1sd: number | null;
+  lower_2sd: number | null;
+  upper_2sd: number | null;
+  days_to_expiry: number | null;
+  unavailable_reason: string | null;
+  notes: string[];
+}
+
+export interface XauVolOiReportRequest {
+  options_oi_file_path: string;
+  session_date?: string | null;
+  spot_reference?: XauReferencePrice | null;
+  futures_reference?: XauReferencePrice | null;
+  manual_basis?: number | null;
+  volatility_snapshot?: XauVolatilitySnapshot | null;
+  include_2sd_range?: boolean;
+  min_wall_score?: number;
+  report_format?: XauReportFormat;
+}
+
+export interface XauOptionsImportReport {
+  file_path: string;
+  is_valid: boolean;
+  source_row_count: number;
+  accepted_row_count: number;
+  rejected_row_count: number;
+  required_columns_missing: string[];
+  optional_columns_present: string[];
+  timestamp_column: string | null;
+  errors: string[];
+  warnings: string[];
+  instructions: string[];
+}
+
+export interface XauReportArtifact {
+  artifact_type: string;
+  path: string;
+  format: 'json' | 'markdown' | 'parquet';
+  rows: number | null;
+  created_at: string;
+}
+
+export interface XauVolOiReport {
+  report_id: string;
+  status: XauReportStatus;
+  created_at: string;
+  session_date: string | null;
+  request: XauVolOiReportRequest;
+  source_validation: XauOptionsImportReport;
+  basis_snapshot: XauBasisSnapshot | null;
+  expected_range: XauExpectedRange | null;
+  source_row_count: number;
+  accepted_row_count: number;
+  rejected_row_count: number;
+  wall_count: number;
+  zone_count: number;
+  warnings: string[];
+  limitations: string[];
+  missing_data_instructions: string[];
+  artifacts: XauReportArtifact[];
+}
+
+export interface XauVolOiReportSummary {
+  report_id: string;
+  status: XauReportStatus;
+  created_at: string;
+  session_date: string | null;
+  source_row_count: number;
+  wall_count: number;
+  zone_count: number;
+  warning_count: number;
+}
+
+export interface XauVolOiReportListResponse {
+  reports: XauVolOiReportSummary[];
+}

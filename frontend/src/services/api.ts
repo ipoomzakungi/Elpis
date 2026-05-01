@@ -35,6 +35,9 @@ import {
   ValidationSensitivityResponse,
   ValidationStressResponse,
   ValidationWalkForwardResponse,
+  XauVolOiReport,
+  XauVolOiReportListResponse,
+  XauVolOiReportRequest,
 } from '@/types';
 
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
@@ -266,5 +269,21 @@ export const api = {
       ),
     ]);
     return { run, assets, comparison, validation };
+  },
+
+  // XAU Vol-OI reports
+  runXauVolOiReport: async (request: XauVolOiReportRequest): Promise<XauVolOiReport> => {
+    return fetchApi('/xau/vol-oi/reports', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  getXauVolOiReports: async (): Promise<XauVolOiReportListResponse> => {
+    return fetchApi('/xau/vol-oi/reports');
+  },
+
+  getXauVolOiReport: async (reportId: string): Promise<XauVolOiReport> => {
+    return fetchApi(`/xau/vol-oi/reports/${encodeURIComponent(reportId)}`);
   },
 };

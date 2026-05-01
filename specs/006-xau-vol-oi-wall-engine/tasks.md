@@ -13,29 +13,29 @@
 
 - [X] T001 Create the XAU backend package marker in backend/src/xau/__init__.py
 - [X] T002 Create the XAU model module placeholder in backend/src/models/xau.py
-- [ ] T003 Create the XAU API route module placeholder in backend/src/api/routes/xau.py
-- [ ] T004 Create the XAU dashboard route placeholder in frontend/src/app/xau-vol-oi/page.tsx
-- [ ] T005 [P] Create shared XAU fixture helpers for synthetic local options files in backend/tests/helpers/test_xau_data.py
-- [ ] T006 [P] Verify generated XAU data/report exclusions are covered by .gitignore and scripts/check_generated_artifacts.ps1
+- [X] T003 Create the XAU API route module placeholder in backend/src/api/routes/xau.py
+- [X] T004 Create the XAU dashboard route placeholder in frontend/src/app/xau-vol-oi/page.tsx
+- [X] T005 [P] Create shared XAU fixture helpers for synthetic local options files in backend/tests/helpers/test_xau_data.py
+- [X] T006 [P] Verify generated XAU data/report exclusions are covered by .gitignore and scripts/check_generated_artifacts.ps1
 
 ## Phase 2: Foundation
 
 **Purpose**: Establish shared schemas, route wiring, report persistence scaffolding, and dashboard/API type placeholders that block all user stories.
 
 - [X] T007 Define XAU enum and Pydantic schema skeletons in backend/src/models/xau.py
-- [ ] T008 Add XAU-specific API validation helper functions in backend/src/api/validation.py
-- [ ] T009 Register the XAU API router under `/api/v1/xau/vol-oi` in backend/src/main.py
+- [X] T008 Add XAU-specific API validation helper functions in backend/src/api/validation.py
+- [X] T009 Register the XAU API router under `/api/v1/xau/vol-oi` in backend/src/main.py
 - [X] T010 Create local import service skeleton in backend/src/xau/imports.py
 - [X] T011 Create basis-adjustment service skeleton in backend/src/xau/basis.py
 - [X] T012 Create volatility expected-range service skeleton in backend/src/xau/volatility.py
-- [ ] T013 Create OI wall scoring service skeleton in backend/src/xau/walls.py
-- [ ] T014 Create zone classification service skeleton in backend/src/xau/zones.py
-- [ ] T015 Create XAU report orchestration skeleton in backend/src/xau/orchestration.py
-- [ ] T016 Create XAU report store skeleton in backend/src/xau/report_store.py
-- [ ] T017 Add grouped XAU JSON/Markdown writer skeleton in backend/src/reports/writer.py
-- [ ] T018 Add XAU frontend type placeholders in frontend/src/types/index.ts
-- [ ] T019 Add XAU frontend API client placeholders in frontend/src/services/api.ts
-- [ ] T020 Create shared XAU API contract test scaffold in backend/tests/contract/test_xau_api_contracts.py
+- [X] T013 Create OI wall scoring service skeleton in backend/src/xau/walls.py
+- [X] T014 Create zone classification service skeleton in backend/src/xau/zones.py
+- [X] T015 Create XAU report orchestration skeleton in backend/src/xau/orchestration.py
+- [X] T016 Create XAU report store skeleton in backend/src/xau/report_store.py
+- [X] T017 Add grouped XAU JSON/Markdown writer skeleton in backend/src/reports/writer.py
+- [X] T018 Add XAU frontend type placeholders in frontend/src/types/index.ts
+- [X] T019 Add XAU frontend API client placeholders in frontend/src/services/api.ts
+- [X] T020 Create shared XAU API contract test scaffold in backend/tests/contract/test_xau_api_contracts.py
 
 ## Phase 3: User Story 1 - Load Gold Derivatives Research Data (Priority: P1)
 
@@ -49,8 +49,8 @@
 - [X] T022 [US1] Add timestamp, expiry, strike, option type, and open-interest parse tests in backend/tests/unit/test_xau_imports.py
 - [X] T023 [US1] Add unsafe path and unreadable file tests in backend/tests/unit/test_xau_imports.py
 - [X] T024 [US1] Add missing-data instruction tests for absent OI files and missing columns in backend/tests/unit/test_xau_imports.py
-- [ ] T025 [P] [US1] Add local import integration flow with synthetic CSV and Parquet files in backend/tests/integration/test_xau_import_flow.py
-- [ ] T026 [P] [US1] Add report creation contract tests for validation errors in backend/tests/contract/test_xau_api_contracts.py
+- [X] T025 [P] [US1] Add local import integration flow with synthetic CSV and Parquet files in backend/tests/integration/test_xau_import_flow.py
+- [X] T026 [P] [US1] Add report creation contract tests for validation errors in backend/tests/contract/test_xau_api_contracts.py
 
 ### Implementation for User Story 1
 
@@ -61,8 +61,8 @@
 - [X] T031 [US1] Implement expiry parsing and days-to-expiry calculation in backend/src/xau/imports.py
 - [X] T032 [US1] Implement strike, option type, open-interest, and optional numeric column normalization in backend/src/xau/imports.py
 - [X] T033 [US1] Implement row-level validation notes, accepted row counts, and rejected row counts in backend/src/xau/imports.py
-- [ ] T034 [US1] Implement local import preflight and missing-data instructions in backend/src/xau/orchestration.py
-- [ ] T035 [US1] Persist source validation metadata in backend/src/xau/report_store.py
+- [X] T034 [US1] Implement local import preflight and missing-data instructions in backend/src/xau/orchestration.py
+- [X] T035 [US1] Persist source validation metadata in backend/src/xau/report_store.py
 
 ## Phase 4: User Story 2 - Map Futures Strikes To Spot-Equivalent Levels (Priority: P2)
 
