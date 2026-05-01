@@ -17,8 +17,8 @@
 
 **Purpose**: Add the 007 package, API/UI placeholders, and test helper entry points.
 
-- [ ] T001 Create `backend/src/research_execution/__init__.py` package marker
-- [ ] T002 [P] Create `backend/src/models/research_execution.py` placeholder for execution schemas
+- [X] T001 Create `backend/src/research_execution/__init__.py` package marker
+- [X] T002 [P] Create `backend/src/models/research_execution.py` placeholder for execution schemas
 - [ ] T003 [P] Create `backend/src/api/routes/research_execution.py` route placeholder
 - [ ] T004 [P] Create `/evidence` placeholder page in `frontend/src/app/evidence/page.tsx`
 - [ ] T005 [P] Create shared synthetic evidence fixtures in `backend/tests/helpers/test_research_execution_data.py`
@@ -31,10 +31,10 @@
 
 **Critical**: No user story implementation should start until this phase is complete.
 
-- [ ] T006 Implement workflow status, decision, workflow type, request, config, preflight, result, evidence, run, and summary schemas in `backend/src/models/research_execution.py`
+- [X] T006 Implement workflow status, decision, workflow type, request, config, preflight, result, evidence, run, and summary schemas in `backend/src/models/research_execution.py`
 - [ ] T007 [P] Create execution report store skeleton and artifact path helpers in `backend/src/research_execution/report_store.py`
-- [ ] T008 [P] Create execution preflight skeleton and shared result builders in `backend/src/research_execution/preflight.py`
-- [ ] T009 [P] Create evidence aggregation skeleton and decision-rule placeholders in `backend/src/research_execution/aggregation.py`
+- [X] T008 [P] Create execution preflight skeleton and shared result builders in `backend/src/research_execution/preflight.py`
+- [X] T009 [P] Create evidence aggregation skeleton and decision-rule placeholders in `backend/src/research_execution/aggregation.py`
 - [ ] T010 [P] Create execution orchestration skeleton in `backend/src/research_execution/orchestration.py`
 - [ ] T011 Add research execution API validation helpers in `backend/src/api/validation.py`
 - [ ] T012 Register research execution router in `backend/src/main.py`
@@ -56,16 +56,16 @@
 
 ### Tests for User Story 1
 
-- [ ] T018 [P] [US1] Add execution config validation and forbidden field tests in `backend/tests/unit/test_research_execution_config.py`
-- [ ] T019 [P] [US1] Add crypto processed-feature preflight tests in `backend/tests/unit/test_research_execution_preflight.py`
+- [X] T018 [P] [US1] Add execution config validation and forbidden field tests in `backend/tests/unit/test_research_execution_config.py`
+- [X] T019 [P] [US1] Add crypto processed-feature preflight tests in `backend/tests/unit/test_research_execution_preflight.py`
 - [ ] T020 [US1] Add basic run/list/detail API contract tests in `backend/tests/contract/test_research_execution_api_contracts.py`
 - [ ] T021 [P] [US1] Add mixed ready/missing crypto integration test in `backend/tests/integration/test_research_execution_crypto_flow.py`
 
 ### Implementation for User Story 1
 
-- [ ] T022 [US1] Implement normalized crypto workflow config validation and forbidden field rejection in `backend/src/models/research_execution.py`
-- [ ] T023 [US1] Implement processed feature path resolution and path safety for crypto assets in `backend/src/research_execution/preflight.py`
-- [ ] T024 [US1] Implement missing, unreadable, empty, and incomplete crypto feature statuses and download/process instructions in `backend/src/research_execution/preflight.py`
+- [X] T022 [US1] Implement normalized crypto workflow config validation and forbidden field rejection in `backend/src/models/research_execution.py`
+- [X] T023 [US1] Implement processed feature path resolution and path safety for crypto assets in `backend/src/research_execution/preflight.py`
+- [X] T024 [US1] Implement missing, unreadable, empty, and incomplete crypto feature statuses and download/process instructions in `backend/src/research_execution/preflight.py`
 - [ ] T025 [US1] Implement grouped execution run ID creation and request normalization in `backend/src/research_execution/orchestration.py`
 - [ ] T026 [US1] Implement crypto workflow orchestration for ready and blocked assets using existing feature 005 reports in `backend/src/research_execution/orchestration.py`
 - [ ] T027 [US1] Persist execution metadata, normalized config, preflight results, and crypto asset summaries in `backend/src/research_execution/report_store.py`
