@@ -586,11 +586,37 @@ def compose_xau_report_markdown(
         "",
         f"Source: {expected_range.get('source')}",
         f"Expected move: {expected_range.get('expected_move')}",
+        f"Lower 1SD: {expected_range.get('lower_1sd')}",
+        f"Upper 1SD: {expected_range.get('upper_1sd')}",
+        f"Lower 2SD: {expected_range.get('lower_2sd')}",
+        f"Upper 2SD: {expected_range.get('upper_2sd')}",
         f"Unavailable reason: {expected_range.get('unavailable_reason')}",
         "",
-        "## Missing Data Instructions",
-        "",
     ]
+    lines.extend(["## Basis-Adjusted OI Walls", ""])
+    if not report["walls"]:
+        lines.append("- No OI wall rows were generated.")
+    for wall in report["walls"]:
+        lines.append(
+            f"- {wall.get('wall_id')}: {wall.get('option_type')} wall, "
+            f"expiry {wall.get('expiry')}, strike {wall.get('strike')}, "
+            f"spot-equivalent {wall.get('spot_equivalent_level')}, "
+            f"score {wall.get('wall_score')}, freshness {wall.get('freshness_status')}"
+        )
+
+    lines.extend(["", "## Zone Classification", ""])
+    if not report["zones"]:
+        lines.append("- No zone rows were generated.")
+    for zone in report["zones"]:
+        lines.append(
+            f"- {zone.get('zone_id')}: {zone.get('zone_type')}, "
+            f"level {zone.get('level')}, confidence {zone.get('confidence')}, "
+            f"no-trade warning {zone.get('no_trade_warning')}"
+        )
+        for note in zone.get("notes", []):
+            lines.append(f"  - {note}")
+
+    lines.extend(["", "## Missing Data Instructions", ""])
     if not report["missing_data_instructions"]:
         lines.append("- None")
     lines.extend(f"- {instruction}" for instruction in report["missing_data_instructions"])

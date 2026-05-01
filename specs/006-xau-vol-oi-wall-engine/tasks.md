@@ -125,21 +125,21 @@
 
 ### Tests for User Story 4
 
-- [ ] T065 [US4] Add report list/detail/walls/zones API contract tests in backend/tests/contract/test_xau_api_contracts.py
-- [ ] T066 [US4] Add missing report and structured XAU error contract tests in backend/tests/contract/test_xau_api_contracts.py
-- [ ] T067 [P] [US4] Add frontend type/build coverage for XAU responses in frontend/src/types/index.ts
+- [X] T065 [US4] Add report list/detail/walls/zones API contract tests in backend/tests/contract/test_xau_api_contracts.py
+- [X] T066 [US4] Add missing report and structured XAU error contract tests in backend/tests/contract/test_xau_api_contracts.py
+- [X] T067 [P] [US4] Add frontend type/build coverage for XAU responses in frontend/src/types/index.ts
 
 ### Implementation for User Story 4
 
-- [ ] T068 [US4] Implement report metadata, wall table, zone table, JSON, and Markdown persistence in backend/src/xau/report_store.py
-- [ ] T069 [US4] Add XAU report JSON and Markdown sections to backend/src/reports/writer.py
-- [ ] T070 [US4] Implement `POST /api/v1/xau/vol-oi/reports` in backend/src/api/routes/xau.py
-- [ ] T071 [US4] Implement `GET /api/v1/xau/vol-oi/reports` and `GET /api/v1/xau/vol-oi/reports/{report_id}` in backend/src/api/routes/xau.py
-- [ ] T072 [US4] Implement `GET /api/v1/xau/vol-oi/reports/{report_id}/walls` and `/zones` in backend/src/api/routes/xau.py
-- [ ] T073 [US4] Implement XAU report API client methods in frontend/src/services/api.ts
-- [ ] T074 [US4] Implement report selector, status summary, basis snapshot, and expected range cards in frontend/src/app/xau-vol-oi/page.tsx
-- [ ] T075 [US4] Implement basis-adjusted wall table and zone classification table in frontend/src/app/xau-vol-oi/page.tsx
-- [ ] T076 [US4] Render missing-data warnings, source limitation notes, no-trade warnings, and research-only disclaimer in frontend/src/app/xau-vol-oi/page.tsx
+- [X] T068 [US4] Implement report metadata, wall table, zone table, JSON, and Markdown persistence in backend/src/xau/report_store.py
+- [X] T069 [US4] Add XAU report JSON and Markdown sections to backend/src/reports/writer.py
+- [X] T070 [US4] Implement `POST /api/v1/xau/vol-oi/reports` in backend/src/api/routes/xau.py
+- [X] T071 [US4] Implement `GET /api/v1/xau/vol-oi/reports` and `GET /api/v1/xau/vol-oi/reports/{report_id}` in backend/src/api/routes/xau.py
+- [X] T072 [US4] Implement `GET /api/v1/xau/vol-oi/reports/{report_id}/walls` and `/zones` in backend/src/api/routes/xau.py
+- [X] T073 [US4] Implement XAU report API client methods in frontend/src/services/api.ts
+- [X] T074 [US4] Implement report selector, status summary, basis snapshot, and expected range cards in frontend/src/app/xau-vol-oi/page.tsx
+- [X] T075 [US4] Implement basis-adjusted wall table and zone classification table in frontend/src/app/xau-vol-oi/page.tsx
+- [X] T076 [US4] Render missing-data warnings, source limitation notes, no-trade warnings, and research-only disclaimer in frontend/src/app/xau-vol-oi/page.tsx
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 

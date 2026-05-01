@@ -48,6 +48,8 @@ async def get_xau_vol_oi_report(report_id: str) -> XauVolOiReport:
 
     try:
         return XauReportStore().read_report(report_id)
+    except ValueError as exc:
+        invalid_xau_config(str(exc))
     except FileNotFoundError:
         xau_report_not_found(report_id)
 
@@ -56,13 +58,12 @@ async def get_xau_vol_oi_report(report_id: str) -> XauVolOiReport:
 
 @router.get("/xau/vol-oi/reports/{report_id}/walls", response_model=XauWallTableResponse)
 async def get_xau_vol_oi_walls(report_id: str) -> XauWallTableResponse:
-    """Read saved XAU wall rows.
-
-    Wall scoring is implemented in a later feature slice, so early reports return an empty table.
-    """
+    """Read saved scored XAU wall rows."""
 
     try:
         return XauReportStore().read_walls(report_id)
+    except ValueError as exc:
+        invalid_xau_config(str(exc))
     except FileNotFoundError:
         xau_report_not_found(report_id)
 
@@ -71,14 +72,12 @@ async def get_xau_vol_oi_walls(report_id: str) -> XauWallTableResponse:
 
 @router.get("/xau/vol-oi/reports/{report_id}/zones", response_model=XauZoneTableResponse)
 async def get_xau_vol_oi_zones(report_id: str) -> XauZoneTableResponse:
-    """Read saved XAU zone rows.
-
-    Zone classification is implemented in a later feature slice, so early reports return an empty
-    table.
-    """
+    """Read saved XAU zone classification rows."""
 
     try:
         return XauReportStore().read_zones(report_id)
+    except ValueError as exc:
+        invalid_xau_config(str(exc))
     except FileNotFoundError:
         xau_report_not_found(report_id)
 
