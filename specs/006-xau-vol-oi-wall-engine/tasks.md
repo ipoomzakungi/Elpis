@@ -75,7 +75,7 @@
 - [X] T036 [US2] Add computed and manual basis tests in backend/tests/unit/test_xau_basis.py
 - [X] T037 [US2] Add futures strike to spot-equivalent mapping tests in backend/tests/unit/test_xau_basis.py
 - [X] T038 [P] [US2] Add IV expected move, 1SD, 2SD, and unavailable-IV tests in backend/tests/unit/test_xau_volatility.py
-- [ ] T039 [P] [US2] Add basis and expected range integration assertions in backend/tests/integration/test_xau_vol_oi_flow.py
+- [X] T039 [P] [US2] Add basis and expected range integration assertions in backend/tests/integration/test_xau_vol_oi_flow.py
 
 ### Implementation for User Story 2
 
@@ -86,7 +86,7 @@
 - [X] T044 [US2] Implement IV-based expected move and 1SD range calculation in backend/src/xau/volatility.py
 - [X] T045 [US2] Implement optional 2SD stress range calculation in backend/src/xau/volatility.py
 - [X] T046 [US2] Implement realized-volatility, manual, and unavailable range labels in backend/src/xau/volatility.py
-- [ ] T047 [US2] Integrate basis snapshots and expected range outputs into report orchestration in backend/src/xau/orchestration.py
+- [X] T047 [US2] Integrate basis snapshots and expected range outputs into report orchestration in backend/src/xau/orchestration.py
 
 ## Phase 5: User Story 3 - Classify Research Zones With Transparent Scores (Priority: P3)
 
