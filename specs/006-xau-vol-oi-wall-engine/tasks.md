@@ -145,14 +145,23 @@
 
 **Purpose**: Verify the complete feature through documented backend, frontend, artifact, API, dashboard, and forbidden-scope checks.
 
-- [ ] T077 Run backend import check from backend/src/main.py
-- [ ] T078 Run full backend pytest suite for backend/tests/
-- [ ] T079 Run frontend install and production build using frontend/package.json
-- [ ] T080 Run generated artifact guard using scripts/check_generated_artifacts.ps1
-- [ ] T081 Run XAU Vol-OI API smoke flow from specs/006-xau-vol-oi-wall-engine/quickstart.md
-- [ ] T082 Run dashboard smoke flow for `/xau-vol-oi` from specs/006-xau-vol-oi-wall-engine/quickstart.md
-- [ ] T083 Review forbidden v0 scope in backend/pyproject.toml, frontend/package.json, .github/workflows/validation.yml, backend/src/, and frontend/src/
-- [ ] T084 Update final validation notes and completion status in specs/006-xau-vol-oi-wall-engine/tasks.md
+- [X] T077 Run backend import check from backend/src/main.py
+- [X] T078 Run full backend pytest suite for backend/tests/
+- [X] T079 Run frontend install and production build using frontend/package.json
+- [X] T080 Run generated artifact guard using scripts/check_generated_artifacts.ps1
+- [X] T081 Run XAU Vol-OI API smoke flow from specs/006-xau-vol-oi-wall-engine/quickstart.md
+- [X] T082 Run dashboard smoke flow for `/xau-vol-oi` from specs/006-xau-vol-oi-wall-engine/quickstart.md
+- [X] T083 Review forbidden v0 scope in backend/pyproject.toml, frontend/package.json, .github/workflows/validation.yml, backend/src/, and frontend/src/
+- [X] T084 Update final validation notes and completion status in specs/006-xau-vol-oi-wall-engine/tasks.md
+
+Final validation notes:
+
+- Backend import passed and full backend pytest passed with 191 tests.
+- Frontend `npm install` and production build passed.
+- Generated artifact guard passed after ignored local XAU smoke data/report generation; root and backend-relative generated data/report paths are covered.
+- XAU API smoke passed for report create/list/detail/walls/zones and structured missing-report errors.
+- Dashboard smoke passed through local frontend/backend server HTTP checks and source assertions for selector, status, basis, expected range, wall table, zone table, warnings, limitations, and research-only disclaimer.
+- Forbidden-scope review found only guardrail/disclaimer text, existing forbidden-field validation labels, and false-positive terms; no live trading, paper trading, shadow trading, private keys, broker integration, real execution, Rust execution engine, ClickHouse, PostgreSQL, Kafka, Kubernetes, ML training, buy/sell signal behavior, or profitability/predictive/safety/live-readiness claims were introduced.
 
 ## Dependencies & Execution Order
 
