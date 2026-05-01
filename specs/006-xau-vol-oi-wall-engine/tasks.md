@@ -11,8 +11,8 @@
 
 **Purpose**: Create the additive XAU feature surface without changing existing provider, backtest, validation, or research modules.
 
-- [ ] T001 Create the XAU backend package marker in backend/src/xau/__init__.py
-- [ ] T002 Create the XAU model module placeholder in backend/src/models/xau.py
+- [X] T001 Create the XAU backend package marker in backend/src/xau/__init__.py
+- [X] T002 Create the XAU model module placeholder in backend/src/models/xau.py
 - [ ] T003 Create the XAU API route module placeholder in backend/src/api/routes/xau.py
 - [ ] T004 Create the XAU dashboard route placeholder in frontend/src/app/xau-vol-oi/page.tsx
 - [ ] T005 [P] Create shared XAU fixture helpers for synthetic local options files in backend/tests/helpers/test_xau_data.py
@@ -22,12 +22,12 @@
 
 **Purpose**: Establish shared schemas, route wiring, report persistence scaffolding, and dashboard/API type placeholders that block all user stories.
 
-- [ ] T007 Define XAU enum and Pydantic schema skeletons in backend/src/models/xau.py
+- [X] T007 Define XAU enum and Pydantic schema skeletons in backend/src/models/xau.py
 - [ ] T008 Add XAU-specific API validation helper functions in backend/src/api/validation.py
 - [ ] T009 Register the XAU API router under `/api/v1/xau/vol-oi` in backend/src/main.py
-- [ ] T010 Create local import service skeleton in backend/src/xau/imports.py
-- [ ] T011 Create basis-adjustment service skeleton in backend/src/xau/basis.py
-- [ ] T012 Create volatility expected-range service skeleton in backend/src/xau/volatility.py
+- [X] T010 Create local import service skeleton in backend/src/xau/imports.py
+- [X] T011 Create basis-adjustment service skeleton in backend/src/xau/basis.py
+- [X] T012 Create volatility expected-range service skeleton in backend/src/xau/volatility.py
 - [ ] T013 Create OI wall scoring service skeleton in backend/src/xau/walls.py
 - [ ] T014 Create zone classification service skeleton in backend/src/xau/zones.py
 - [ ] T015 Create XAU report orchestration skeleton in backend/src/xau/orchestration.py
@@ -45,22 +45,22 @@
 
 ### Tests for User Story 1
 
-- [ ] T021 [US1] Add local CSV/Parquet required-column validation tests in backend/tests/unit/test_xau_imports.py
-- [ ] T022 [US1] Add timestamp, expiry, strike, option type, and open-interest parse tests in backend/tests/unit/test_xau_imports.py
-- [ ] T023 [US1] Add unsafe path and unreadable file tests in backend/tests/unit/test_xau_imports.py
-- [ ] T024 [US1] Add missing-data instruction tests for absent OI files and missing columns in backend/tests/unit/test_xau_imports.py
+- [X] T021 [US1] Add local CSV/Parquet required-column validation tests in backend/tests/unit/test_xau_imports.py
+- [X] T022 [US1] Add timestamp, expiry, strike, option type, and open-interest parse tests in backend/tests/unit/test_xau_imports.py
+- [X] T023 [US1] Add unsafe path and unreadable file tests in backend/tests/unit/test_xau_imports.py
+- [X] T024 [US1] Add missing-data instruction tests for absent OI files and missing columns in backend/tests/unit/test_xau_imports.py
 - [ ] T025 [P] [US1] Add local import integration flow with synthetic CSV and Parquet files in backend/tests/integration/test_xau_import_flow.py
 - [ ] T026 [P] [US1] Add report creation contract tests for validation errors in backend/tests/contract/test_xau_api_contracts.py
 
 ### Implementation for User Story 1
 
-- [ ] T027 [US1] Implement required and optional gold options OI column constants in backend/src/xau/imports.py
-- [ ] T028 [US1] Implement safe local file path resolution for XAU source files in backend/src/xau/imports.py
-- [ ] T029 [US1] Implement CSV and Parquet loading with Polars in backend/src/xau/imports.py
-- [ ] T030 [US1] Implement timestamp/date parsing and session selection in backend/src/xau/imports.py
-- [ ] T031 [US1] Implement expiry parsing and days-to-expiry calculation in backend/src/xau/imports.py
-- [ ] T032 [US1] Implement strike, option type, open-interest, and optional numeric column normalization in backend/src/xau/imports.py
-- [ ] T033 [US1] Implement row-level validation notes, accepted row counts, and rejected row counts in backend/src/xau/imports.py
+- [X] T027 [US1] Implement required and optional gold options OI column constants in backend/src/xau/imports.py
+- [X] T028 [US1] Implement safe local file path resolution for XAU source files in backend/src/xau/imports.py
+- [X] T029 [US1] Implement CSV and Parquet loading with Polars in backend/src/xau/imports.py
+- [X] T030 [US1] Implement timestamp/date parsing and session selection in backend/src/xau/imports.py
+- [X] T031 [US1] Implement expiry parsing and days-to-expiry calculation in backend/src/xau/imports.py
+- [X] T032 [US1] Implement strike, option type, open-interest, and optional numeric column normalization in backend/src/xau/imports.py
+- [X] T033 [US1] Implement row-level validation notes, accepted row counts, and rejected row counts in backend/src/xau/imports.py
 - [ ] T034 [US1] Implement local import preflight and missing-data instructions in backend/src/xau/orchestration.py
 - [ ] T035 [US1] Persist source validation metadata in backend/src/xau/report_store.py
 
@@ -72,20 +72,20 @@
 
 ### Tests for User Story 2
 
-- [ ] T036 [US2] Add computed and manual basis tests in backend/tests/unit/test_xau_basis.py
-- [ ] T037 [US2] Add futures strike to spot-equivalent mapping tests in backend/tests/unit/test_xau_basis.py
-- [ ] T038 [P] [US2] Add IV expected move, 1SD, 2SD, and unavailable-IV tests in backend/tests/unit/test_xau_volatility.py
+- [X] T036 [US2] Add computed and manual basis tests in backend/tests/unit/test_xau_basis.py
+- [X] T037 [US2] Add futures strike to spot-equivalent mapping tests in backend/tests/unit/test_xau_basis.py
+- [X] T038 [P] [US2] Add IV expected move, 1SD, 2SD, and unavailable-IV tests in backend/tests/unit/test_xau_volatility.py
 - [ ] T039 [P] [US2] Add basis and expected range integration assertions in backend/tests/integration/test_xau_vol_oi_flow.py
 
 ### Implementation for User Story 2
 
-- [ ] T040 [US2] Implement basis input validation and manual-basis handling in backend/src/xau/basis.py
-- [ ] T041 [US2] Implement computed `futures_spot_basis` snapshots in backend/src/xau/basis.py
-- [ ] T042 [US2] Implement futures strike to spot-equivalent level mapping in backend/src/xau/basis.py
-- [ ] T043 [US2] Implement timestamp alignment status and basis limitation notes in backend/src/xau/basis.py
-- [ ] T044 [US2] Implement IV-based expected move and 1SD range calculation in backend/src/xau/volatility.py
-- [ ] T045 [US2] Implement optional 2SD stress range calculation in backend/src/xau/volatility.py
-- [ ] T046 [US2] Implement realized-volatility, manual, and unavailable range labels in backend/src/xau/volatility.py
+- [X] T040 [US2] Implement basis input validation and manual-basis handling in backend/src/xau/basis.py
+- [X] T041 [US2] Implement computed `futures_spot_basis` snapshots in backend/src/xau/basis.py
+- [X] T042 [US2] Implement futures strike to spot-equivalent level mapping in backend/src/xau/basis.py
+- [X] T043 [US2] Implement timestamp alignment status and basis limitation notes in backend/src/xau/basis.py
+- [X] T044 [US2] Implement IV-based expected move and 1SD range calculation in backend/src/xau/volatility.py
+- [X] T045 [US2] Implement optional 2SD stress range calculation in backend/src/xau/volatility.py
+- [X] T046 [US2] Implement realized-volatility, manual, and unavailable range labels in backend/src/xau/volatility.py
 - [ ] T047 [US2] Integrate basis snapshots and expected range outputs into report orchestration in backend/src/xau/orchestration.py
 
 ## Phase 5: User Story 3 - Classify Research Zones With Transparent Scores (Priority: P3)
