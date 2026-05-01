@@ -85,22 +85,22 @@
 
 ### Tests for User Story 2
 
-- [ ] T031 [P] [US2] Add unsupported proxy capability tests in `backend/tests/unit/test_research_execution_unsupported_capabilities.py`
-- [ ] T032 [P] [US2] Add proxy OHLCV preflight tests in `backend/tests/unit/test_research_execution_preflight.py`
-- [ ] T033 [P] [US2] Add Yahoo/proxy OHLCV integration flow in `backend/tests/integration/test_research_execution_proxy_flow.py`
-- [ ] T034 [US2] Add proxy limitation API contract assertions in `backend/tests/contract/test_research_execution_api_contracts.py`
+- [X] T031 [P] [US2] Add unsupported proxy capability tests in `backend/tests/unit/test_research_execution_unsupported_capabilities.py`
+- [X] T032 [P] [US2] Add proxy OHLCV preflight tests in `backend/tests/unit/test_research_execution_preflight.py`
+- [X] T033 [P] [US2] Add Yahoo/proxy OHLCV integration flow in `backend/tests/integration/test_research_execution_proxy_flow.py`
+- [X] T034 [US2] Add proxy limitation API contract assertions in `backend/tests/contract/test_research_execution_api_contracts.py`
 
 ### Implementation for User Story 2
 
-- [ ] T035 [US2] Implement proxy workflow config normalization and OHLCV-only defaults in `backend/src/models/research_execution.py`
-- [ ] T036 [US2] Implement provider capability snapshot generation for proxy assets in `backend/src/research_execution/preflight.py`
-- [ ] T037 [US2] Implement unsupported OI, funding, gold options OI, futures OI, IV, and XAUUSD execution labels in `backend/src/research_execution/preflight.py`
-- [ ] T038 [US2] Implement GC=F and GLD gold proxy limitation notes in `backend/src/research_execution/preflight.py`
-- [ ] T039 [US2] Implement proxy workflow orchestration using existing feature 005 reports or processed OHLCV inputs in `backend/src/research_execution/orchestration.py`
-- [ ] T040 [US2] Aggregate proxy OHLCV workflow outcomes and research decisions in `backend/src/research_execution/aggregation.py`
-- [ ] T041 [US2] Persist proxy workflow evidence and limitation summaries in `backend/src/research_execution/report_store.py`
-- [ ] T042 [US2] Add proxy OHLCV and unsupported capability sections to evidence JSON and Markdown in `backend/src/reports/writer.py`
-- [ ] T043 [US2] Return proxy limitation fields from execution detail and evidence routes in `backend/src/api/routes/research_execution.py`
+- [X] T035 [US2] Implement proxy workflow config normalization and OHLCV-only defaults in `backend/src/models/research_execution.py`
+- [X] T036 [US2] Implement provider capability snapshot generation for proxy assets in `backend/src/research_execution/preflight.py`
+- [X] T037 [US2] Implement unsupported OI, funding, gold options OI, futures OI, IV, and XAUUSD execution labels in `backend/src/research_execution/preflight.py`
+- [X] T038 [US2] Implement GC=F and GLD gold proxy limitation notes in `backend/src/research_execution/preflight.py`
+- [X] T039 [US2] Implement proxy workflow orchestration using existing feature 005 reports or processed OHLCV inputs in `backend/src/research_execution/orchestration.py`
+- [X] T040 [US2] Aggregate proxy OHLCV workflow outcomes and research decisions in `backend/src/research_execution/aggregation.py`
+- [X] T041 [US2] Persist proxy workflow evidence and limitation summaries in `backend/src/research_execution/report_store.py`
+- [X] T042 [US2] Add proxy OHLCV and unsupported capability sections to evidence JSON and Markdown in `backend/src/reports/writer.py`
+- [X] T043 [US2] Return proxy limitation fields from execution detail and evidence routes in `backend/src/api/routes/research_execution.py`
 
 **Checkpoint**: User Story 2 is independently testable with an OHLCV-only proxy asset and explicit unsupported capability labels.
 

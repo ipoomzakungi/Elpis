@@ -538,6 +538,7 @@ def compose_research_execution_evidence_json(
         ),
         "workflow_results": evidence.get("workflow_results", []),
         "crypto_summary": evidence.get("crypto_summary"),
+        "proxy_summary": evidence.get("proxy_summary"),
         "missing_data_checklist": evidence.get("missing_data_checklist", []),
         "limitations": evidence.get("limitations", []),
         "research_only_warnings": evidence.get("research_only_warnings", []),
@@ -591,6 +592,26 @@ def compose_research_execution_evidence_markdown(
                 ),
             ]
         )
+    lines.extend(["", "## Proxy OHLCV Workflow", ""])
+    proxy_summary = report["proxy_summary"] or {}
+    if not proxy_summary:
+        lines.append("- No proxy OHLCV workflow summary was generated.")
+    else:
+        lines.extend(
+            [
+                f"- Provider: {proxy_summary.get('provider', 'unknown')}",
+                f"- Completed assets: {proxy_summary.get('completed_asset_count', 0)}",
+                f"- Blocked assets: {proxy_summary.get('blocked_asset_count', 0)}",
+                f"- Ready assets: {', '.join(proxy_summary.get('ready_assets', [])) or 'None'}",
+                (
+                    f"- Blocked asset list: "
+                    f"{', '.join(proxy_summary.get('blocked_assets', [])) or 'None'}"
+                ),
+            ]
+        )
+        unsupported_by_asset = proxy_summary.get("unsupported_capabilities_by_asset", {})
+        for asset, capabilities in unsupported_by_asset.items():
+            lines.append(f"- {asset} unsupported capabilities: {', '.join(capabilities) or 'None'}")
     lines.extend(["", "## Missing Data Checklist", ""])
     if not report["missing_data_checklist"]:
         lines.append("- None")

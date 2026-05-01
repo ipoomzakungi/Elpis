@@ -59,14 +59,15 @@ def preflight_proxy_ohlcv_assets(
 ) -> list[ResearchExecutionPreflightResult]:
     """Check processed OHLCV proxy readiness and label unsupported capabilities."""
 
-    unsupported = _unsupported_proxy_capabilities(config.required_capabilities, config.provider)
+    provider = _canonical_provider(config.provider)
+    unsupported = _unsupported_proxy_capabilities(config.required_capabilities, provider)
     results = []
     for symbol in config.assets if config.enabled else []:
         result = _preflight_processed_asset(
             workflow_type=ResearchExecutionWorkflowType.PROXY_OHLCV,
             symbol=symbol,
             timeframe=config.timeframe,
-            provider=config.provider,
+            provider=provider,
             processed_feature_root=config.processed_feature_root,
             required_capabilities=[
                 capability
@@ -75,7 +76,7 @@ def preflight_proxy_ohlcv_assets(
             ]
             or ["ohlcv"],
             unsupported_capabilities=unsupported,
-            limitations=_proxy_limitations(symbol, config.provider),
+            limitations=_proxy_limitations(symbol, provider),
         )
         results.append(result)
     return results
@@ -166,6 +167,7 @@ def _preflight_processed_asset(
     unsupported_capabilities: list[str] | None = None,
     limitations: list[str] | None = None,
 ) -> ResearchExecutionPreflightResult:
+    provider = _canonical_provider(provider)
     unsupported = unsupported_capabilities or []
     notes = limitations or []
     try:
@@ -179,6 +181,7 @@ def _preflight_processed_asset(
             ready=False,
             missing_data_actions=[str(exc)],
             unsupported_capabilities=unsupported,
+            capability_snapshot=provider_capability_snapshot(provider),
             limitations=notes,
         )
 
@@ -197,6 +200,7 @@ def _preflight_processed_asset(
             feature_path=feature_path.as_posix(),
             missing_data_actions=instruction_factory(symbol, timeframe, feature_path),
             unsupported_capabilities=unsupported,
+            capability_snapshot=provider_capability_snapshot(provider),
             warnings=_unsupported_warnings(unsupported),
             limitations=notes,
         )
@@ -216,10 +220,12 @@ def _preflight_processed_asset(
                 f"Reprocess {symbol} {timeframe} before research execution.",
             ],
             unsupported_capabilities=unsupported,
+            capability_snapshot=provider_capability_snapshot(provider),
             warnings=[f"Processed feature file could not be read: {exc}"],
             limitations=notes,
         )
 
+    capability_snapshot = provider_capability_snapshot(provider, frame.columns)
     missing_columns = _missing_columns(frame.columns, required_capabilities)
     if frame.is_empty():
         missing_columns.append("<non-empty rows>")
@@ -240,6 +246,7 @@ def _preflight_processed_asset(
                 f"Missing columns: {', '.join(missing_columns)}",
             ],
             unsupported_capabilities=unsupported,
+            capability_snapshot=capability_snapshot,
             warnings=_unsupported_warnings(unsupported),
             limitations=notes,
         )
@@ -255,9 +262,44 @@ def _preflight_processed_asset(
         date_start=_first_timestamp(frame),
         date_end=_last_timestamp(frame),
         unsupported_capabilities=unsupported,
+        capability_snapshot=capability_snapshot,
         warnings=_unsupported_warnings(unsupported),
         limitations=notes,
     )
+
+
+def provider_capability_snapshot(
+    provider: str,
+    columns: Iterable[str] | None = None,
+) -> dict[str, bool | str]:
+    """Return provider/source capability metadata for an existing processed feature set."""
+
+    normalized_provider = _canonical_provider(provider)
+    column_set = set(columns or [])
+    detected_ohlcv = REQUIRED_COLUMNS_BY_CAPABILITY["ohlcv"].issubset(column_set)
+    detected_regime = REQUIRED_COLUMNS_BY_CAPABILITY["regime"].issubset(column_set)
+    detected_open_interest = REQUIRED_COLUMNS_BY_CAPABILITY["open_interest"].issubset(column_set)
+    detected_funding = REQUIRED_COLUMNS_BY_CAPABILITY["funding"].issubset(column_set)
+    detected_volume_confirmation = REQUIRED_COLUMNS_BY_CAPABILITY["volume_confirmation"].issubset(
+        column_set
+    )
+    is_yahoo = normalized_provider in {"yahoo_finance", "yahoo"}
+    is_local = normalized_provider == "local_file"
+    return {
+        "provider": normalized_provider,
+        "supports_ohlcv": True if is_yahoo or is_local else detected_ohlcv,
+        "supports_open_interest": False if is_yahoo else detected_open_interest,
+        "supports_funding": False if is_yahoo else detected_funding,
+        "supports_gold_options_oi": False,
+        "supports_futures_oi": False,
+        "supports_iv": False,
+        "supports_xauusd_spot_execution": False,
+        "detected_ohlcv": detected_ohlcv,
+        "detected_regime": detected_regime,
+        "detected_open_interest": detected_open_interest,
+        "detected_funding": detected_funding,
+        "detected_volume_confirmation": detected_volume_confirmation,
+    }
 
 
 def resolve_processed_feature_path(
@@ -282,7 +324,7 @@ def _missing_columns(columns: Iterable[str], capabilities: list[str]) -> list[st
 
 
 def _unsupported_proxy_capabilities(capabilities: list[str], provider: str) -> list[str]:
-    if provider.strip().lower() not in {"yahoo_finance", "yahoo"}:
+    if _canonical_provider(provider) not in {"yahoo_finance", "yahoo"}:
         return []
     unsupported: list[str] = []
     for capability in capabilities:
@@ -294,7 +336,7 @@ def _unsupported_proxy_capabilities(capabilities: list[str], provider: str) -> l
 
 def _proxy_limitations(symbol: str, provider: str) -> list[str]:
     notes = []
-    if provider.strip().lower() in {"yahoo_finance", "yahoo"}:
+    if _canonical_provider(provider) in {"yahoo_finance", "yahoo"}:
         notes.append(
             "Yahoo Finance proxy assets are OHLCV-only in this workflow; OI, funding, "
             "gold options OI, futures OI, IV, and XAUUSD spot execution data are unsupported."
@@ -336,6 +378,13 @@ def _safe_filename_part(value: str) -> str:
     normalized = re.sub(r"[^a-z0-9._=-]+", "_", value.lower()).strip("_")
     if not normalized:
         raise ValueError("processed feature filename part cannot be empty")
+    return normalized
+
+
+def _canonical_provider(provider: str) -> str:
+    normalized = provider.strip().lower()
+    if normalized in {"yahoo", "yfinance"}:
+        return "yahoo_finance"
     return normalized
 
 

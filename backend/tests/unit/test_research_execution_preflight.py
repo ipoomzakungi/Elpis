@@ -89,6 +89,28 @@ def test_proxy_preflight_labels_yahoo_unsupported_capabilities(isolated_data_pat
     assert any("unsupported" in warning.lower() for warning in result.warnings)
 
 
+def test_proxy_preflight_missing_gc_f_preserves_gold_proxy_limitations(isolated_data_paths):
+    config = ProxyResearchWorkflowConfig(
+        assets=["GC=F"],
+        provider="yfinance",
+        required_capabilities=["ohlcv", "gold_options_oi", "futures_oi", "iv"],
+        processed_feature_root=isolated_data_paths / "processed",
+    )
+
+    result = preflight_proxy_ohlcv_assets(config)[0]
+
+    assert result.status == ResearchExecutionWorkflowStatus.BLOCKED
+    assert result.source_identity == "yahoo_finance"
+    assert result.unsupported_capabilities == ["gold_options_oi", "futures_oi", "iv"]
+    assert result.capability_snapshot["provider"] == "yahoo_finance"
+    assert result.capability_snapshot["detected_ohlcv"] is False
+    assert any(
+        "Download or import OHLCV data for GC=F" in action for action in result.missing_data_actions
+    )
+    assert any("gold OHLCV proxies only" in limitation for limitation in result.limitations)
+    assert any("not CME gold options OI" in limitation for limitation in result.limitations)
+
+
 def test_xau_preflight_missing_options_file_returns_schema_instructions(isolated_data_paths):
     missing_path = isolated_data_paths / "raw" / "xau" / "missing_options.csv"
     config = XauVolOiWorkflowConfig(options_oi_file_path=missing_path)

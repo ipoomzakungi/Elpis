@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from src.main import app
+from tests.helpers.research_data import write_synthetic_research_features
 
 
 def test_research_execution_list_placeholder_returns_empty_runs(isolated_data_paths):
@@ -59,6 +60,54 @@ def test_research_execution_run_creates_crypto_preflight_evidence(isolated_data_
     detail_response = client.get(f"/api/v1/research/execution-runs/{body['execution_run_id']}")
     assert detail_response.status_code == 200
     assert detail_response.json()["execution_run_id"] == body["execution_run_id"]
+
+
+def test_research_execution_run_returns_proxy_limitations_in_contract(isolated_data_paths):
+    processed_root = isolated_data_paths / "processed"
+    write_synthetic_research_features(
+        processed_root / "gld_1d_features.parquet",
+        symbol="GLD",
+        rows=7,
+        include_regime=False,
+        include_open_interest=False,
+        include_funding=False,
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/research/execution-runs",
+        json={
+            "name": "proxy limitation contract",
+            "research_only_acknowledged": True,
+            "proxy": {
+                "enabled": True,
+                "assets": ["GLD"],
+                "provider": "yahoo_finance",
+                "processed_feature_root": str(processed_root),
+                "required_capabilities": ["ohlcv", "open_interest", "funding", "iv"],
+            },
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["evidence_summary"]["status"] == "completed"
+    assert body["evidence_summary"]["proxy_summary"]["ready_assets"] == ["GLD"]
+    assert body["evidence_summary"]["proxy_summary"]["unsupported_capabilities_by_asset"][
+        "GLD"
+    ] == ["open_interest", "funding", "iv"]
+    assert any(
+        "OHLCV-only" in limitation
+        for limitation in body["evidence_summary"]["proxy_summary"]["limitations_by_asset"]["GLD"]
+    )
+
+    evidence_response = client.get(
+        f"/api/v1/research/execution-runs/{body['execution_run_id']}/evidence"
+    )
+    assert evidence_response.status_code == 200
+    evidence = evidence_response.json()
+    assert evidence["proxy_summary"]["ready_assets"] == ["GLD"]
+    assert any("OHLCV-only" in limitation for limitation in evidence["limitations"])
 
 
 def test_research_execution_detail_returns_structured_not_found():

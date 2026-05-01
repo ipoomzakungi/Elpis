@@ -3,7 +3,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 
 from src.models.backtest import StrictModel
 
@@ -89,7 +89,8 @@ class CryptoResearchWorkflowConfig(ResearchExecutionWorkflowConfig):
     timeframe: str = "15m"
     processed_feature_root: Path | None = None
     required_capabilities: list[str] = Field(
-        default_factory=lambda: DEFAULT_CRYPTO_CAPABILITIES.copy()
+        default_factory=lambda: DEFAULT_CRYPTO_CAPABILITIES.copy(),
+        validation_alias=AliasChoices("required_capabilities", "required_feature_groups"),
     )
     existing_research_run_id: str | None = None
 
@@ -124,7 +125,8 @@ class ProxyResearchWorkflowConfig(ResearchExecutionWorkflowConfig):
     timeframe: str = "1d"
     processed_feature_root: Path | None = None
     required_capabilities: list[str] = Field(
-        default_factory=lambda: DEFAULT_PROXY_CAPABILITIES.copy()
+        default_factory=lambda: DEFAULT_PROXY_CAPABILITIES.copy(),
+        validation_alias=AliasChoices("required_capabilities", "required_feature_groups"),
     )
     existing_research_run_id: str | None = None
 
@@ -146,6 +148,8 @@ class ProxyResearchWorkflowConfig(ResearchExecutionWorkflowConfig):
         normalized = value.strip().lower()
         if not normalized:
             raise ValueError("provider is required")
+        if normalized in {"yahoo", "yfinance"}:
+            return "yahoo_finance"
         return normalized
 
     @field_validator("timeframe")
@@ -155,6 +159,9 @@ class ProxyResearchWorkflowConfig(ResearchExecutionWorkflowConfig):
         if not normalized:
             raise ValueError("timeframe is required")
         return normalized
+
+    def enabled_assets(self) -> list[str]:
+        return list(self.assets) if self.enabled else []
 
 
 class XauVolOiWorkflowConfig(ResearchExecutionWorkflowConfig):
@@ -211,6 +218,7 @@ class ResearchExecutionPreflightResult(StrictModel):
     date_end: datetime | None = None
     missing_data_actions: list[str] = Field(default_factory=list)
     unsupported_capabilities: list[str] = Field(default_factory=list)
+    capability_snapshot: dict[str, Any] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
 
