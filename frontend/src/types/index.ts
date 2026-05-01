@@ -762,6 +762,161 @@ export interface ResearchDashboardData {
   validation: ResearchValidationAggregationResponse;
 }
 
+export type ResearchExecutionWorkflowStatus =
+  | 'completed'
+  | 'partial'
+  | 'blocked'
+  | 'skipped'
+  | 'failed';
+export type ResearchEvidenceDecision =
+  | 'continue'
+  | 'refine'
+  | 'reject'
+  | 'data_blocked'
+  | 'inconclusive';
+export type ResearchExecutionWorkflowType =
+  | 'crypto_multi_asset'
+  | 'proxy_ohlcv'
+  | 'xau_vol_oi'
+  | 'evidence_summary';
+
+export interface CryptoResearchWorkflowConfig {
+  enabled?: boolean;
+  workflow_type?: ResearchExecutionWorkflowType;
+  primary_assets?: string[];
+  optional_assets?: string[];
+  timeframe?: string;
+  processed_feature_root?: string | null;
+  required_capabilities?: string[];
+  existing_research_run_id?: string | null;
+}
+
+export interface ProxyResearchWorkflowConfig {
+  enabled?: boolean;
+  workflow_type?: ResearchExecutionWorkflowType;
+  assets?: string[];
+  provider?: string;
+  timeframe?: string;
+  processed_feature_root?: string | null;
+  required_capabilities?: string[];
+  existing_research_run_id?: string | null;
+}
+
+export interface XauVolOiWorkflowConfig {
+  enabled?: boolean;
+  workflow_type?: ResearchExecutionWorkflowType;
+  options_oi_file_path?: string | null;
+  existing_xau_report_id?: string | null;
+  spot_reference?: Record<string, unknown> | null;
+  futures_reference?: Record<string, unknown> | null;
+  manual_basis?: number | null;
+  volatility_snapshot?: Record<string, unknown> | null;
+  include_2sd_range?: boolean;
+  required_capabilities?: string[];
+}
+
+export interface ResearchExecutionRunRequest {
+  name?: string | null;
+  description?: string | null;
+  crypto?: CryptoResearchWorkflowConfig | null;
+  proxy?: ProxyResearchWorkflowConfig | null;
+  xau?: XauVolOiWorkflowConfig | null;
+  evidence_options?: Record<string, unknown>;
+  reference_report_ids?: string[];
+  research_only_acknowledged: boolean;
+}
+
+export interface ResearchExecutionPreflightResult {
+  workflow_type: ResearchExecutionWorkflowType;
+  status: ResearchExecutionWorkflowStatus;
+  asset: string | null;
+  source_identity: string | null;
+  ready: boolean;
+  feature_path: string | null;
+  row_count: number | null;
+  date_start: string | null;
+  date_end: string | null;
+  missing_data_actions: string[];
+  unsupported_capabilities: string[];
+  capability_snapshot: Record<string, unknown>;
+  warnings: string[];
+  limitations: string[];
+}
+
+export interface ResearchExecutionWorkflowResult {
+  workflow_type: ResearchExecutionWorkflowType;
+  status: ResearchExecutionWorkflowStatus;
+  decision: ResearchEvidenceDecision;
+  decision_reason: string;
+  report_ids: string[];
+  asset_results: ResearchExecutionPreflightResult[];
+  warnings: string[];
+  limitations: string[];
+  missing_data_actions: string[];
+}
+
+export interface ResearchEvidenceSummary {
+  execution_run_id: string;
+  status: ResearchExecutionWorkflowStatus;
+  decision: ResearchEvidenceDecision;
+  workflow_results: ResearchExecutionWorkflowResult[];
+  crypto_summary: Record<string, unknown> | null;
+  proxy_summary: Record<string, unknown> | null;
+  xau_summary: Record<string, unknown> | null;
+  missing_data_checklist: string[];
+  limitations: string[];
+  research_only_warnings: string[];
+  created_at: string;
+}
+
+export interface ResearchExecutionRun {
+  execution_run_id: string;
+  name: string | null;
+  normalized_config: ResearchExecutionRunRequest;
+  preflight_results: ResearchExecutionPreflightResult[];
+  evidence_summary: ResearchEvidenceSummary | null;
+  artifact_paths: Record<string, string>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ResearchExecutionRunSummary {
+  execution_run_id: string;
+  name: string | null;
+  status: ResearchExecutionWorkflowStatus;
+  decision: ResearchEvidenceDecision;
+  completed_workflow_count: number;
+  blocked_workflow_count: number;
+  partial_workflow_count: number;
+  failed_workflow_count: number;
+  created_at: string;
+  artifact_root: string;
+}
+
+export interface ResearchExecutionRunListResponse {
+  runs: ResearchExecutionRunSummary[];
+}
+
+export interface ResearchExecutionMissingDataResponse {
+  execution_run_id: string;
+  missing_data_checklist: string[];
+}
+
+export interface ResearchExecutionWorkflowStatusCounts {
+  completed: number;
+  partial: number;
+  blocked: number;
+  skipped: number;
+  failed: number;
+}
+
+export interface ResearchExecutionDashboardData {
+  run: ResearchExecutionRun;
+  evidence: ResearchEvidenceSummary;
+  missingData: ResearchExecutionMissingDataResponse;
+  statusCounts: ResearchExecutionWorkflowStatusCounts;
+}
+
 export type XauReferenceType = 'spot' | 'proxy' | 'futures' | 'manual';
 export type XauFreshnessStatus = 'fresh' | 'stale' | 'unknown';
 export type XauBasisSource = 'computed' | 'manual' | 'unavailable';

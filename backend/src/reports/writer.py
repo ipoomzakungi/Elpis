@@ -517,6 +517,174 @@ def compose_research_report_markdown(
     return "\n".join(lines) + "\n"
 
 
+def compose_research_execution_evidence_json(
+    execution_run: BaseModel | dict[str, Any],
+    extra_notes: list[str] | None = None,
+) -> dict[str, Any]:
+    """Compose a research-only execution evidence report payload."""
+
+    notes = [RESEARCH_ONLY_WARNING]
+    if extra_notes:
+        notes.extend(extra_notes)
+
+    run_payload = _to_jsonable(execution_run)
+    evidence = run_payload.get("evidence_summary") or run_payload
+    workflow_results = evidence.get("workflow_results", [])
+    report_references = _research_execution_report_references(workflow_results)
+    return {
+        "execution_run": run_payload,
+        "evidence_summary": evidence,
+        "research_disclaimer": (
+            "Evidence labels are research decisions only and do not imply profitability, "
+            "predictive power, safety, or live readiness."
+        ),
+        "workflow_results": workflow_results,
+        "report_references": report_references,
+        "crypto_summary": evidence.get("crypto_summary"),
+        "proxy_summary": evidence.get("proxy_summary"),
+        "xau_summary": evidence.get("xau_summary"),
+        "missing_data_checklist": evidence.get("missing_data_checklist", []),
+        "limitations": evidence.get("limitations", []),
+        "research_only_warnings": evidence.get("research_only_warnings", []),
+        "notes": notes,
+    }
+
+
+def compose_research_execution_evidence_markdown(
+    execution_run: BaseModel | dict[str, Any],
+    extra_notes: list[str] | None = None,
+) -> str:
+    """Compose a research-only execution evidence Markdown report."""
+
+    report = compose_research_execution_evidence_json(execution_run, extra_notes=extra_notes)
+    run_payload = report["execution_run"]
+    evidence = report["evidence_summary"]
+    lines = [
+        "# Research Execution Evidence Report",
+        "",
+        f"Execution Run ID: {run_payload.get('execution_run_id', 'unknown')}",
+        f"Status: {evidence.get('status', run_payload.get('status', 'unknown'))}",
+        f"Decision: {evidence.get('decision', run_payload.get('decision', 'unknown'))}",
+        "",
+        "## Research-Only Disclaimer",
+        "",
+        report["research_disclaimer"],
+        "",
+        "## Workflow Results",
+        "",
+    ]
+    if not report["workflow_results"]:
+        lines.append("- No workflow evidence rows were generated.")
+    for workflow in report["workflow_results"]:
+        lines.append(
+            f"- {workflow.get('workflow_type')}: {workflow.get('status')} / "
+            f"{workflow.get('decision')} - {workflow.get('decision_reason')}"
+        )
+    lines.extend(["", "## Evidence Decision Table", ""])
+    if not report["workflow_results"]:
+        lines.append("- No bounded evidence decisions were generated.")
+    else:
+        lines.extend(
+            [
+                "| Workflow | Status | Decision | Reason |",
+                "| --- | --- | --- | --- |",
+            ]
+        )
+    for workflow in report["workflow_results"]:
+        lines.append(
+            "| "
+            f"{workflow.get('workflow_type', 'unknown')} | "
+            f"{workflow.get('status', 'unknown')} | "
+            f"{workflow.get('decision', 'unknown')} | "
+            f"{workflow.get('decision_reason', '')} |"
+        )
+    lines.extend(["", "## Linked Report IDs", ""])
+    if not report["report_references"]:
+        lines.append("- None")
+    for reference in report["report_references"]:
+        lines.append(f"- {reference['workflow_type']}: {reference['report_id']}")
+    lines.extend(["", "## Crypto Workflow", ""])
+    crypto_summary = report["crypto_summary"] or {}
+    if not crypto_summary:
+        lines.append("- No crypto workflow summary was generated.")
+    else:
+        lines.extend(
+            [
+                f"- Completed assets: {crypto_summary.get('completed_asset_count', 0)}",
+                f"- Blocked assets: {crypto_summary.get('blocked_asset_count', 0)}",
+                f"- Ready assets: {', '.join(crypto_summary.get('ready_assets', [])) or 'None'}",
+                (
+                    f"- Blocked asset list: "
+                    f"{', '.join(crypto_summary.get('blocked_assets', [])) or 'None'}"
+                ),
+            ]
+        )
+    lines.extend(["", "## Proxy OHLCV Workflow", ""])
+    proxy_summary = report["proxy_summary"] or {}
+    if not proxy_summary:
+        lines.append("- No proxy OHLCV workflow summary was generated.")
+    else:
+        lines.extend(
+            [
+                f"- Provider: {proxy_summary.get('provider', 'unknown')}",
+                f"- Completed assets: {proxy_summary.get('completed_asset_count', 0)}",
+                f"- Blocked assets: {proxy_summary.get('blocked_asset_count', 0)}",
+                f"- Ready assets: {', '.join(proxy_summary.get('ready_assets', [])) or 'None'}",
+                (
+                    f"- Blocked asset list: "
+                    f"{', '.join(proxy_summary.get('blocked_assets', [])) or 'None'}"
+                ),
+            ]
+        )
+        unsupported_by_asset = proxy_summary.get("unsupported_capabilities_by_asset", {})
+        for asset, capabilities in unsupported_by_asset.items():
+            lines.append(f"- {asset} unsupported capabilities: {', '.join(capabilities) or 'None'}")
+    lines.extend(["", "## XAU Vol-OI Workflow", ""])
+    xau_summary = report["xau_summary"] or {}
+    if not xau_summary:
+        lines.append("- No XAU Vol-OI workflow summary was generated.")
+    else:
+        lines.extend(
+            [
+                f"- Status: {xau_summary.get('status', 'unknown')}",
+                f"- Linked XAU report: {xau_summary.get('linked_xau_report_id') or 'None'}",
+                f"- Missing XAU report: {xau_summary.get('missing_report_id') or 'None'}",
+                f"- Basis snapshot: {xau_summary.get('basis_snapshot_status', 'unknown')}",
+                f"- Expected range: {xau_summary.get('expected_range_status', 'unknown')}",
+                f"- Wall rows: {xau_summary.get('wall_count', 0)}",
+                f"- Zone rows: {xau_summary.get('zone_count', 0)}",
+            ]
+        )
+        for limitation in xau_summary.get("limitations", []):
+            lines.append(f"- XAU limitation: {limitation}")
+    lines.extend(["", "## Missing Data Checklist", ""])
+    if not report["missing_data_checklist"]:
+        lines.append("- None")
+    lines.extend(f"- {item}" for item in report["missing_data_checklist"])
+    lines.extend(["", "## Limitations", ""])
+    if not report["limitations"]:
+        lines.append("- None")
+    lines.extend(f"- {limitation}" for limitation in report["limitations"])
+    lines.extend(["", "## Notes", ""])
+    lines.extend(f"- {note}" for note in report["notes"])
+    return "\n".join(lines) + "\n"
+
+
+def _research_execution_report_references(
+    workflow_results: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    references: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for workflow in workflow_results:
+        workflow_type = str(workflow.get("workflow_type", "unknown"))
+        for report_id in workflow.get("report_ids", []):
+            key = (workflow_type, str(report_id))
+            if key not in seen:
+                references.append({"workflow_type": key[0], "report_id": key[1]})
+                seen.add(key)
+    return references
+
+
 def compose_xau_report_json(
     xau_report: BaseModel | dict[str, Any],
     extra_notes: list[str] | None = None,
