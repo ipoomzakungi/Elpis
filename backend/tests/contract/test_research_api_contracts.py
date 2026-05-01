@@ -57,11 +57,29 @@ def test_research_run_list_and_detail_contracts(isolated_data_paths):
     assert {row["category"] for row in comparison_rows} >= {"strategy", "baseline"}
     assert all("mode" in row for row in comparison_rows)
 
+    validation_response = client.get(f"/api/v1/research/runs/{research_run_id}/validation")
+    assert validation_response.status_code == 200
+    validation_body = validation_response.json()
+    assert validation_body["research_run_id"] == research_run_id
+    assert {row["symbol"] for row in validation_body["stress"]} == {"BTCUSDT"}
+    assert {row["symbol"] for row in validation_body["walk_forward"]} == {"BTCUSDT"}
+    assert {row["symbol"] for row in validation_body["regime_coverage"]} == {"BTCUSDT"}
+    assert {row["symbol"] for row in validation_body["concentration"]} == {"BTCUSDT"}
+
 
 def test_research_comparison_endpoint_returns_structured_missing_report_error():
     client = TestClient(app)
 
     response = client.get("/api/v1/research/runs/missing-run/comparison")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "NOT_FOUND"
+
+
+def test_research_validation_endpoint_returns_structured_missing_report_error():
+    client = TestClient(app)
+
+    response = client.get("/api/v1/research/runs/missing-run/validation")
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "NOT_FOUND"

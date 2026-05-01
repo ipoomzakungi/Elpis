@@ -5,14 +5,18 @@ from datetime import datetime
 from pathlib import Path
 
 from src.backtest.engine import BacktestEngine
+from src.backtest.validation import ValidationReportService
 from src.models.backtest import (
     BacktestAssumptions,
     BacktestRunRequest,
     BacktestStatus,
     BaselineMode,
     ReportFormat,
+    SensitivityGrid,
     StrategyConfig,
     StrategyMode,
+    ValidationRunRequest,
+    WalkForwardConfig,
 )
 from src.models.research import (
     ResearchAssetClassification,
@@ -25,7 +29,11 @@ from src.models.research import (
     ResearchRunRequest,
 )
 from src.reports.writer import RESEARCH_ONLY_WARNING
-from src.research.aggregation import comparison_rows_from_backtest_metrics
+from src.research.aggregation import (
+    classify_asset_evidence,
+    comparison_rows_from_backtest_metrics,
+    validation_summaries_from_run,
+)
 from src.research.preflight import preflight_research_assets
 from src.research.report_store import ResearchReportStore
 
@@ -41,9 +49,13 @@ class ResearchOrchestrator:
         self,
         report_store: ResearchReportStore | None = None,
         backtest_engine: BacktestEngine | None = None,
+        validation_service: ValidationReportService | None = None,
     ):
         self.report_store = report_store or ResearchReportStore()
         self.backtest_engine = backtest_engine or BacktestEngine()
+        self.validation_service = validation_service or ValidationReportService(
+            report_store=self.report_store.report_store
+        )
 
     def run(self, request: ResearchRunRequest) -> ResearchRun:
         created_at = datetime.utcnow()
@@ -52,15 +64,29 @@ class ResearchOrchestrator:
         assets = []
         for asset_config, preflight in zip(asset_configs, preflight_results, strict=True):
             if preflight.status == ResearchPreflightStatus.READY:
-                backtest_response = self.backtest_engine.run(
-                    _backtest_request(asset_config, preflight, request)
-                )
+                backtest_request = _backtest_request(asset_config, preflight, request)
+                backtest_response = self.backtest_engine.run(backtest_request)
                 comparison_rows = comparison_rows_from_backtest_metrics(
                     symbol=asset_config.symbol,
                     provider=asset_config.provider,
                     metrics=backtest_response.metrics,
                 )
-                assets.append(_asset_result(asset_config, preflight, comparison_rows))
+                validation_run = self.validation_service.run(
+                    _validation_request(backtest_request, request)
+                )
+                validation_summaries = validation_summaries_from_run(
+                    asset_config.symbol,
+                    validation_run,
+                )
+                assets.append(
+                    _asset_result(
+                        asset_config,
+                        preflight,
+                        comparison_rows,
+                        validation_run_id=validation_run.validation_run_id,
+                        validation_summaries=validation_summaries,
+                    )
+                )
                 continue
             assets.append(_asset_result(asset_config, preflight))
 
@@ -93,7 +119,8 @@ class ResearchOrchestrator:
                 RESEARCH_ONLY_WARNING,
                 "Feature 005 US1 uses existing processed feature files only; no synthetic "
                 "fallback is used for missing real-data research inputs.",
-                "Strategy comparison and validation aggregation are added in later phases.",
+                "Strategy comparison and validation aggregation are independent per-asset "
+                "research evidence, not a portfolio result or live-readiness claim.",
             ],
         )
         return self.report_store.write_run_outputs(run)
@@ -103,16 +130,32 @@ def _asset_result(
     asset_config: ResearchAssetConfig,
     preflight: ResearchPreflightResult,
     strategy_comparison=None,
+    validation_run_id: str | None = None,
+    validation_summaries=None,
 ) -> ResearchAssetResult:
     if preflight.status == ResearchPreflightStatus.READY:
         comparison_rows = list(strategy_comparison or [])
-        return ResearchAssetResult(
+        stress_summary = list(validation_summaries.stress) if validation_summaries else []
+        walk_forward_summary = (
+            list(validation_summaries.walk_forward) if validation_summaries else []
+        )
+        regime_coverage_summary = (
+            list(validation_summaries.regime_coverage) if validation_summaries else []
+        )
+        concentration_summary = (
+            list(validation_summaries.concentration) if validation_summaries else []
+        )
+        warnings = [*preflight.warnings]
+        if validation_summaries:
+            warnings.extend(validation_summaries.notes)
+        result = ResearchAssetResult(
             symbol=asset_config.symbol,
             provider=asset_config.provider,
             asset_class=asset_config.asset_class,
             status=ResearchAssetRunStatus.COMPLETED,
             classification=ResearchAssetClassification.INCONCLUSIVE,
             preflight=preflight,
+            validation_run_id=validation_run_id,
             data_identity=_data_identity(
                 preflight,
                 source_kind="explicit_feature_path"
@@ -120,12 +163,28 @@ def _asset_result(
                 else "processed_features",
             ),
             strategy_comparison=comparison_rows,
-            warnings=preflight.warnings,
+            stress_summary=stress_summary,
+            walk_forward_summary=walk_forward_summary,
+            regime_coverage_summary=regime_coverage_summary,
+            concentration_summary=concentration_summary,
+            warnings=warnings,
             limitations=[
                 *preflight.capability_snapshot.limitation_notes,
                 "Strategy and baseline rows are independent comparisons, not a combined "
                 "portfolio result.",
+                "Validation summaries are robustness diagnostics only and do not imply "
+                "profitability, predictive power, safety, or live readiness.",
             ],
+        )
+        return result.model_copy(
+            update={
+                "classification": classify_asset_evidence(
+                    result,
+                    sensitivity_fragile=bool(
+                        validation_summaries and validation_summaries.sensitivity_fragile
+                    ),
+                )
+            }
         )
 
     classification = (
@@ -187,6 +246,29 @@ def _backtest_request(
         strategies=strategies,
         baselines=baselines,
         report_format=ReportFormat.JSON,
+    )
+
+
+def _validation_request(
+    backtest_request: BacktestRunRequest,
+    research_request: ResearchRunRequest,
+) -> ValidationRunRequest:
+    grid = research_request.validation_config.sensitivity_grid
+    walk_forward = research_request.validation_config.walk_forward
+    return ValidationRunRequest(
+        base_config=backtest_request,
+        stress_profiles=list(research_request.validation_config.stress_profiles),
+        sensitivity_grid=SensitivityGrid(
+            grid_entry_threshold=list(grid.grid_entry_threshold),
+            atr_stop_buffer=list(grid.atr_stop_buffer),
+            breakout_risk_reward_multiple=list(grid.breakout_risk_reward_multiple),
+            fee_slippage_profile=list(grid.fee_slippage_profile),
+        ),
+        walk_forward=WalkForwardConfig(
+            split_count=walk_forward.split_count,
+            minimum_rows_per_split=walk_forward.minimum_rows_per_split,
+        ),
+        include_real_data_check=True,
     )
 
 

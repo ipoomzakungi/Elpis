@@ -118,22 +118,22 @@
 
 ### Tests for User Story 3
 
-- [ ] T044 [P] [US3] Add aggregation classification tests in `backend/tests/unit/test_research_aggregation.py`
-- [ ] T045 [P] [US3] Add validation summary aggregation tests in `backend/tests/unit/test_research_validation_summary.py`
-- [ ] T046 [P] [US3] Add validation section endpoint contract tests in `backend/tests/contract/test_research_api_contracts.py`
-- [ ] T047 [P] [US3] Add crypto-like validation aggregation integration test in `backend/tests/integration/test_research_crypto_flow.py`
+- [X] T044 [P] [US3] Add aggregation classification tests in `backend/tests/unit/test_research_aggregation.py`
+- [X] T045 [P] [US3] Add validation summary aggregation tests in `backend/tests/unit/test_research_validation_summary.py`
+- [X] T046 [P] [US3] Add validation section endpoint contract tests in `backend/tests/contract/test_research_api_contracts.py`
+- [X] T047 [P] [US3] Add crypto-like validation aggregation integration test in `backend/tests/integration/test_research_crypto_flow.py`
 
 ### Implementation for User Story 3
 
-- [ ] T048 [US3] Aggregate stress survival rows by asset in `backend/src/research/aggregation.py`
-- [ ] T049 [US3] Aggregate parameter sensitivity fragility by asset in `backend/src/research/aggregation.py`
-- [ ] T050 [US3] Aggregate walk-forward stability by asset in `backend/src/research/aggregation.py`
-- [ ] T051 [US3] Aggregate regime coverage rows by asset in `backend/src/research/aggregation.py`
-- [ ] T052 [US3] Aggregate trade concentration warnings by asset in `backend/src/research/aggregation.py`
-- [ ] T053 [US3] Implement robust, fragile, missing-data, inconclusive, and not-worth-continuing classification rules in `backend/src/research/aggregation.py`
-- [ ] T054 [US3] Persist stress, walk-forward, regime, and concentration summary artifacts in `backend/src/research/report_store.py`
-- [ ] T055 [US3] Add validation aggregation sections to grouped JSON and Markdown reports in `backend/src/reports/writer.py`
-- [ ] T056 [US3] Implement validation aggregation endpoint in `backend/src/api/routes/research.py`
+- [X] T048 [US3] Aggregate stress survival rows by asset in `backend/src/research/aggregation.py`
+- [X] T049 [US3] Aggregate parameter sensitivity fragility by asset in `backend/src/research/aggregation.py`
+- [X] T050 [US3] Aggregate walk-forward stability by asset in `backend/src/research/aggregation.py`
+- [X] T051 [US3] Aggregate regime coverage rows by asset in `backend/src/research/aggregation.py`
+- [X] T052 [US3] Aggregate trade concentration warnings by asset in `backend/src/research/aggregation.py`
+- [X] T053 [US3] Implement robust, fragile, missing-data, inconclusive, and not-worth-continuing classification rules in `backend/src/research/aggregation.py`
+- [X] T054 [US3] Persist stress, walk-forward, regime, and concentration summary artifacts in `backend/src/research/report_store.py`
+- [X] T055 [US3] Add validation aggregation sections to grouped JSON and Markdown reports in `backend/src/reports/writer.py`
+- [X] T056 [US3] Implement validation aggregation endpoint in `backend/src/api/routes/research.py`
 
 **Checkpoint**: US3 provides cross-asset robustness evidence and classifications without profitability or live-readiness claims.
 

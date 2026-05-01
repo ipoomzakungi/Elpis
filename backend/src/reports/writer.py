@@ -223,15 +223,15 @@ def compose_validation_report_json(
         },
         "concentration_report": run_payload.get("concentration_report", {}),
         "concentration_summary": {
-            "top_1_profit_contribution_pct": run_payload.get(
-                "concentration_report", {}
-            ).get("top_1_profit_contribution_pct"),
-            "top_5_profit_contribution_pct": run_payload.get(
-                "concentration_report", {}
-            ).get("top_5_profit_contribution_pct"),
-            "top_10_profit_contribution_pct": run_payload.get(
-                "concentration_report", {}
-            ).get("top_10_profit_contribution_pct"),
+            "top_1_profit_contribution_pct": run_payload.get("concentration_report", {}).get(
+                "top_1_profit_contribution_pct"
+            ),
+            "top_5_profit_contribution_pct": run_payload.get("concentration_report", {}).get(
+                "top_5_profit_contribution_pct"
+            ),
+            "top_10_profit_contribution_pct": run_payload.get("concentration_report", {}).get(
+                "top_10_profit_contribution_pct"
+            ),
             "max_consecutive_losses": run_payload.get("concentration_report", {}).get(
                 "max_consecutive_losses", 0
             ),
@@ -342,12 +342,9 @@ def compose_validation_report_markdown(
     concentration = report["concentration_report"]
     lines.extend(
         [
-            f"Top 1 profit contribution %: "
-            f"{concentration.get('top_1_profit_contribution_pct')}",
-            f"Top 5 profit contribution %: "
-            f"{concentration.get('top_5_profit_contribution_pct')}",
-            f"Top 10 profit contribution %: "
-            f"{concentration.get('top_10_profit_contribution_pct')}",
+            f"Top 1 profit contribution %: {concentration.get('top_1_profit_contribution_pct')}",
+            f"Top 5 profit contribution %: {concentration.get('top_5_profit_contribution_pct')}",
+            f"Top 10 profit contribution %: {concentration.get('top_10_profit_contribution_pct')}",
             f"Max consecutive losses: {concentration.get('max_consecutive_losses')}",
             f"Drawdown recovery status: {concentration.get('drawdown_recovery_status')}",
         ]
@@ -379,17 +376,42 @@ def compose_research_report_json(
     run_payload = _to_jsonable(research_run)
     assets = run_payload.get("assets", [])
     strategy_comparison = []
+    stress = []
+    walk_forward = []
+    regime_coverage = []
+    concentration = []
+    classification_summary = {}
     for asset in assets:
         if isinstance(asset, dict):
             strategy_comparison.extend(asset.get("strategy_comparison", []))
+            stress.extend(asset.get("stress_summary", []))
+            walk_forward.extend(asset.get("walk_forward_summary", []))
+            regime_coverage.extend(asset.get("regime_coverage_summary", []))
+            concentration.extend(asset.get("concentration_summary", []))
+            classification = asset.get("classification")
+            if classification:
+                classification_summary[classification] = (
+                    classification_summary.get(classification, 0) + 1
+                )
     return {
         "research_run": run_payload,
         "research_disclaimer": RESEARCH_ONLY_WARNING,
         "assets": assets,
         "strategy_comparison": strategy_comparison,
+        "validation_summary": {
+            "stress": stress,
+            "walk_forward": walk_forward,
+            "regime_coverage": regime_coverage,
+            "concentration": concentration,
+            "classification_summary": classification_summary,
+        },
         "comparison_semantics": (
             "Strategy and baseline rows are independent per-asset comparisons, "
             "not a combined portfolio result."
+        ),
+        "validation_semantics": (
+            "Validation sections are robustness diagnostics only and do not imply "
+            "profitability, predictive power, safety, or live readiness."
         ),
         "warnings": run_payload.get("warnings", []),
         "limitations": run_payload.get("limitations", []),
@@ -440,6 +462,51 @@ def compose_research_report_markdown(
             f"total return % {row.get('total_return_pct')}, "
             f"max drawdown % {row.get('max_drawdown_pct')}, "
             f"trades {row.get('number_of_trades')}"
+        )
+    validation = report["validation_summary"]
+    lines.extend(
+        [
+            "",
+            "## Validation Aggregation",
+            "",
+            report["validation_semantics"],
+            "",
+            "### Stress Survival",
+            "",
+        ]
+    )
+    if not validation["stress"]:
+        lines.append("- No stress summary rows were generated.")
+    for row in validation["stress"]:
+        lines.append(
+            f"- {row.get('symbol')} / {row.get('mode')} / {row.get('profile')}: "
+            f"outcome {row.get('outcome')}, survived {row.get('survived')}"
+        )
+    lines.extend(["", "### Walk-Forward Stability", ""])
+    if not validation["walk_forward"]:
+        lines.append("- No walk-forward summary rows were generated.")
+    for row in validation["walk_forward"]:
+        lines.append(
+            f"- {row.get('symbol')} / {row.get('split_id')}: "
+            f"status {row.get('status')}, rows {row.get('row_count')}, "
+            f"trades {row.get('trade_count')}, stable {row.get('stable')}"
+        )
+    lines.extend(["", "### Regime Coverage", ""])
+    if not validation["regime_coverage"]:
+        lines.append("- No regime coverage rows were generated.")
+    for row in validation["regime_coverage"]:
+        lines.append(
+            f"- {row.get('symbol')} / {row.get('regime')}: bars {row.get('bar_count')}, "
+            f"trades {row.get('trade_count')}, return % {row.get('return_pct')}"
+        )
+    lines.extend(["", "### Trade Concentration", ""])
+    if not validation["concentration"]:
+        lines.append("- No concentration rows were generated.")
+    for row in validation["concentration"]:
+        lines.append(
+            f"- {row.get('symbol')}: warning {row.get('warning_level')}, "
+            f"top 1 contribution % {row.get('top_1_profit_contribution_pct')}, "
+            f"max consecutive losses {row.get('max_consecutive_losses')}"
         )
     lines.extend(["", "## Warnings", ""])
     lines.extend(f"- {warning}" for warning in report["warnings"])

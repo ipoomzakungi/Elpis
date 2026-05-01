@@ -8,6 +8,9 @@ import polars as pl
 from src.backtest.report_store import ReportStore
 from src.models.backtest import ReportArtifactType, ReportFormat
 from src.models.research import (
+    ConcentrationAssetRow,
+    ConcentrationWarningLevel,
+    RegimeCoverageAssetRow,
     ResearchAssetSummaryResponse,
     ResearchComparisonResponse,
     ResearchRun,
@@ -15,6 +18,8 @@ from src.models.research import (
     ResearchRunSummary,
     ResearchValidationAggregationResponse,
     StrategyComparisonRow,
+    StressSurvivalRow,
+    WalkForwardStabilityRow,
 )
 from src.reports.writer import compose_research_report_json, compose_research_report_markdown
 from src.research.aggregation import (
@@ -85,14 +90,40 @@ class ResearchReportStore:
         self,
         research_run_id: str,
     ) -> ResearchValidationAggregationResponse:
-        run = self.read_run(research_run_id)
-        return ResearchValidationAggregationResponse(
-            research_run_id=research_run_id,
-            stress=collect_stress_survival(run.assets),
-            walk_forward=collect_walk_forward_stability(run.assets),
-            regime_coverage=collect_regime_coverage(run.assets),
-            concentration=collect_concentration(run.assets),
-        )
+        try:
+            return ResearchValidationAggregationResponse(
+                research_run_id=research_run_id,
+                stress=_stress_rows_from_frame(
+                    self.report_store.read_parquet(research_run_id, "stress_summary.parquet")
+                ),
+                walk_forward=_walk_forward_rows_from_frame(
+                    self.report_store.read_parquet(
+                        research_run_id,
+                        "walk_forward_summary.parquet",
+                    )
+                ),
+                regime_coverage=_regime_rows_from_frame(
+                    self.report_store.read_parquet(
+                        research_run_id,
+                        "regime_coverage_summary.parquet",
+                    )
+                ),
+                concentration=_concentration_rows_from_frame(
+                    self.report_store.read_parquet(
+                        research_run_id,
+                        "concentration_summary.parquet",
+                    )
+                ),
+            )
+        except FileNotFoundError:
+            run = self.read_run(research_run_id)
+            return ResearchValidationAggregationResponse(
+                research_run_id=research_run_id,
+                stress=collect_stress_survival(run.assets),
+                walk_forward=collect_walk_forward_stability(run.assets),
+                regime_coverage=collect_regime_coverage(run.assets),
+                concentration=collect_concentration(run.assets),
+            )
 
     def write_run_outputs(self, research_run: ResearchRun) -> ResearchRun:
         artifacts = [
@@ -113,6 +144,30 @@ class ResearchReportStore:
                 "strategy_comparison.parquet",
                 _strategy_comparison_frame(research_run),
                 ReportArtifactType.RESEARCH_COMPARISON,
+            ),
+            self.report_store.write_parquet(
+                research_run.research_run_id,
+                "stress_summary.parquet",
+                _stress_summary_frame(research_run),
+                ReportArtifactType.RESEARCH_STRESS_SUMMARY,
+            ),
+            self.report_store.write_parquet(
+                research_run.research_run_id,
+                "walk_forward_summary.parquet",
+                _walk_forward_summary_frame(research_run),
+                ReportArtifactType.RESEARCH_WALK_FORWARD_SUMMARY,
+            ),
+            self.report_store.write_parquet(
+                research_run.research_run_id,
+                "regime_coverage_summary.parquet",
+                _regime_coverage_summary_frame(research_run),
+                ReportArtifactType.RESEARCH_REGIME_COVERAGE_SUMMARY,
+            ),
+            self.report_store.write_parquet(
+                research_run.research_run_id,
+                "concentration_summary.parquet",
+                _concentration_summary_frame(research_run),
+                ReportArtifactType.RESEARCH_CONCENTRATION_SUMMARY,
             ),
         ]
         if research_run.request.report_format in {ReportFormat.JSON, ReportFormat.BOTH}:
@@ -242,3 +297,189 @@ def _comparison_rows_from_frame(frame: pl.DataFrame) -> list[StrategyComparisonR
             )
         )
     return rows
+
+
+def _stress_summary_frame(research_run: ResearchRun) -> pl.DataFrame:
+    records = [
+        {
+            "research_run_id": research_run.research_run_id,
+            "symbol": row.symbol,
+            "mode": row.mode,
+            "profile": row.profile,
+            "outcome": row.outcome,
+            "survived": row.survived,
+            "notes": json.dumps(row.notes, sort_keys=True),
+        }
+        for row in collect_stress_survival(research_run.assets)
+    ]
+    return pl.DataFrame(
+        records,
+        schema={
+            "research_run_id": pl.Utf8,
+            "symbol": pl.Utf8,
+            "mode": pl.Utf8,
+            "profile": pl.Utf8,
+            "outcome": pl.Utf8,
+            "survived": pl.Boolean,
+            "notes": pl.Utf8,
+        },
+        strict=False,
+    )
+
+
+def _walk_forward_summary_frame(research_run: ResearchRun) -> pl.DataFrame:
+    records = [
+        {
+            "research_run_id": research_run.research_run_id,
+            "symbol": row.symbol,
+            "split_id": row.split_id,
+            "status": row.status,
+            "row_count": row.row_count,
+            "trade_count": row.trade_count,
+            "stable": row.stable,
+            "notes": json.dumps(row.notes, sort_keys=True),
+        }
+        for row in collect_walk_forward_stability(research_run.assets)
+    ]
+    return pl.DataFrame(
+        records,
+        schema={
+            "research_run_id": pl.Utf8,
+            "symbol": pl.Utf8,
+            "split_id": pl.Utf8,
+            "status": pl.Utf8,
+            "row_count": pl.Int64,
+            "trade_count": pl.Int64,
+            "stable": pl.Boolean,
+            "notes": pl.Utf8,
+        },
+        strict=False,
+    )
+
+
+def _regime_coverage_summary_frame(research_run: ResearchRun) -> pl.DataFrame:
+    records = [
+        {
+            "research_run_id": research_run.research_run_id,
+            "symbol": row.symbol,
+            "regime": row.regime,
+            "bar_count": row.bar_count,
+            "trade_count": row.trade_count,
+            "return_pct": row.return_pct,
+            "notes": json.dumps(row.notes, sort_keys=True),
+        }
+        for row in collect_regime_coverage(research_run.assets)
+    ]
+    return pl.DataFrame(
+        records,
+        schema={
+            "research_run_id": pl.Utf8,
+            "symbol": pl.Utf8,
+            "regime": pl.Utf8,
+            "bar_count": pl.Int64,
+            "trade_count": pl.Int64,
+            "return_pct": pl.Float64,
+            "notes": pl.Utf8,
+        },
+        strict=False,
+    )
+
+
+def _concentration_summary_frame(research_run: ResearchRun) -> pl.DataFrame:
+    records = [
+        {
+            "research_run_id": research_run.research_run_id,
+            "symbol": row.symbol,
+            "top_1_profit_contribution_pct": row.top_1_profit_contribution_pct,
+            "top_5_profit_contribution_pct": row.top_5_profit_contribution_pct,
+            "top_10_profit_contribution_pct": row.top_10_profit_contribution_pct,
+            "max_consecutive_losses": row.max_consecutive_losses,
+            "drawdown_recovery_status": row.drawdown_recovery_status,
+            "warning_level": row.warning_level.value,
+            "notes": json.dumps(row.notes, sort_keys=True),
+        }
+        for row in collect_concentration(research_run.assets)
+    ]
+    return pl.DataFrame(
+        records,
+        schema={
+            "research_run_id": pl.Utf8,
+            "symbol": pl.Utf8,
+            "top_1_profit_contribution_pct": pl.Float64,
+            "top_5_profit_contribution_pct": pl.Float64,
+            "top_10_profit_contribution_pct": pl.Float64,
+            "max_consecutive_losses": pl.Int64,
+            "drawdown_recovery_status": pl.Utf8,
+            "warning_level": pl.Utf8,
+            "notes": pl.Utf8,
+        },
+        strict=False,
+    )
+
+
+def _notes_from_json(value) -> list[str]:
+    notes = value or "[]"
+    try:
+        parsed = json.loads(notes)
+    except json.JSONDecodeError:
+        return [str(notes)]
+    return parsed if isinstance(parsed, list) else [str(parsed)]
+
+
+def _stress_rows_from_frame(frame: pl.DataFrame) -> list[StressSurvivalRow]:
+    return [
+        StressSurvivalRow(
+            symbol=row["symbol"],
+            mode=row["mode"],
+            profile=row["profile"],
+            outcome=row["outcome"],
+            survived=row.get("survived"),
+            notes=_notes_from_json(row.get("notes")),
+        )
+        for row in frame.to_dicts()
+    ]
+
+
+def _walk_forward_rows_from_frame(frame: pl.DataFrame) -> list[WalkForwardStabilityRow]:
+    return [
+        WalkForwardStabilityRow(
+            symbol=row["symbol"],
+            split_id=row["split_id"],
+            status=row["status"],
+            row_count=row["row_count"],
+            trade_count=row.get("trade_count") or 0,
+            stable=row.get("stable"),
+            notes=_notes_from_json(row.get("notes")),
+        )
+        for row in frame.to_dicts()
+    ]
+
+
+def _regime_rows_from_frame(frame: pl.DataFrame) -> list[RegimeCoverageAssetRow]:
+    return [
+        RegimeCoverageAssetRow(
+            symbol=row["symbol"],
+            regime=row["regime"],
+            bar_count=row["bar_count"],
+            trade_count=row.get("trade_count") or 0,
+            return_pct=row.get("return_pct"),
+            notes=_notes_from_json(row.get("notes")),
+        )
+        for row in frame.to_dicts()
+    ]
+
+
+def _concentration_rows_from_frame(frame: pl.DataFrame) -> list[ConcentrationAssetRow]:
+    return [
+        ConcentrationAssetRow(
+            symbol=row["symbol"],
+            top_1_profit_contribution_pct=row.get("top_1_profit_contribution_pct"),
+            top_5_profit_contribution_pct=row.get("top_5_profit_contribution_pct"),
+            top_10_profit_contribution_pct=row.get("top_10_profit_contribution_pct"),
+            max_consecutive_losses=row.get("max_consecutive_losses") or 0,
+            drawdown_recovery_status=row["drawdown_recovery_status"],
+            warning_level=ConcentrationWarningLevel(row["warning_level"]),
+            notes=_notes_from_json(row.get("notes")),
+        )
+        for row in frame.to_dicts()
+    ]
