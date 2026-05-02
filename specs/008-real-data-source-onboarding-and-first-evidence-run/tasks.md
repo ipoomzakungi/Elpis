@@ -113,18 +113,18 @@
 
 ### Tests for User Story 3
 
-- [ ] T043 [US3] Add first evidence run API contract tests in backend/tests/contract/test_data_sources_api_contracts.py
-- [ ] T044 [P] [US3] Add first evidence run integration flow with ready and blocked workflows in backend/tests/integration/test_first_evidence_run_flow.py
-- [ ] T045 [P] [US3] Add first evidence run delegation tests for feature 007 request mapping in backend/tests/unit/test_data_source_first_run.py
+- [X] T043 [US3] Add first evidence run API contract tests in backend/tests/contract/test_data_sources_api_contracts.py
+- [X] T044 [P] [US3] Add first evidence run integration flow with ready and blocked workflows in backend/tests/integration/test_first_evidence_run_flow.py
+- [X] T045 [P] [US3] Add first evidence run delegation tests for feature 007 request mapping in backend/tests/unit/test_data_source_first_run.py
 
 ### Implementation for User Story 3
 
-- [ ] T046 [US3] Implement FirstEvidenceRunRequest normalization and research-only acknowledgement validation in backend/src/models/data_sources.py
-- [ ] T047 [US3] Implement preflight-to-ResearchExecutionRunRequest translation in backend/src/data_sources/first_run.py
-- [ ] T048 [US3] Implement first evidence run orchestration by delegating to ResearchExecutionOrchestrator in backend/src/data_sources/first_run.py
-- [ ] T049 [US3] Implement first evidence run wrapper persistence or reference lookup under ignored report paths in backend/src/data_sources/report_store.py
-- [ ] T050 [US3] Implement POST /api/v1/evidence/first-run in backend/src/api/routes/data_sources.py
-- [ ] T051 [US3] Implement GET /api/v1/evidence/first-run/{run_id} in backend/src/api/routes/data_sources.py
+- [X] T046 [US3] Implement FirstEvidenceRunRequest normalization and research-only acknowledgement validation in backend/src/models/data_sources.py
+- [X] T047 [US3] Implement preflight-to-ResearchExecutionRunRequest translation in backend/src/data_sources/first_run.py
+- [X] T048 [US3] Implement first evidence run orchestration by delegating to ResearchExecutionOrchestrator in backend/src/data_sources/first_run.py
+- [X] T049 [US3] Implement first evidence run wrapper persistence or reference lookup under ignored report paths in backend/src/data_sources/report_store.py
+- [X] T050 [US3] Implement POST /api/v1/evidence/first-run in backend/src/api/routes/data_sources.py
+- [X] T051 [US3] Implement GET /api/v1/evidence/first-run/{run_id} in backend/src/api/routes/data_sources.py
 
 **Checkpoint**: User Story 3 should pass first-run contract and integration tests independently.
 

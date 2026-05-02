@@ -1,6 +1,7 @@
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 
 from pydantic import Field, field_validator, model_validator
 
@@ -248,6 +249,29 @@ class FirstEvidenceRunRequest(StrictModel):
     run_when_partial: bool = True
     research_only_acknowledged: bool
 
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    @field_validator("use_existing_research_report_ids")
+    @classmethod
+    def normalize_research_report_ids(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for value in values:
+            report_id = _normalize_safe_report_id(value, "use_existing_research_report_ids")
+            if report_id is not None and report_id not in normalized:
+                normalized.append(report_id)
+        return normalized
+
+    @field_validator("use_existing_xau_report_id")
+    @classmethod
+    def normalize_existing_xau_report_id(cls, value: str | None) -> str | None:
+        return _normalize_safe_report_id(value, "use_existing_xau_report_id")
+
     @model_validator(mode="after")
     def validate_first_run_request(self) -> "FirstEvidenceRunRequest":
         if not self.research_only_acknowledged:
@@ -260,9 +284,11 @@ class FirstEvidenceRunResult(StrictModel):
     status: FirstEvidenceRunStatus
     execution_run_id: str | None = None
     evidence_report_path: str | None = None
+    decision: str | None = None
     linked_research_report_ids: list[str] = Field(default_factory=list)
     linked_xau_report_ids: list[str] = Field(default_factory=list)
     preflight_result: DataSourcePreflightResult
+    evidence_summary: dict[str, Any] | None = None
     missing_data_actions: list[DataSourceMissingDataAction] = Field(default_factory=list)
     research_only_warnings: list[str] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
@@ -281,3 +307,14 @@ def _validate_local_path(path: Path | None, field_name: str) -> None:
         resolved = path.resolve()
         if ".." in resolved.parts:
             raise ValueError(f"{field_name} must be a safe local path")
+
+
+def _normalize_safe_report_id(value: str | None, field_name: str) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    if any(part in {"", ".", ".."} for part in Path(normalized).parts):
+        raise ValueError(f"{field_name} must contain safe report id values")
+    return normalized
