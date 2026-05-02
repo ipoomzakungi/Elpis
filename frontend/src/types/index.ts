@@ -1191,3 +1191,72 @@ export interface DataSourceCapabilityListResponse {
 export interface DataSourceMissingDataResponse {
   actions: DataSourceMissingDataAction[];
 }
+
+export interface DataSourcePreflightRequest {
+  crypto_assets?: string[];
+  optional_crypto_assets?: string[];
+  crypto_timeframe?: string;
+  proxy_assets?: string[];
+  proxy_timeframe?: string;
+  processed_feature_root?: string | null;
+  xau_options_oi_file_path?: string | null;
+  require_optional_vendors?: DataSourceProviderType[];
+  requested_capabilities?: string[];
+  research_only_acknowledged: boolean;
+}
+
+export interface DataSourcePreflightAssetResult {
+  asset: string | null;
+  provider_type: DataSourceProviderType;
+  status: DataSourceReadinessStatus;
+  feature_path: string | null;
+  row_count: number | null;
+  missing_data_actions: DataSourceMissingDataAction[];
+  unsupported_capabilities: string[];
+  warnings: string[];
+  limitations: string[];
+}
+
+export interface DataSourcePreflightResult {
+  status: FirstEvidenceRunStatus;
+  readiness: DataSourceReadiness;
+  crypto_results: DataSourcePreflightAssetResult[];
+  proxy_results: DataSourcePreflightAssetResult[];
+  xau_result: DataSourcePreflightAssetResult | null;
+  optional_vendor_results: DataSourceProviderStatus[];
+  unsupported_capabilities: string[];
+  missing_data_actions: DataSourceMissingDataAction[];
+  warnings: string[];
+  limitations: string[];
+}
+
+export interface FirstEvidenceRunRequest {
+  name?: string | null;
+  preflight: DataSourcePreflightRequest;
+  use_existing_research_report_ids?: string[];
+  use_existing_xau_report_id?: string | null;
+  run_when_partial?: boolean;
+  research_only_acknowledged: boolean;
+}
+
+export interface FirstEvidenceRunResult {
+  first_run_id: string;
+  status: FirstEvidenceRunStatus;
+  execution_run_id: string | null;
+  evidence_report_path: string | null;
+  decision: ResearchEvidenceDecision | null;
+  linked_research_report_ids: string[];
+  linked_xau_report_ids: string[];
+  preflight_result: DataSourcePreflightResult;
+  evidence_summary: ResearchEvidenceSummary | null;
+  missing_data_actions: DataSourceMissingDataAction[];
+  research_only_warnings: string[];
+  limitations: string[];
+  created_at: string;
+}
+
+export interface DataSourceDashboardData {
+  readiness: DataSourceReadiness;
+  capabilities: DataSourceCapabilityListResponse;
+  missingData: DataSourceMissingDataResponse;
+}

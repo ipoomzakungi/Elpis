@@ -20,6 +20,9 @@ export default function Header() {
           <Link href="/evidence" className="text-gray-200 hover:text-white">
             Evidence
           </Link>
+          <Link href="/data-sources" className="text-gray-200 hover:text-white">
+            Data Sources
+          </Link>
           <span className="text-sm text-gray-400">v0 Research Dashboard</span>
         </nav>
       </div>

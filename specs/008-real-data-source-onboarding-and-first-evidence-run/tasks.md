@@ -138,18 +138,18 @@
 
 ### Tests for User Story 4
 
-- [ ] T052 [US4] Add frontend type coverage for data-source responses through production build expectations in frontend/src/types/index.ts
+- [X] T052 [US4] Add frontend type coverage for data-source responses through production build expectations in frontend/src/types/index.ts
 
 ### Implementation for User Story 4
 
-- [ ] T053 [US4] Implement full data-source API client methods in frontend/src/services/api.ts
-- [ ] T054 [US4] Render source readiness cards in frontend/src/app/data-sources/page.tsx
-- [ ] T055 [US4] Render provider capability matrix and unsupported capability labels in frontend/src/app/data-sources/page.tsx
-- [ ] T056 [US4] Render optional provider key status as configured or missing only in frontend/src/app/data-sources/page.tsx
-- [ ] T057 [US4] Render missing-data checklist and XAU local file requirements in frontend/src/app/data-sources/page.tsx
-- [ ] T058 [US4] Render first evidence run status and linked report IDs in frontend/src/app/data-sources/page.tsx
-- [ ] T059 [US4] Render research-only disclaimer and no-execution limitations in frontend/src/app/data-sources/page.tsx
-- [ ] T060 [US4] Add Data Sources navigation link in frontend/src/components/ui/Header.tsx
+- [X] T053 [US4] Implement full data-source API client methods in frontend/src/services/api.ts
+- [X] T054 [US4] Render source readiness cards in frontend/src/app/data-sources/page.tsx
+- [X] T055 [US4] Render provider capability matrix and unsupported capability labels in frontend/src/app/data-sources/page.tsx
+- [X] T056 [US4] Render optional provider key status as configured or missing only in frontend/src/app/data-sources/page.tsx
+- [X] T057 [US4] Render missing-data checklist and XAU local file requirements in frontend/src/app/data-sources/page.tsx
+- [X] T058 [US4] Render first evidence run status and linked report IDs in frontend/src/app/data-sources/page.tsx
+- [X] T059 [US4] Render research-only disclaimer and no-execution limitations in frontend/src/app/data-sources/page.tsx
+- [X] T060 [US4] Add Data Sources navigation link in frontend/src/components/ui/Header.tsx
 
 **Checkpoint**: User Story 4 should compile with `npm run build` and be smoke-testable in the browser.
 
