@@ -41,8 +41,8 @@
 - [X] T013 [P] Create static provider capability matrix skeleton in backend/src/data_sources/capabilities.py
 - [X] T014 [P] Create readiness service skeleton with env-presence helper in backend/src/data_sources/readiness.py
 - [X] T015 [P] Create missing-data instruction service skeleton in backend/src/data_sources/missing_data.py
-- [ ] T016 [P] Create preflight service skeleton in backend/src/data_sources/preflight.py
-- [ ] T017 [P] Create first evidence run orchestration skeleton in backend/src/data_sources/first_run.py
+- [X] T016 [P] Create preflight service skeleton in backend/src/data_sources/preflight.py
+- [X] T017 [P] Create first evidence run orchestration skeleton in backend/src/data_sources/first_run.py
 
 **Checkpoint**: Foundation ready. All user stories can now be implemented in priority order.
 
@@ -59,7 +59,7 @@
 - [X] T018 [P] [US1] Add provider readiness and optional key detection tests in backend/tests/unit/test_data_source_readiness.py
 - [X] T019 [US1] Add no-secret-leakage tests for readiness payloads in backend/tests/unit/test_data_source_readiness.py
 - [X] T020 [P] [US1] Add provider capability matrix tests in backend/tests/unit/test_data_source_capabilities.py
-- [ ] T021 [US1] Add readiness and capabilities API contract tests in backend/tests/contract/test_data_sources_api_contracts.py
+- [X] T021 [US1] Add readiness and capabilities API contract tests in backend/tests/contract/test_data_sources_api_contracts.py
 
 ### Implementation for User Story 1
 
