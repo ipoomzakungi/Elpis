@@ -2,10 +2,13 @@ from fastapi import APIRouter
 
 from src.data_sources.capabilities import capability_matrix
 from src.data_sources.missing_data import default_missing_data_actions
+from src.data_sources.preflight import run_data_source_preflight
 from src.data_sources.readiness import data_source_readiness
 from src.models.data_sources import (
     DataSourceCapabilityListResponse,
     DataSourceMissingDataResponse,
+    DataSourcePreflightRequest,
+    DataSourcePreflightResult,
     DataSourceReadiness,
 )
 
@@ -31,3 +34,12 @@ async def get_data_source_missing_data() -> DataSourceMissingDataResponse:
     """Return default missing-data instructions for the first evidence workflow."""
 
     return DataSourceMissingDataResponse(actions=default_missing_data_actions())
+
+
+@router.post("/data-sources/preflight", response_model=DataSourcePreflightResult)
+async def run_data_source_preflight_endpoint(
+    request: DataSourcePreflightRequest,
+) -> DataSourcePreflightResult:
+    """Check local data-source readiness without fetching external data."""
+
+    return run_data_source_preflight(request)

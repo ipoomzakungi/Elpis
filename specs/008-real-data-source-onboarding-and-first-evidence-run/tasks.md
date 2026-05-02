@@ -83,11 +83,11 @@
 ### Tests for User Story 2
 
 - [X] T028 [P] [US2] Add missing-data instruction tests for crypto, proxy, XAU, and optional vendors in backend/tests/unit/test_data_source_missing_data.py
-- [ ] T029 [P] [US2] Add local-file schema capability detection tests in backend/tests/unit/test_data_source_preflight.py
-- [ ] T030 [US2] Add preflight API contract tests in backend/tests/contract/test_data_sources_api_contracts.py
-- [ ] T031 [P] [US2] Add public/no-key MVP preflight integration test in backend/tests/integration/test_data_source_public_mvp_flow.py
-- [ ] T032 [P] [US2] Add optional paid provider keys missing but non-blocking integration test in backend/tests/integration/test_data_source_optional_keys.py
-- [ ] T033 [P] [US2] Add XAU local file readiness integration test with synthetic CSV/Parquet fixtures in backend/tests/integration/test_data_source_xau_local_file.py
+- [X] T029 [P] [US2] Add local-file schema capability detection tests in backend/tests/unit/test_data_source_preflight.py
+- [X] T030 [US2] Add preflight API contract tests in backend/tests/contract/test_data_sources_api_contracts.py
+- [X] T031 [P] [US2] Add public/no-key MVP preflight integration test in backend/tests/integration/test_data_source_public_mvp_flow.py
+- [X] T032 [P] [US2] Add optional paid provider keys missing but non-blocking integration test in backend/tests/integration/test_data_source_optional_keys.py
+- [X] T033 [P] [US2] Add XAU local file readiness integration test with synthetic CSV/Parquet fixtures in backend/tests/integration/test_data_source_xau_local_file.py
 
 ### Implementation for User Story 2
 
@@ -95,11 +95,11 @@
 - [X] T035 [US2] Implement proxy Yahoo OHLCV missing-data instructions and OHLCV-only limitations in backend/src/data_sources/missing_data.py
 - [X] T036 [US2] Implement XAU local options OI schema instructions and optional columns in backend/src/data_sources/missing_data.py
 - [X] T037 [US2] Implement optional paid vendor configuration instructions without requiring keys in backend/src/data_sources/missing_data.py
-- [ ] T038 [US2] Implement crypto processed feature readiness checks and path safety in backend/src/data_sources/preflight.py
-- [ ] T039 [US2] Implement proxy OHLCV readiness checks and unsupported capability labeling in backend/src/data_sources/preflight.py
-- [ ] T040 [US2] Implement XAU local file schema readiness by reusing feature 006 validation in backend/src/data_sources/preflight.py
-- [ ] T041 [US2] Implement optional provider key preflight checks as non-blocking results in backend/src/data_sources/preflight.py
-- [ ] T042 [US2] Implement GET /api/v1/data-sources/missing-data and POST /api/v1/data-sources/preflight in backend/src/api/routes/data_sources.py
+- [X] T038 [US2] Implement crypto processed feature readiness checks and path safety in backend/src/data_sources/preflight.py
+- [X] T039 [US2] Implement proxy OHLCV readiness checks and unsupported capability labeling in backend/src/data_sources/preflight.py
+- [X] T040 [US2] Implement XAU local file schema readiness by reusing feature 006 validation in backend/src/data_sources/preflight.py
+- [X] T041 [US2] Implement optional provider key preflight checks as non-blocking results in backend/src/data_sources/preflight.py
+- [X] T042 [US2] Implement GET /api/v1/data-sources/missing-data and POST /api/v1/data-sources/preflight in backend/src/api/routes/data_sources.py
 
 **Checkpoint**: User Story 2 should pass missing-data, preflight, contract, and integration tests independently.
 

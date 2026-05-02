@@ -101,6 +101,67 @@ def test_forbidden_private_trading_readiness_remains_forbidden():
     assert "execution credentials" in forbidden["capabilities"]["forbidden_reason"]
 
 
+def test_preflight_contract_returns_blocked_missing_data_actions(isolated_data_paths):
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/data-sources/preflight",
+        json={
+            "crypto_assets": ["BTCUSDT"],
+            "proxy_assets": ["GC=F"],
+            "processed_feature_root": str(isolated_data_paths / "processed"),
+            "xau_options_oi_file_path": str(
+                isolated_data_paths / "raw" / "xau" / "missing.csv"
+            ),
+            "requested_capabilities": [
+                "ohlcv",
+                "open_interest",
+                "funding",
+                "gold_options_oi",
+                "futures_oi",
+                "iv",
+                "xauusd_spot_execution",
+            ],
+            "research_only_acknowledged": True,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "blocked"
+    assert payload["crypto_results"][0]["status"] == "blocked"
+    assert payload["proxy_results"][0]["status"] == "blocked"
+    assert payload["xau_result"]["status"] == "blocked"
+    assert payload["proxy_results"][0]["unsupported_capabilities"] == [
+        "open_interest",
+        "funding",
+        "gold_options_oi",
+        "futures_oi",
+        "iv",
+        "xauusd_spot_execution",
+    ]
+    assert any(
+        action["provider_type"] == "binance_public"
+        for action in payload["missing_data_actions"]
+    )
+    assert any(
+        action["provider_type"] == "local_file"
+        for action in payload["missing_data_actions"]
+    )
+
+
+def test_preflight_contract_rejects_missing_research_acknowledgement():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/data-sources/preflight",
+        json={"research_only_acknowledged": False},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
 def _clear_optional_vendor_environment(monkeypatch) -> None:
     for env_var_name in OPTIONAL_PROVIDER_ENV_VARS.values():
         monkeypatch.delenv(env_var_name, raising=False)
