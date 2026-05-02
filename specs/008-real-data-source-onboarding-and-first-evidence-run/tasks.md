@@ -159,14 +159,14 @@
 
 **Purpose**: Final validation, smoke checks, and scope review across the complete feature.
 
-- [ ] T061 Run backend import check from backend/src/main.py
-- [ ] T062 Run full backend pytest suite for backend/tests/
-- [ ] T063 Run frontend install and production build using frontend/package.json
-- [ ] T064 Run generated artifact guard using scripts/check_generated_artifacts.ps1
-- [ ] T065 Run data-source readiness, capabilities, missing-data, preflight, and first-run API smoke flow from specs/008-real-data-source-onboarding-and-first-evidence-run/quickstart.md
-- [ ] T066 Run /data-sources dashboard smoke flow from specs/008-real-data-source-onboarding-and-first-evidence-run/quickstart.md
-- [ ] T067 Review forbidden v0 scope in backend/pyproject.toml, frontend/package.json, .github/workflows/validation.yml, backend/src/, and frontend/src/
-- [ ] T068 Update final validation notes and completion status in specs/008-real-data-source-onboarding-and-first-evidence-run/tasks.md
+- [X] T061 Run backend import check from backend/src/main.py
+- [X] T062 Run full backend pytest suite for backend/tests/
+- [X] T063 Run frontend install and production build using frontend/package.json
+- [X] T064 Run generated artifact guard using scripts/check_generated_artifacts.ps1
+- [X] T065 Run data-source readiness, capabilities, missing-data, preflight, and first-run API smoke flow from specs/008-real-data-source-onboarding-and-first-evidence-run/quickstart.md
+- [X] T066 Run /data-sources dashboard smoke flow from specs/008-real-data-source-onboarding-and-first-evidence-run/quickstart.md
+- [X] T067 Review forbidden v0 scope in backend/pyproject.toml, frontend/package.json, .github/workflows/validation.yml, backend/src/, and frontend/src/
+- [X] T068 Update final validation notes and completion status in specs/008-real-data-source-onboarding-and-first-evidence-run/tasks.md
 
 ---
 
