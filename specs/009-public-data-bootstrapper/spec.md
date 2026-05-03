@@ -1,8 +1,8 @@
 # Feature Specification: Public Data Bootstrapper
 
-**Feature Branch**: `009-public-data-bootstrapper`  
-**Created**: 2026-05-03  
-**Status**: Draft  
+**Feature Branch**: `009-public-data-bootstrapper`
+**Created**: 2026-05-03
+**Status**: Draft
 **Input**: User description: "Add a public data bootstrapper for first evidence runs."
 
 ## User Scenarios & Testing *(mandatory)*
