@@ -1,14 +1,14 @@
 from fastapi import APIRouter, HTTPException, status
 
 from src.api.validation import data_source_not_found, invalid_data_source_config
-from src.data_sources.bootstrap import PublicDataBootstrapService
+from src.data_bootstrap.orchestration import PublicDataBootstrapService
+from src.data_bootstrap.report_store import DataSourceBootstrapReportStore
 from src.data_sources.capabilities import capability_matrix
 from src.data_sources.first_run import FirstEvidenceRunOrchestrator
 from src.data_sources.missing_data import default_missing_data_actions
 from src.data_sources.preflight import run_data_source_preflight
 from src.data_sources.readiness import data_source_readiness
 from src.data_sources.report_store import (
-    DataSourceBootstrapReportStore,
     DataSourceFirstRunReportStore,
 )
 from src.models.data_sources import (

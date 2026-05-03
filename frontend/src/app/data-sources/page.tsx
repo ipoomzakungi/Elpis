@@ -5,6 +5,8 @@ import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { api } from '@/services/api'
 import {
   DataSourceCapability,
+  DataSourceBootstrapAssetSummary,
+  DataSourceBootstrapRunResult,
   DataSourceDashboardData,
   DataSourceMissingDataAction,
   DataSourceProviderStatus,
@@ -22,11 +24,15 @@ const OPTIONAL_PROVIDER_TYPES = new Set([
 export default function DataSourcesPage() {
   const [data, setData] = useState<DataSourceDashboardData | null>(null)
   const [firstRun, setFirstRun] = useState<FirstEvidenceRunResult | null>(null)
+  const [bootstrapRun, setBootstrapRun] = useState<DataSourceBootstrapRunResult | null>(null)
   const [firstRunId, setFirstRunId] = useState('')
+  const [bootstrapRunId, setBootstrapRunId] = useState('')
   const [loading, setLoading] = useState(true)
   const [loadingRun, setLoadingRun] = useState(false)
+  const [loadingBootstrap, setLoadingBootstrap] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [runError, setRunError] = useState<string | null>(null)
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -36,6 +42,9 @@ export default function DataSourcesPage() {
       .then((response) => {
         if (!active) return
         setData(response)
+        const latestBootstrap = response.bootstrapRuns.runs[0] ?? null
+        setBootstrapRun(latestBootstrap)
+        setBootstrapRunId(latestBootstrap?.bootstrap_run_id ?? '')
       })
       .catch((err) => {
         if (!active) return
@@ -57,6 +66,7 @@ export default function DataSourcesPage() {
   )
   const defaultMissingActions = data?.missingData.actions ?? []
   const readinessMissingActions = data?.readiness.missing_data_actions ?? []
+  const bootstrapRuns = data?.bootstrapRuns.runs ?? []
   const missingActions = useMemo(
     () => dedupeActions([...readinessMissingActions, ...defaultMissingActions]),
     [readinessMissingActions, defaultMissingActions],
@@ -74,6 +84,50 @@ export default function DataSourcesPage() {
       setRunError(err instanceof Error ? err.message : 'First evidence run could not be loaded')
     } finally {
       setLoadingRun(false)
+    }
+  }
+
+  async function loadBootstrapRunById() {
+    if (!bootstrapRunId.trim()) return
+    setLoadingBootstrap(true)
+    setBootstrapError(null)
+    try {
+      const response = await api.getPublicDataBootstrapRun(bootstrapRunId.trim())
+      setBootstrapRun(response)
+    } catch (err) {
+      setBootstrapError(err instanceof Error ? err.message : 'Bootstrap run could not be loaded')
+    } finally {
+      setLoadingBootstrap(false)
+    }
+  }
+
+  async function runPublicBootstrap() {
+    setLoadingBootstrap(true)
+    setBootstrapError(null)
+    try {
+      const response = await api.runPublicDataBootstrap({
+        include_binance: true,
+        binance_symbols: ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'],
+        optional_binance_symbols: [],
+        binance_timeframes: ['15m'],
+        include_binance_open_interest: true,
+        include_binance_funding: true,
+        include_yahoo: true,
+        yahoo_symbols: ['SPY', 'QQQ', 'GLD', 'GC=F'],
+        yahoo_timeframes: ['1d'],
+        days: 90,
+        run_preflight_after: true,
+        include_xau_local_instructions: true,
+        research_only_acknowledged: true,
+      })
+      setBootstrapRun(response)
+      setBootstrapRunId(response.bootstrap_run_id)
+      const runs = await api.listPublicDataBootstrapRuns()
+      setData((current) => (current ? { ...current, bootstrapRuns: runs } : current))
+    } catch (err) {
+      setBootstrapError(err instanceof Error ? err.message : 'Public bootstrap could not be started')
+    } finally {
+      setLoadingBootstrap(false)
     }
   }
 
@@ -167,6 +221,19 @@ export default function DataSourcesPage() {
 
           <ReportSection title="Missing Data Checklist">
             <MissingDataChecklist actions={missingActions} />
+          </ReportSection>
+
+          <ReportSection title="Public Data Bootstrap">
+            <PublicBootstrapPanel
+              bootstrapRun={bootstrapRun}
+              bootstrapRunId={bootstrapRunId}
+              bootstrapRuns={bootstrapRuns}
+              loading={loadingBootstrap}
+              error={bootstrapError}
+              onBootstrapRunIdChange={setBootstrapRunId}
+              onLoad={loadBootstrapRunById}
+              onRun={runPublicBootstrap}
+            />
           </ReportSection>
 
           <ReportSection title="First Evidence Run">
@@ -357,6 +424,196 @@ function MissingDataChecklist({ actions }: { actions: DataSourceMissingDataActio
         </div>
       ))}
     </div>
+  )
+}
+
+function PublicBootstrapPanel({
+  bootstrapRun,
+  bootstrapRunId,
+  bootstrapRuns,
+  error,
+  loading,
+  onBootstrapRunIdChange,
+  onLoad,
+  onRun,
+}: {
+  bootstrapRun: DataSourceBootstrapRunResult | null
+  bootstrapRunId: string
+  bootstrapRuns: DataSourceBootstrapRunResult[]
+  error: string | null
+  loading: boolean
+  onBootstrapRunIdChange: (value: string) => void
+  onLoad: () => void
+  onRun: () => void
+}) {
+  const downloaded = bootstrapRun?.asset_summaries.filter((asset) => asset.status === 'completed') ?? []
+  const blocked = bootstrapRun?.asset_summaries.filter((asset) => asset.status !== 'completed') ?? []
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_auto_auto]">
+        <select
+          value={bootstrapRunId}
+          onChange={(event) => onBootstrapRunIdChange(event.target.value)}
+          className="rounded-md border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-white outline-none focus:border-sky-500"
+        >
+          <option value="">Select bootstrap run</option>
+          {bootstrapRuns.map((run) => (
+            <option key={run.bootstrap_run_id} value={run.bootstrap_run_id}>
+              {run.bootstrap_run_id} | {run.status}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={onLoad}
+          disabled={loading || !bootstrapRunId.trim()}
+          className="rounded-md border border-gray-700 px-3 py-2 text-sm text-gray-100 hover:border-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Load bootstrap
+        </button>
+        <button
+          type="button"
+          onClick={onRun}
+          disabled={loading}
+          className="rounded-md border border-sky-700 bg-sky-950 px-3 py-2 text-sm text-sky-100 hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Run public bootstrap
+        </button>
+      </div>
+
+      <p className="text-xs leading-5 text-gray-400">
+        Public bootstrap uses no private trading keys and no paid vendor keys. It may call
+        public Binance and Yahoo endpoints only when this button is explicitly used.
+      </p>
+
+      {error && <Notice tone="error">{error}</Notice>}
+      {loading && <EmptyInline>Loading public bootstrap run...</EmptyInline>}
+
+      {bootstrapRun ? (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <SummaryCard label="Status" value={bootstrapRun.status} />
+            <SummaryCard label="Downloaded" value={downloaded.length} />
+            <SummaryCard label="Blocked/skipped" value={blocked.length} />
+            <SummaryCard label="Bootstrap run" value={bootstrapRun.bootstrap_run_id} />
+          </div>
+
+          <BootstrapAssetTable title="Downloaded Assets" assets={downloaded} />
+          <BootstrapAssetTable title="Skipped Or Failed Assets" assets={blocked} />
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <MiniPanel title="Bootstrap warnings">
+              <NotesList
+                notes={[
+                  ...bootstrapRun.research_only_warnings,
+                  ...bootstrapRun.asset_summaries.flatMap((asset) => asset.warnings),
+                ]}
+                emptyText="No bootstrap warnings."
+                compact
+              />
+            </MiniPanel>
+            <MiniPanel title="Bootstrap limitations">
+              <NotesList
+                notes={[
+                  ...bootstrapRun.limitations,
+                  ...bootstrapRun.asset_summaries.flatMap((asset) => asset.limitations),
+                ]}
+                emptyText="No bootstrap limitations."
+                compact
+              />
+            </MiniPanel>
+          </div>
+
+          <MiniPanel title="Bootstrap missing data actions">
+            <MissingDataChecklist actions={bootstrapRun.missing_data_actions} />
+          </MiniPanel>
+
+          {bootstrapRun.preflight_result ? (
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <SummaryCard label="Preflight" value={bootstrapRun.preflight_result.status} />
+              <SummaryCard
+                label="Crypto ready"
+                value={
+                  bootstrapRun.preflight_result.crypto_results.filter(
+                    (asset) => asset.status === 'ready',
+                  ).length
+                }
+              />
+              <SummaryCard
+                label="Proxy ready"
+                value={
+                  bootstrapRun.preflight_result.proxy_results.filter(
+                    (asset) => asset.status === 'ready',
+                  ).length
+                }
+              />
+              <SummaryCard
+                label="XAU status"
+                value={bootstrapRun.preflight_result.xau_result?.status ?? 'n/a'}
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <EmptyInline>No public bootstrap run is loaded.</EmptyInline>
+      )}
+    </div>
+  )
+}
+
+function BootstrapAssetTable({
+  assets,
+  title,
+}: {
+  assets: DataSourceBootstrapAssetSummary[]
+  title: string
+}) {
+  if (assets.length === 0) {
+    return (
+      <MiniPanel title={title}>
+        <EmptyInline>No rows.</EmptyInline>
+      </MiniPanel>
+    )
+  }
+
+  return (
+    <MiniPanel title={title}>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead className="border-b border-gray-700 text-xs uppercase text-gray-400">
+            <tr>
+              <th className="px-3 py-2">Asset</th>
+              <th className="px-3 py-2">Source</th>
+              <th className="px-3 py-2">Rows</th>
+              <th className="px-3 py-2">Processed output</th>
+              <th className="px-3 py-2">Unsupported</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-700">
+            {assets.map((asset) => (
+              <tr key={`${asset.provider_type}-${asset.symbol}-${asset.timeframe}`}>
+                <td className="px-3 py-2 font-medium">
+                  {asset.symbol} {asset.timeframe}
+                </td>
+                <td className="px-3 py-2 text-gray-300">{formatValue(asset.provider_type)}</td>
+                <td className="px-3 py-2 text-gray-300">{asset.row_count}</td>
+                <td className="max-w-xs break-all px-3 py-2 text-gray-300">
+                  {asset.processed_feature_path ?? 'n/a'}
+                </td>
+                <td className="px-3 py-2">
+                  <ChipList
+                    items={asset.unsupported_capabilities}
+                    tone="warning"
+                    emptyText="None"
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </MiniPanel>
   )
 }
 

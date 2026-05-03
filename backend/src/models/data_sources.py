@@ -62,6 +62,19 @@ class MissingDataSeverity(StrEnum):
     INFORMATIONAL = "informational"
 
 
+ALLOWED_BOOTSTRAP_BINANCE_SYMBOLS = {
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT",
+    "BNBUSDT",
+    "XRPUSDT",
+    "DOGEUSDT",
+}
+ALLOWED_BOOTSTRAP_YAHOO_SYMBOLS = {"SPY", "QQQ", "GLD", "GC=F", "BTC-USD"}
+ALLOWED_BOOTSTRAP_BINANCE_TIMEFRAMES = {"15m", "1h", "1d"}
+ALLOWED_BOOTSTRAP_YAHOO_TIMEFRAMES = {"1d"}
+
+
 class DataSourceCapability(StrictModel):
     provider_type: DataSourceProviderType
     display_name: str
@@ -309,6 +322,8 @@ class DataSourceBootstrapRequest(StrictModel):
     )
     yahoo_timeframes: list[str] = Field(default_factory=lambda: ["1d"])
     days: int = Field(default=30, ge=1, le=365)
+    start_time: datetime | None = None
+    end_time: datetime | None = None
     include_binance: bool = True
     include_yahoo: bool = True
     include_binance_open_interest: bool = True
@@ -319,24 +334,38 @@ class DataSourceBootstrapRequest(StrictModel):
 
     @field_validator("binance_symbols", "optional_binance_symbols", "yahoo_symbols")
     @classmethod
-    def normalize_bootstrap_symbols(cls, values: list[str]) -> list[str]:
+    def normalize_bootstrap_symbols(cls, values: list[str], info) -> list[str]:
         normalized: list[str] = []
+        allowed = (
+            ALLOWED_BOOTSTRAP_YAHOO_SYMBOLS
+            if info.field_name == "yahoo_symbols"
+            else ALLOWED_BOOTSTRAP_BINANCE_SYMBOLS
+        )
         for value in values:
             symbol = value.strip().upper()
             if not symbol:
                 raise ValueError("bootstrap symbols must not be blank")
+            if symbol not in allowed:
+                raise ValueError(f"unsupported public bootstrap symbol: {symbol}")
             if symbol not in normalized:
                 normalized.append(symbol)
         return normalized
 
     @field_validator("binance_timeframes", "yahoo_timeframes")
     @classmethod
-    def normalize_bootstrap_timeframes(cls, values: list[str]) -> list[str]:
+    def normalize_bootstrap_timeframes(cls, values: list[str], info) -> list[str]:
         normalized: list[str] = []
+        allowed = (
+            ALLOWED_BOOTSTRAP_YAHOO_TIMEFRAMES
+            if info.field_name == "yahoo_timeframes"
+            else ALLOWED_BOOTSTRAP_BINANCE_TIMEFRAMES
+        )
         for value in values:
             timeframe = value.strip().lower()
             if not timeframe:
                 raise ValueError("bootstrap timeframes must not be blank")
+            if timeframe not in allowed:
+                raise ValueError(f"unsupported public bootstrap timeframe: {timeframe}")
             if timeframe not in normalized:
                 normalized.append(timeframe)
         return normalized
@@ -345,6 +374,9 @@ class DataSourceBootstrapRequest(StrictModel):
     def validate_bootstrap_request(self) -> "DataSourceBootstrapRequest":
         if not self.research_only_acknowledged:
             raise ValueError("research_only_acknowledged must be true")
+        if self.start_time is not None and self.end_time is not None:
+            if self.start_time >= self.end_time:
+                raise ValueError("start_time must be before end_time")
         return self
 
 
