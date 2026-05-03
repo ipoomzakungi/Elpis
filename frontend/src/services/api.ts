@@ -8,8 +8,16 @@ import {
   BacktestRunListResponse,
   BacktestTradesResponse,
   DataQualityResponse,
+  DataSourceCapabilityListResponse,
+  DataSourceDashboardData,
+  DataSourceMissingDataResponse,
+  DataSourcePreflightRequest,
+  DataSourcePreflightResult,
+  DataSourceReadiness,
   DownloadRequest,
   Feature,
+  FirstEvidenceRunRequest,
+  FirstEvidenceRunResult,
   FundingRate,
   MarketData,
   OpenInterest,
@@ -165,6 +173,50 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(request),
     });
+  },
+
+  // Data-source onboarding
+  getDataSourceReadiness: async (): Promise<DataSourceReadiness> => {
+    return fetchApi('/data-sources/readiness');
+  },
+
+  getDataSourceCapabilities: async (): Promise<DataSourceCapabilityListResponse> => {
+    return fetchApi('/data-sources/capabilities');
+  },
+
+  getDataSourceMissingData: async (): Promise<DataSourceMissingDataResponse> => {
+    return fetchApi('/data-sources/missing-data');
+  },
+
+  runDataSourcePreflight: async (
+    request: DataSourcePreflightRequest,
+  ): Promise<DataSourcePreflightResult> => {
+    return fetchApi('/data-sources/preflight', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  runFirstEvidenceRun: async (
+    request: FirstEvidenceRunRequest,
+  ): Promise<FirstEvidenceRunResult> => {
+    return fetchApi('/evidence/first-run', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  getFirstEvidenceRun: async (firstRunId: string): Promise<FirstEvidenceRunResult> => {
+    return fetchApi(`/evidence/first-run/${encodeURIComponent(firstRunId)}`);
+  },
+
+  getDataSourceDashboardData: async (): Promise<DataSourceDashboardData> => {
+    const [readiness, capabilities, missingData] = await Promise.all([
+      fetchApi<DataSourceReadiness>('/data-sources/readiness'),
+      fetchApi<DataSourceCapabilityListResponse>('/data-sources/capabilities'),
+      fetchApi<DataSourceMissingDataResponse>('/data-sources/missing-data'),
+    ]);
+    return { readiness, capabilities, missingData };
   },
 
   // Backtest reports

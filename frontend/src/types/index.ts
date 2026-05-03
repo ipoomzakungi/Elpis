@@ -1099,3 +1099,164 @@ export interface XauDashboardData {
   walls: XauWallTableResponse;
   zones: XauZoneTableResponse;
 }
+
+export type DataSourceProviderType =
+  | 'binance_public'
+  | 'yahoo_finance'
+  | 'local_file'
+  | 'kaiko_optional'
+  | 'tardis_optional'
+  | 'coinglass_optional'
+  | 'cryptoquant_optional'
+  | 'cme_quikstrike_local_or_optional'
+  | 'forbidden_private_trading';
+
+export type DataSourceReadinessStatus =
+  | 'ready'
+  | 'configured'
+  | 'missing'
+  | 'unavailable_optional'
+  | 'unsupported'
+  | 'blocked'
+  | 'forbidden';
+
+export type DataSourceTier =
+  | 'tier_0_public_local'
+  | 'tier_1_optional_paid_research'
+  | 'tier_2_forbidden_v0';
+
+export type DataSourceWorkflowType =
+  | 'crypto_multi_asset'
+  | 'proxy_ohlcv'
+  | 'xau_vol_oi'
+  | 'optional_vendor'
+  | 'first_evidence_run';
+
+export type FirstEvidenceRunStatus = 'completed' | 'partial' | 'blocked' | 'failed';
+export type MissingDataSeverity = 'blocking' | 'optional' | 'informational';
+
+export interface DataSourceCapability {
+  provider_type: DataSourceProviderType;
+  display_name: string;
+  tier: DataSourceTier;
+  supports: string[];
+  unsupported: string[];
+  requires_key: boolean;
+  requires_local_file: boolean;
+  is_optional: boolean;
+  limitations: string[];
+  forbidden_reason: string | null;
+}
+
+export interface DataSourceMissingDataAction {
+  action_id: string;
+  workflow_type: DataSourceWorkflowType;
+  provider_type: DataSourceProviderType;
+  asset: string | null;
+  severity: MissingDataSeverity;
+  title: string;
+  instructions: string[];
+  required_columns: string[];
+  optional_columns: string[];
+  blocking: boolean;
+}
+
+export interface DataSourceProviderStatus {
+  provider_type: DataSourceProviderType;
+  status: DataSourceReadinessStatus;
+  configured: boolean;
+  env_var_name: string | null;
+  secret_value_returned: boolean;
+  capabilities: DataSourceCapability;
+  warnings: string[];
+  limitations: string[];
+  missing_actions: DataSourceMissingDataAction[];
+}
+
+export interface DataSourceReadiness {
+  generated_at: string;
+  provider_statuses: DataSourceProviderStatus[];
+  capability_matrix: DataSourceCapability[];
+  public_sources_available: boolean;
+  optional_sources_missing: DataSourceProviderType[];
+  forbidden_sources_detected: DataSourceProviderType[];
+  missing_data_actions: DataSourceMissingDataAction[];
+  research_only_warnings: string[];
+}
+
+export interface DataSourceCapabilityListResponse {
+  capabilities: DataSourceCapability[];
+}
+
+export interface DataSourceMissingDataResponse {
+  actions: DataSourceMissingDataAction[];
+}
+
+export interface DataSourcePreflightRequest {
+  crypto_assets?: string[];
+  optional_crypto_assets?: string[];
+  crypto_timeframe?: string;
+  proxy_assets?: string[];
+  proxy_timeframe?: string;
+  processed_feature_root?: string | null;
+  xau_options_oi_file_path?: string | null;
+  require_optional_vendors?: DataSourceProviderType[];
+  requested_capabilities?: string[];
+  research_only_acknowledged: boolean;
+}
+
+export interface DataSourcePreflightAssetResult {
+  asset: string | null;
+  provider_type: DataSourceProviderType;
+  status: DataSourceReadinessStatus;
+  feature_path: string | null;
+  row_count: number | null;
+  missing_data_actions: DataSourceMissingDataAction[];
+  unsupported_capabilities: string[];
+  warnings: string[];
+  limitations: string[];
+}
+
+export interface DataSourcePreflightResult {
+  status: FirstEvidenceRunStatus;
+  readiness: DataSourceReadiness;
+  crypto_results: DataSourcePreflightAssetResult[];
+  proxy_results: DataSourcePreflightAssetResult[];
+  xau_result: DataSourcePreflightAssetResult | null;
+  optional_vendor_results: DataSourceProviderStatus[];
+  unsupported_capabilities: string[];
+  missing_data_actions: DataSourceMissingDataAction[];
+  warnings: string[];
+  limitations: string[];
+}
+
+export interface FirstEvidenceRunRequest {
+  name?: string | null;
+  preflight: DataSourcePreflightRequest;
+  use_existing_research_report_ids?: string[];
+  use_existing_xau_report_id?: string | null;
+  run_when_partial?: boolean;
+  research_only_acknowledged: boolean;
+}
+
+export interface FirstEvidenceRunResult {
+  first_run_id: string;
+  status: FirstEvidenceRunStatus;
+  execution_run_id: string | null;
+  evidence_report_path: string | null;
+  decision: ResearchEvidenceDecision | null;
+  linked_research_report_ids: string[];
+  linked_xau_report_ids: string[];
+  preflight_result: DataSourcePreflightResult;
+  evidence_summary: ResearchEvidenceSummary | null;
+  missing_data_actions: DataSourceMissingDataAction[];
+  research_only_warnings: string[];
+  limitations: string[];
+  created_at: string;
+}
+
+export interface DataSourceDashboardData {
+  readiness: DataSourceReadiness;
+  capabilities: DataSourceCapabilityListResponse;
+  missingData: DataSourceMissingDataResponse;
+}

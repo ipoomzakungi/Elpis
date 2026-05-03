@@ -95,6 +95,14 @@ def invalid_research_execution_config(
     api_error(400, "VALIDATION_ERROR", message, details)
 
 
+def invalid_data_source_config(message: str, details: list[dict[str, str]] | None = None) -> None:
+    api_error(400, "VALIDATION_ERROR", message, details)
+
+
+def data_source_not_found(source_id: str) -> None:
+    api_error(404, "NOT_FOUND", f"Data-source onboarding item '{source_id}' was not found")
+
+
 def research_report_not_found(research_run_id: str) -> None:
     api_error(404, "NOT_FOUND", f"Research run '{research_run_id}' was not found")
 
