@@ -1255,8 +1255,71 @@ export interface FirstEvidenceRunResult {
   created_at: string;
 }
 
+export interface DataSourceBootstrapRequest {
+  include_binance?: boolean;
+  binance_symbols?: string[];
+  optional_binance_symbols?: string[];
+  binance_timeframes?: string[];
+  include_binance_open_interest?: boolean;
+  include_binance_funding?: boolean;
+  include_yahoo?: boolean;
+  yahoo_symbols?: string[];
+  yahoo_timeframes?: string[];
+  days?: number;
+  start_time?: string | null;
+  end_time?: string | null;
+  run_preflight_after?: boolean;
+  include_xau_local_instructions?: boolean;
+  research_only_acknowledged: boolean;
+}
+
+export type DataSourceBootstrapProvider = 'binance_public' | 'yahoo_finance';
+
+export interface DataSourceBootstrapArtifact {
+  provider_type: DataSourceProviderType;
+  data_type: string;
+  path: string;
+  row_count: number;
+  start_timestamp: string | null;
+  end_timestamp: string | null;
+  limitations: string[];
+}
+
+export interface DataSourceBootstrapAssetSummary {
+  provider_type: DataSourceProviderType;
+  symbol: string;
+  timeframe: string;
+  status: FirstEvidenceRunStatus;
+  raw_artifacts: DataSourceBootstrapArtifact[];
+  processed_feature_path: string | null;
+  row_count: number;
+  start_timestamp: string | null;
+  end_timestamp: string | null;
+  unsupported_capabilities: string[];
+  warnings: string[];
+  limitations: string[];
+}
+
+export interface DataSourceBootstrapRunResult {
+  bootstrap_run_id: string;
+  status: FirstEvidenceRunStatus;
+  created_at: string;
+  raw_root: string;
+  processed_root: string;
+  asset_summaries: DataSourceBootstrapAssetSummary[];
+  preflight_result: DataSourcePreflightResult | null;
+  missing_data_actions: DataSourceMissingDataAction[];
+  research_only_warnings: string[];
+  limitations: string[];
+}
+
+export interface DataSourceBootstrapRunListResponse {
+  runs: DataSourceBootstrapRunResult[];
+}
+
 export interface DataSourceDashboardData {
   readiness: DataSourceReadiness;
   capabilities: DataSourceCapabilityListResponse;
   missingData: DataSourceMissingDataResponse;
+  bootstrapRuns: DataSourceBootstrapRunListResponse;
 }

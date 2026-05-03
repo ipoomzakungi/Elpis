@@ -9,6 +9,9 @@ import {
   BacktestTradesResponse,
   DataQualityResponse,
   DataSourceCapabilityListResponse,
+  DataSourceBootstrapRequest,
+  DataSourceBootstrapRunListResponse,
+  DataSourceBootstrapRunResult,
   DataSourceDashboardData,
   DataSourceMissingDataResponse,
   DataSourcePreflightRequest,
@@ -210,13 +213,33 @@ export const api = {
     return fetchApi(`/evidence/first-run/${encodeURIComponent(firstRunId)}`);
   },
 
+  runPublicDataBootstrap: async (
+    request: DataSourceBootstrapRequest,
+  ): Promise<DataSourceBootstrapRunResult> => {
+    return fetchApi('/data-sources/bootstrap/public', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  listPublicDataBootstrapRuns: async (): Promise<DataSourceBootstrapRunListResponse> => {
+    return fetchApi('/data-sources/bootstrap/runs');
+  },
+
+  getPublicDataBootstrapRun: async (
+    bootstrapRunId: string,
+  ): Promise<DataSourceBootstrapRunResult> => {
+    return fetchApi(`/data-sources/bootstrap/runs/${encodeURIComponent(bootstrapRunId)}`);
+  },
+
   getDataSourceDashboardData: async (): Promise<DataSourceDashboardData> => {
-    const [readiness, capabilities, missingData] = await Promise.all([
+    const [readiness, capabilities, missingData, bootstrapRuns] = await Promise.all([
       fetchApi<DataSourceReadiness>('/data-sources/readiness'),
       fetchApi<DataSourceCapabilityListResponse>('/data-sources/capabilities'),
       fetchApi<DataSourceMissingDataResponse>('/data-sources/missing-data'),
+      fetchApi<DataSourceBootstrapRunListResponse>('/data-sources/bootstrap/runs'),
     ]);
-    return { readiness, capabilities, missingData };
+    return { readiness, capabilities, missingData, bootstrapRuns };
   },
 
   // Backtest reports

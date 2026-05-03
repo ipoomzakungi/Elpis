@@ -1,13 +1,20 @@
 from fastapi import APIRouter, HTTPException, status
 
 from src.api.validation import data_source_not_found, invalid_data_source_config
+from src.data_bootstrap.orchestration import PublicDataBootstrapService
+from src.data_bootstrap.report_store import DataSourceBootstrapReportStore
 from src.data_sources.capabilities import capability_matrix
 from src.data_sources.first_run import FirstEvidenceRunOrchestrator
 from src.data_sources.missing_data import default_missing_data_actions
 from src.data_sources.preflight import run_data_source_preflight
 from src.data_sources.readiness import data_source_readiness
-from src.data_sources.report_store import DataSourceFirstRunReportStore
+from src.data_sources.report_store import (
+    DataSourceFirstRunReportStore,
+)
 from src.models.data_sources import (
+    DataSourceBootstrapRequest,
+    DataSourceBootstrapRunListResponse,
+    DataSourceBootstrapRunResult,
     DataSourceCapabilityListResponse,
     DataSourceMissingDataResponse,
     DataSourcePreflightRequest,
@@ -48,6 +55,55 @@ async def run_data_source_preflight_endpoint(
     """Check local data-source readiness without fetching external data."""
 
     return run_data_source_preflight(request)
+
+
+@router.post(
+    "/data-sources/bootstrap/public",
+    response_model=DataSourceBootstrapRunResult,
+    status_code=status.HTTP_201_CREATED,
+)
+async def run_public_data_bootstrap(
+    request: DataSourceBootstrapRequest,
+) -> DataSourceBootstrapRunResult:
+    """Download public/no-key research data into ignored local artifact paths."""
+
+    try:
+        return await PublicDataBootstrapService().run(request)
+    except ValueError as exc:
+        invalid_data_source_config(str(exc))
+
+    raise HTTPException(status_code=500, detail="Public data bootstrap failed")
+
+
+@router.get(
+    "/data-sources/bootstrap/runs",
+    response_model=DataSourceBootstrapRunListResponse,
+)
+async def list_public_data_bootstrap_runs() -> DataSourceBootstrapRunListResponse:
+    """List saved public data bootstrap runs."""
+
+    return DataSourceBootstrapRunListResponse(
+        runs=DataSourceBootstrapReportStore().list_bootstrap_runs()
+    )
+
+
+@router.get(
+    "/data-sources/bootstrap/runs/{bootstrap_run_id}",
+    response_model=DataSourceBootstrapRunResult,
+)
+async def get_public_data_bootstrap_run(
+    bootstrap_run_id: str,
+) -> DataSourceBootstrapRunResult:
+    """Read one saved public data bootstrap run."""
+
+    try:
+        return DataSourceBootstrapReportStore().read_bootstrap_run(bootstrap_run_id)
+    except FileNotFoundError:
+        data_source_not_found(bootstrap_run_id)
+    except ValueError as exc:
+        invalid_data_source_config(str(exc))
+
+    raise HTTPException(status_code=500, detail="Public data bootstrap read failed")
 
 
 @router.post(
