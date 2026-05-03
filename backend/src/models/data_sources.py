@@ -51,6 +51,11 @@ class FirstEvidenceRunStatus(StrEnum):
     FAILED = "failed"
 
 
+class DataSourceBootstrapProvider(StrEnum):
+    BINANCE_PUBLIC = "binance_public"
+    YAHOO_FINANCE = "yahoo_finance"
+
+
 class MissingDataSeverity(StrEnum):
     BLOCKING = "blocking"
     OPTIONAL = "optional"
@@ -293,6 +298,105 @@ class FirstEvidenceRunResult(StrictModel):
     research_only_warnings: list[str] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
     created_at: datetime
+
+
+class DataSourceBootstrapRequest(StrictModel):
+    binance_symbols: list[str] = Field(default_factory=lambda: ["BTCUSDT", "ETHUSDT", "SOLUSDT"])
+    optional_binance_symbols: list[str] = Field(default_factory=list)
+    binance_timeframes: list[str] = Field(default_factory=lambda: ["15m"])
+    yahoo_symbols: list[str] = Field(
+        default_factory=lambda: ["SPY", "QQQ", "GLD", "GC=F", "BTC-USD"]
+    )
+    yahoo_timeframes: list[str] = Field(default_factory=lambda: ["1d"])
+    days: int = Field(default=30, ge=1, le=365)
+    include_binance: bool = True
+    include_yahoo: bool = True
+    include_binance_open_interest: bool = True
+    include_binance_funding: bool = True
+    run_preflight_after: bool = True
+    include_xau_local_instructions: bool = True
+    research_only_acknowledged: bool
+
+    @field_validator("binance_symbols", "optional_binance_symbols", "yahoo_symbols")
+    @classmethod
+    def normalize_bootstrap_symbols(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for value in values:
+            symbol = value.strip().upper()
+            if not symbol:
+                raise ValueError("bootstrap symbols must not be blank")
+            if symbol not in normalized:
+                normalized.append(symbol)
+        return normalized
+
+    @field_validator("binance_timeframes", "yahoo_timeframes")
+    @classmethod
+    def normalize_bootstrap_timeframes(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for value in values:
+            timeframe = value.strip().lower()
+            if not timeframe:
+                raise ValueError("bootstrap timeframes must not be blank")
+            if timeframe not in normalized:
+                normalized.append(timeframe)
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_bootstrap_request(self) -> "DataSourceBootstrapRequest":
+        if not self.research_only_acknowledged:
+            raise ValueError("research_only_acknowledged must be true")
+        return self
+
+
+class DataSourceBootstrapPlanItem(StrictModel):
+    provider: DataSourceBootstrapProvider
+    symbol: str
+    timeframe: str
+    data_types: list[str]
+    unsupported_capabilities: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+
+class DataSourceBootstrapArtifact(StrictModel):
+    provider_type: DataSourceProviderType
+    data_type: str
+    path: Path
+    row_count: int = Field(ge=0)
+    start_timestamp: datetime | None = None
+    end_timestamp: datetime | None = None
+    limitations: list[str] = Field(default_factory=list)
+
+
+class DataSourceBootstrapAssetSummary(StrictModel):
+    provider_type: DataSourceProviderType
+    symbol: str
+    timeframe: str
+    status: FirstEvidenceRunStatus
+    raw_artifacts: list[DataSourceBootstrapArtifact] = Field(default_factory=list)
+    processed_feature_path: Path | None = None
+    row_count: int = Field(default=0, ge=0)
+    start_timestamp: datetime | None = None
+    end_timestamp: datetime | None = None
+    unsupported_capabilities: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+
+class DataSourceBootstrapRunResult(StrictModel):
+    bootstrap_run_id: str
+    status: FirstEvidenceRunStatus
+    created_at: datetime
+    raw_root: Path
+    processed_root: Path
+    asset_summaries: list[DataSourceBootstrapAssetSummary] = Field(default_factory=list)
+    preflight_result: DataSourcePreflightResult | None = None
+    missing_data_actions: list[DataSourceMissingDataAction] = Field(default_factory=list)
+    research_only_warnings: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+
+class DataSourceBootstrapRunListResponse(StrictModel):
+    runs: list[DataSourceBootstrapRunResult] = Field(default_factory=list)
 
 
 def _validate_local_path(path: Path | None, field_name: str) -> None:

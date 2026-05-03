@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -10,8 +10,8 @@ class DataQuality(BaseModel):
     total_records: int = Field(..., ge=0, description="Total number of records")
     missing_timestamps: int = Field(..., ge=0, description="Number of gaps")
     duplicate_timestamps: int = Field(..., ge=0, description="Number of duplicates")
-    first_timestamp: Optional[datetime] = Field(None, description="Earliest record")
-    last_timestamp: Optional[datetime] = Field(None, description="Latest record")
+    first_timestamp: datetime | None = Field(None, description="Earliest record")
+    last_timestamp: datetime | None = Field(None, description="Latest record")
     last_updated: datetime = Field(..., description="When data was last fetched")
 
     model_config = ConfigDict(

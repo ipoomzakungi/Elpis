@@ -170,6 +170,25 @@
 
 ---
 
+## Phase 8: Free/Public Data Bootstrapper
+
+**Purpose**: Add public/no-key and local-file bootstrap support without paid vendor APIs or trading execution.
+
+- [X] T069 Add public bootstrap request/result schemas in backend/src/models/data_sources.py
+- [X] T070 Add free Binance/Yahoo bootstrap service in backend/src/data_sources/bootstrap.py
+- [X] T071 Persist public bootstrap run metadata under ignored report paths in backend/src/data_sources/report_store.py
+- [X] T072 Add public bootstrap API endpoints in backend/src/api/routes/data_sources.py
+- [X] T073 Add Binance/Yahoo/path-safety unit tests in backend/tests/unit/test_data_source_bootstrap.py
+- [X] T074 Add mocked public bootstrap integration tests in backend/tests/integration/test_data_source_bootstrap_flow.py
+- [X] T075 Add public bootstrap API contract tests in backend/tests/contract/test_data_sources_api_contracts.py
+- [X] T076 Run backend import, focused bootstrap tests, contract tests, and full backend pytest suite
+- [X] T077 Run frontend production build
+- [X] T078 Run generated artifact guard
+- [X] T079 Run Ruff for data-source bootstrap paths
+- [X] T080 Confirm validation used mocked/synthetic fixtures only and did not run real external downloads
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

@@ -252,6 +252,69 @@ def test_first_evidence_run_contract_requires_research_acknowledgement():
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
+def test_public_bootstrap_contract_accepts_no_network_empty_run():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/data-sources/bootstrap/public",
+        json={
+            "binance_symbols": [],
+            "yahoo_symbols": [],
+            "include_binance": False,
+            "include_yahoo": False,
+            "research_only_acknowledged": True,
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["bootstrap_run_id"].startswith("bootstrap_")
+    assert payload["status"] == "blocked"
+    assert payload["asset_summaries"] == []
+    assert payload["preflight_result"] is None
+    assert any(
+        "research-only" in warning.lower()
+        for warning in payload["research_only_warnings"]
+    )
+    assert "Kaiko" not in response.text
+
+
+def test_public_bootstrap_contract_lists_and_reads_saved_runs():
+    client = TestClient(app)
+    created = client.post(
+        "/api/v1/data-sources/bootstrap/public",
+        json={
+            "binance_symbols": [],
+            "yahoo_symbols": [],
+            "include_binance": False,
+            "include_yahoo": False,
+            "research_only_acknowledged": True,
+        },
+    ).json()
+
+    list_response = client.get("/api/v1/data-sources/bootstrap/runs")
+    detail_response = client.get(
+        f"/api/v1/data-sources/bootstrap/runs/{created['bootstrap_run_id']}"
+    )
+
+    assert list_response.status_code == 200
+    assert any(
+        item["bootstrap_run_id"] == created["bootstrap_run_id"]
+        for item in list_response.json()["runs"]
+    )
+    assert detail_response.status_code == 200
+    assert detail_response.json()["bootstrap_run_id"] == created["bootstrap_run_id"]
+
+
+def test_public_bootstrap_contract_returns_structured_not_found():
+    client = TestClient(app)
+
+    response = client.get("/api/v1/data-sources/bootstrap/runs/not-a-real-bootstrap")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "NOT_FOUND"
+
+
 def _clear_optional_vendor_environment(monkeypatch) -> None:
     for env_var_name in OPTIONAL_PROVIDER_ENV_VARS.values():
         monkeypatch.delenv(env_var_name, raising=False)

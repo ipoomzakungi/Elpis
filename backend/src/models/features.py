@@ -1,11 +1,11 @@
 from datetime import datetime
-from enum import Enum
-from typing import Optional
+from enum import StrEnum
 from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-class RegimeType(str, Enum):
+class RegimeType(StrEnum):
     """Regime classification types."""
 
     RANGE = "RANGE"
@@ -31,16 +31,16 @@ class Feature(BaseModel):
     range_mid: float = Field(..., description="Midpoint of range")
 
     # OI features
-    open_interest: Optional[float] = Field(None, gt=0, description="Open interest")
-    oi_change_pct: Optional[float] = Field(None, description="OI change percentage")
+    open_interest: float | None = Field(None, gt=0, description="Open interest")
+    oi_change_pct: float | None = Field(None, description="OI change percentage")
 
     # Volume features
     volume_ratio: float = Field(..., ge=0, description="Volume / 20-period avg")
 
     # Funding features
-    funding_rate: Optional[float] = Field(None, ge=-0.05, le=0.05, description="Funding rate")
-    funding_rate_change: Optional[float] = Field(None, description="Rate change from previous")
-    funding_rate_cumsum: Optional[float] = Field(None, description="Cumulative funding rate")
+    funding_rate: float | None = Field(None, ge=-0.05, le=0.05, description="Funding rate")
+    funding_rate_change: float | None = Field(None, description="Rate change from previous")
+    funding_rate_cumsum: float | None = Field(None, description="Cumulative funding rate")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -72,7 +72,7 @@ class Regime(BaseModel):
     timestamp: datetime = Field(..., description="Bar time (UTC)")
     regime: RegimeType = Field(..., description="Regime classification")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Classification confidence")
-    reason: Optional[str] = Field(None, description="Human-readable reason")
+    reason: str | None = Field(None, description="Human-readable reason")
 
     model_config = ConfigDict(
         json_schema_extra={
