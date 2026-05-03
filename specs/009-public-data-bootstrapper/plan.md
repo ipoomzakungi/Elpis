@@ -9,14 +9,14 @@ Add a research-only public data bootstrap workflow that downloads no-key Binance
 
 ## Technical Context
 
-**Language/Version**: Python 3.11+ for backend data and orchestration; TypeScript with Next.js for dashboard updates  
-**Primary Dependencies**: FastAPI, Pydantic, Polars, Parquet/PyArrow, existing provider layer, existing Binance public client/provider behavior, existing Yahoo Finance provider behavior, existing feature engine, existing data-source preflight service  
-**Storage**: Local ignored file artifacts under `data/raw/`, `data/processed/`, and `data/reports/`; no database server  
-**Testing**: pytest for backend unit, integration, and contract tests; frontend production build for UI/type checks; existing artifact guard script  
-**Target Platform**: Local research workstation and CI on Windows/Linux-compatible Python and Node environments  
-**Project Type**: Web application with FastAPI backend, local research files, and Next.js dashboard  
-**Performance Goals**: Default bootstrap planning completes immediately; mocked integration runs complete in the normal backend test suite; real public downloads preserve per-asset progress and partial results rather than failing the whole run  
-**Constraints**: Research-only, public/no-key data only, no secret exposure, no generated artifact commits, no external downloads during automated tests, no live/paper/shadow trading, no broker/wallet/order execution, no forbidden v0 technologies  
+**Language/Version**: Python 3.11+ for backend data and orchestration; TypeScript with Next.js for dashboard updates
+**Primary Dependencies**: FastAPI, Pydantic, Polars, Parquet/PyArrow, existing provider layer, existing Binance public client/provider behavior, existing Yahoo Finance provider behavior, existing feature engine, existing data-source preflight service
+**Storage**: Local ignored file artifacts under `data/raw/`, `data/processed/`, and `data/reports/`; no database server
+**Testing**: pytest for backend unit, integration, and contract tests; frontend production build for UI/type checks; existing artifact guard script
+**Target Platform**: Local research workstation and CI on Windows/Linux-compatible Python and Node environments
+**Project Type**: Web application with FastAPI backend, local research files, and Next.js dashboard
+**Performance Goals**: Default bootstrap planning completes immediately; mocked integration runs complete in the normal backend test suite; real public downloads preserve per-asset progress and partial results rather than failing the whole run
+**Constraints**: Research-only, public/no-key data only, no secret exposure, no generated artifact commits, no external downloads during automated tests, no live/paper/shadow trading, no broker/wallet/order execution, no forbidden v0 technologies
 **Scale/Scope**: Default assets are BTCUSDT, ETHUSDT, SOLUSDT, SPY, QQQ, GLD, and GC=F; optional assets are BNBUSDT, XRPUSDT, DOGEUSDT, and BTC-USD; timeframes are crypto 15m/1h/1d and Yahoo 1d
 
 ## Constitution Check
