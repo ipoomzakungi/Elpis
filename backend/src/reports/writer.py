@@ -795,3 +795,126 @@ def compose_xau_report_markdown(
     lines.extend(["", "## Notes", ""])
     lines.extend(f"- {note}" for note in report["notes"])
     return "\n".join(lines) + "\n"
+
+
+def compose_xau_reaction_report_json(
+    reaction_report: BaseModel | dict[str, Any],
+    extra_notes: list[str] | None = None,
+) -> dict[str, Any]:
+    """Compose a research-only XAU reaction report payload."""
+
+    notes = [
+        "XAU reaction reports are research annotations only.",
+        "OI walls are context zones and require freshness, volatility, open, and candle review.",
+    ]
+    if extra_notes:
+        notes.extend(extra_notes)
+
+    report_payload = _to_jsonable(reaction_report)
+    return {
+        "report": report_payload,
+        "research_disclaimer": "XAU reaction reports are research annotations only.",
+        "source_report_id": report_payload.get("source_report_id"),
+        "status": report_payload.get("status"),
+        "counts": {
+            "source_wall_count": report_payload.get("source_wall_count", 0),
+            "source_zone_count": report_payload.get("source_zone_count", 0),
+            "reaction_count": report_payload.get("reaction_count", 0),
+            "no_trade_count": report_payload.get("no_trade_count", 0),
+            "risk_plan_count": report_payload.get("risk_plan_count", 0),
+        },
+        "freshness_state": report_payload.get("freshness_state"),
+        "vol_regime_state": report_payload.get("vol_regime_state"),
+        "open_regime_state": report_payload.get("open_regime_state"),
+        "reactions": report_payload.get("reactions", []),
+        "risk_plans": report_payload.get("risk_plans", []),
+        "warnings": report_payload.get("warnings", []),
+        "limitations": report_payload.get("limitations", []),
+        "artifacts": report_payload.get("artifacts", []),
+        "notes": notes,
+    }
+
+
+def compose_xau_reaction_report_markdown(
+    reaction_report: BaseModel | dict[str, Any],
+    extra_notes: list[str] | None = None,
+) -> str:
+    report = compose_xau_reaction_report_json(reaction_report, extra_notes=extra_notes)
+    report_payload = report["report"]
+    lines = [
+        "# XAU Reaction Report",
+        "",
+        f"Report ID: {report_payload.get('report_id', 'unknown')}",
+        f"Source report ID: {report_payload.get('source_report_id', 'unknown')}",
+        f"Status: {report_payload.get('status', 'unknown')}",
+        f"Reaction rows: {report['counts']['reaction_count']}",
+        f"Risk-plan rows: {report['counts']['risk_plan_count']}",
+        "",
+        "## Research-Only Disclaimer",
+        "",
+        report["research_disclaimer"],
+        "",
+        "## Context",
+        "",
+        f"Freshness: {report.get('freshness_state')}",
+        f"Volatility: {report.get('vol_regime_state')}",
+        f"Open regime: {report.get('open_regime_state')}",
+        "",
+        "## Reaction Rows",
+        "",
+    ]
+    if not report["reactions"]:
+        lines.append("- No reaction rows were generated.")
+    else:
+        lines.extend(
+            [
+                "| Reaction ID | Wall | Zone | Label | Confidence | "
+                "Invalidation | Target 1 | Target 2 |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- |",
+            ]
+        )
+    for reaction in report["reactions"]:
+        lines.append(
+            "| "
+            f"{reaction.get('reaction_id')} | "
+            f"{reaction.get('wall_id') or 'n/a'} | "
+            f"{reaction.get('zone_id') or 'n/a'} | "
+            f"{reaction.get('reaction_label')} | "
+            f"{reaction.get('confidence_label')} | "
+            f"{reaction.get('invalidation_level')} | "
+            f"{reaction.get('target_level_1')} | "
+            f"{reaction.get('target_level_2')} |"
+        )
+        for reason in reaction.get("no_trade_reasons", []):
+            lines.append(f"- No-trade reason for {reaction.get('reaction_id')}: {reason}")
+    lines.extend(["", "## Bounded Risk Plan Rows", ""])
+    if not report["risk_plans"]:
+        lines.append("- No bounded risk-plan rows were generated.")
+    else:
+        lines.extend(
+            [
+                "| Plan ID | Reaction ID | Label | RR State | "
+                "Recovery Legs | Target 1 | Target 2 |",
+                "| --- | --- | --- | --- | --- | --- | --- |",
+            ]
+        )
+    for plan in report["risk_plans"]:
+        lines.append(
+            "| "
+            f"{plan.get('plan_id')} | "
+            f"{plan.get('reaction_id')} | "
+            f"{plan.get('reaction_label')} | "
+            f"{plan.get('rr_state')} | "
+            f"{plan.get('max_recovery_legs')} | "
+            f"{plan.get('target_1')} | "
+            f"{plan.get('target_2')} |"
+        )
+        for condition in plan.get("cancel_conditions", []):
+            lines.append(f"- Cancel condition for {plan.get('plan_id')}: {condition}")
+    lines.extend(["", "## Warnings", ""])
+    lines.extend(f"- {warning}" for warning in report["warnings"])
+    lines.extend(["", "## Limitations", ""])
+    lines.extend(f"- {limitation}" for limitation in report["limitations"])
+    lines.extend(["", "## Notes", ""])
+    lines.extend(f"- {note}" for note in report["notes"])
+    return "\n".join(lines) + "\n"

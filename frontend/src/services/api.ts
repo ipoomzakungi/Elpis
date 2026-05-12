@@ -54,6 +54,12 @@ import {
   ValidationWalkForwardResponse,
   XauVolOiReport,
   XauDashboardData,
+  XauReactionDashboardData,
+  XauReactionReport,
+  XauReactionReportListResponse,
+  XauReactionReportRequest,
+  XauReactionRowsResponse,
+  XauRiskPlanRowsResponse,
   XauVolOiReportListResponse,
   XauVolOiReportRequest,
   XauWallTableResponse,
@@ -442,5 +448,43 @@ export const api = {
       fetchApi<XauZoneTableResponse>(`/xau/vol-oi/reports/${encodedReportId}/zones`),
     ]);
     return { report, walls, zones };
+  },
+
+  // XAU reaction reports
+  createXauReactionReport: async (
+    request: XauReactionReportRequest,
+  ): Promise<XauReactionReport> => {
+    return fetchApi('/xau/reaction-reports', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  listXauReactionReports: async (): Promise<XauReactionReportListResponse> => {
+    return fetchApi('/xau/reaction-reports');
+  },
+
+  getXauReactionReport: async (reportId: string): Promise<XauReactionReport> => {
+    return fetchApi(`/xau/reaction-reports/${encodeURIComponent(reportId)}`);
+  },
+
+  getXauReactionRows: async (reportId: string): Promise<XauReactionRowsResponse> => {
+    return fetchApi(`/xau/reaction-reports/${encodeURIComponent(reportId)}/reactions`);
+  },
+
+  getXauRiskPlanRows: async (reportId: string): Promise<XauRiskPlanRowsResponse> => {
+    return fetchApi(`/xau/reaction-reports/${encodeURIComponent(reportId)}/risk-plan`);
+  },
+
+  getXauReactionDashboardData: async (
+    reportId: string,
+  ): Promise<XauReactionDashboardData> => {
+    const encodedReportId = encodeURIComponent(reportId);
+    const [report, reactions, riskPlan] = await Promise.all([
+      fetchApi<XauReactionReport>(`/xau/reaction-reports/${encodedReportId}`),
+      fetchApi<XauReactionRowsResponse>(`/xau/reaction-reports/${encodedReportId}/reactions`),
+      fetchApi<XauRiskPlanRowsResponse>(`/xau/reaction-reports/${encodedReportId}/risk-plan`),
+    ]);
+    return { report, reactions, riskPlan };
   },
 };

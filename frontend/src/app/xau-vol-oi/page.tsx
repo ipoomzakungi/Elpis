@@ -4,8 +4,16 @@ import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { api } from '@/services/api'
 import {
   XauDashboardData,
+  XauAcceptanceResult,
   XauExpectedRange,
+  XauFreshnessResult,
   XauOiWall,
+  XauOpenRegimeResult,
+  XauReactionDashboardData,
+  XauReactionReportSummary,
+  XauReactionRow,
+  XauRiskPlan,
+  XauVolRegimeResult,
   XauVolOiReportSummary,
   XauZone,
 } from '@/types'
@@ -14,9 +22,15 @@ export default function XauVolOiPage() {
   const [reports, setReports] = useState<XauVolOiReportSummary[]>([])
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null)
   const [dashboardData, setDashboardData] = useState<XauDashboardData | null>(null)
+  const [reactionReports, setReactionReports] = useState<XauReactionReportSummary[]>([])
+  const [selectedReactionReportId, setSelectedReactionReportId] = useState<string | null>(null)
+  const [reactionData, setReactionData] = useState<XauReactionDashboardData | null>(null)
   const [loadingReports, setLoadingReports] = useState(true)
   const [loadingReport, setLoadingReport] = useState(false)
+  const [loadingReactionReports, setLoadingReactionReports] = useState(true)
+  const [loadingReactionReport, setLoadingReactionReport] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [reactionError, setReactionError] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -33,6 +47,29 @@ export default function XauVolOiPage() {
       })
       .finally(() => {
         if (active) setLoadingReports(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    setLoadingReactionReports(true)
+    api.listXauReactionReports()
+      .then((response) => {
+        if (!active) return
+        setReactionReports(response.reports)
+      })
+      .catch((err) => {
+        if (!active) return
+        setReactionError(
+          err instanceof Error ? err.message : 'XAU reaction reports could not be loaded',
+        )
+      })
+      .finally(() => {
+        if (active) setLoadingReactionReports(false)
       })
 
     return () => {
@@ -68,9 +105,63 @@ export default function XauVolOiPage() {
     }
   }, [selectedReportId])
 
+  useEffect(() => {
+    if (reactionReports.length === 0) {
+      setSelectedReactionReportId(null)
+      return
+    }
+
+    setSelectedReactionReportId((current) => {
+      const currentSummary = reactionReports.find((item) => item.report_id === current)
+      if (
+        current &&
+        currentSummary &&
+        (!selectedReportId || currentSummary.source_report_id === selectedReportId)
+      ) {
+        return current
+      }
+      const sourceMatch = reactionReports.find((item) => item.source_report_id === selectedReportId)
+      return sourceMatch?.report_id ?? reactionReports[0].report_id
+    })
+  }, [reactionReports, selectedReportId])
+
+  useEffect(() => {
+    if (!selectedReactionReportId) {
+      setReactionData(null)
+      return
+    }
+
+    let active = true
+    setLoadingReactionReport(true)
+    setReactionError(null)
+    api.getXauReactionDashboardData(selectedReactionReportId)
+      .then((response) => {
+        if (!active) return
+        setReactionData(response)
+      })
+      .catch((err) => {
+        if (!active) return
+        setReactionData(null)
+        setReactionError(
+          err instanceof Error ? err.message : 'XAU reaction report could not be loaded',
+        )
+      })
+      .finally(() => {
+        if (active) setLoadingReactionReport(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [selectedReactionReportId])
+
   const selectedSummary = useMemo(
     () => reports.find((item) => item.report_id === selectedReportId) ?? null,
     [reports, selectedReportId],
+  )
+  const selectedReactionSummary = useMemo(
+    () => reactionReports.find((item) => item.report_id === selectedReactionReportId) ?? null,
+    [reactionReports, selectedReactionReportId],
   )
 
   const report = dashboardData?.report ?? null
@@ -119,6 +210,16 @@ export default function XauVolOiPage() {
       </div>
 
       <ResearchOnlyNotice />
+      <ReactionReportInspection
+        reports={reactionReports}
+        selectedReportId={selectedReactionReportId}
+        selectedSummary={selectedReactionSummary}
+        data={reactionData}
+        loadingList={loadingReactionReports}
+        loadingReport={loadingReactionReport}
+        error={reactionError}
+        onSelect={setSelectedReactionReportId}
+      />
 
       {error && <Notice tone="error">{error}</Notice>}
 
@@ -176,10 +277,137 @@ export default function XauVolOiPage() {
 function ResearchOnlyNotice() {
   return (
     <Notice tone="warning">
-      XAU Vol-OI walls and zones are research annotations only. They are not buy/sell
-      signals, profitability evidence, predictive proof, safety evidence, or
-      live-readiness evidence.
+      XAU Vol-OI walls, zones, reactions, and bounded risk plans are research
+      annotations only. They require source-data review, context review, and manual
+      validation before any operational use.
     </Notice>
+  )
+}
+
+function ReactionReportInspection({
+  reports,
+  selectedReportId,
+  selectedSummary,
+  data,
+  loadingList,
+  loadingReport,
+  error,
+  onSelect,
+}: {
+  reports: XauReactionReportSummary[]
+  selectedReportId: string | null
+  selectedSummary: XauReactionReportSummary | null
+  data: XauReactionDashboardData | null
+  loadingList: boolean
+  loadingReport: boolean
+  error: string | null
+  onSelect: (reportId: string | null) => void
+}) {
+  const report = data?.report ?? null
+  const reactions = data?.reactions.data ?? report?.reactions ?? []
+  const riskPlans = data?.riskPlan.data ?? report?.risk_plans ?? []
+  const acceptanceStates = reactions
+    .map((reaction) => reaction.acceptance_state)
+    .filter((state): state is XauAcceptanceResult => state !== null)
+  const noTradeReasons = uniqueValues(reactions.flatMap((reaction) => reaction.no_trade_reasons))
+
+  return (
+    <ReportSection title="XAU Reaction Reports">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-sm text-gray-400">
+            Saved reaction reports derived from feature 006 XAU Vol-OI reports.
+          </p>
+          {selectedSummary && (
+            <p className="mt-2 text-sm text-gray-300">
+              Source report: {selectedSummary.source_report_id} | {selectedSummary.status} |{' '}
+              {formatDate(selectedSummary.created_at)}
+            </p>
+          )}
+        </div>
+        <label className="flex flex-col gap-2 text-sm text-gray-300">
+          Reaction report
+          <select
+            value={selectedReportId ?? ''}
+            onChange={(event) => onSelect(event.target.value || null)}
+            className="min-w-80 rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+            disabled={loadingList || reports.length === 0}
+          >
+            {reports.length === 0 ? (
+              <option value="">No reaction reports</option>
+            ) : (
+              reports.map((item) => (
+                <option key={item.report_id} value={item.report_id}>
+                  {item.report_id}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+      </div>
+
+      {error && <div className="mt-4"><Notice tone="error">{error}</Notice></div>}
+
+      {loadingList ? (
+        <div className="mt-4">
+          <EmptyState>Loading XAU reaction reports...</EmptyState>
+        </div>
+      ) : reports.length === 0 ? (
+        <div className="mt-4">
+          <EmptyState>No saved XAU reaction reports are available.</EmptyState>
+        </div>
+      ) : loadingReport ? (
+        <div className="mt-4">
+          <EmptyState>Loading selected XAU reaction report...</EmptyState>
+        </div>
+      ) : report ? (
+        <div className="mt-5 space-y-5">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+            <SummaryCard label="Status" value={report.status} />
+            <SummaryCard label="Source Walls" value={report.source_wall_count} />
+            <SummaryCard label="Reactions" value={report.reaction_count} />
+            <SummaryCard label="No-Trade" value={report.no_trade_count} />
+            <SummaryCard label="Risk Plans" value={report.risk_plan_count} />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <ContextPanel title="Freshness">
+              <FreshnessPanel state={report.freshness_state} />
+            </ContextPanel>
+            <ContextPanel title="IV/RV/VRP">
+              <VolRegimePanel state={report.vol_regime_state} />
+            </ContextPanel>
+            <ContextPanel title="Session Open">
+              <OpenRegimePanel state={report.open_regime_state} />
+            </ContextPanel>
+          </div>
+
+          <ContextPanel title="Acceptance / Rejection State">
+            <AcceptanceStateList states={acceptanceStates} />
+          </ContextPanel>
+
+          <ContextPanel title="Reaction Labels">
+            <ReactionTable rows={reactions} />
+          </ContextPanel>
+
+          <ContextPanel title="Bounded Risk Planner">
+            <RiskPlanTable rows={riskPlans} />
+          </ContextPanel>
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <ContextPanel title="No-Trade Reasons">
+              <NotesList notes={noTradeReasons} emptyText="No no-trade reasons in this report" />
+            </ContextPanel>
+            <ContextPanel title="Warnings">
+              <NotesList notes={report.warnings} emptyText="No warnings" />
+            </ContextPanel>
+            <ContextPanel title="Limitations">
+              <NotesList notes={report.limitations} emptyText="No limitations" />
+            </ContextPanel>
+          </div>
+        </div>
+      ) : null}
+    </ReportSection>
   )
 }
 
@@ -191,6 +419,95 @@ function StatusSummary({ report }: { report: NonNullable<XauDashboardData['repor
       <SummaryCard label="Accepted" value={report.accepted_row_count} />
       <SummaryCard label="Walls" value={report.wall_count} />
       <SummaryCard label="Zones" value={report.zone_count} />
+    </div>
+  )
+}
+
+function ContextPanel({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="rounded-md border border-gray-700 bg-gray-900 p-4">
+      <h4 className="mb-3 text-sm font-semibold text-gray-100">{title}</h4>
+      {children}
+    </div>
+  )
+}
+
+function FreshnessPanel({ state }: { state: XauFreshnessResult }) {
+  return (
+    <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+      <Metric label="State" value={state.state} />
+      <Metric label="Confidence" value={state.confidence_label} />
+      <Metric label="Age Minutes" value={formatNumber(state.age_minutes)} />
+      <Metric label="No-Trade Reason" value={state.no_trade_reason ?? 'n/a'} />
+      {state.notes.length > 0 && (
+        <div className="sm:col-span-2">
+          <NotesList notes={state.notes} emptyText="No freshness notes" />
+        </div>
+      )}
+    </dl>
+  )
+}
+
+function VolRegimePanel({ state }: { state: XauVolRegimeResult }) {
+  return (
+    <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+      <Metric label="Realized Vol" value={formatNumber(state.realized_volatility)} />
+      <Metric label="VRP" value={formatNumber(state.vrp)} />
+      <Metric label="VRP Regime" value={state.vrp_regime} />
+      <Metric label="IV Edge" value={state.iv_edge_state} />
+      <Metric label="RV Extension" value={state.rv_extension_state} />
+      <Metric label="Confidence" value={state.confidence_label} />
+      {state.notes.length > 0 && (
+        <div className="sm:col-span-2">
+          <NotesList notes={state.notes} emptyText="No volatility notes" />
+        </div>
+      )}
+    </dl>
+  )
+}
+
+function OpenRegimePanel({ state }: { state: XauOpenRegimeResult }) {
+  return (
+    <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+      <Metric label="Open Side" value={state.open_side} />
+      <Metric label="Distance" value={formatNumber(state.open_distance_points)} />
+      <Metric label="Flip State" value={state.open_flip_state} />
+      <Metric label="Boundary" value={state.open_as_support_or_resistance} />
+      <Metric label="Confidence" value={state.confidence_label} />
+      {state.notes.length > 0 && (
+        <div className="sm:col-span-2">
+          <NotesList notes={state.notes} emptyText="No open-regime notes" />
+        </div>
+      )}
+    </dl>
+  )
+}
+
+function AcceptanceStateList({ states }: { states: XauAcceptanceResult[] }) {
+  if (states.length === 0) {
+    return <p className="text-sm text-gray-400">No candle acceptance state was recorded.</p>
+  }
+  return (
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+      {states.map((state) => (
+        <div key={`${state.wall_id ?? 'wall'}-${state.zone_id ?? 'zone'}`} className="text-sm">
+          <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Metric label="Wall" value={state.wall_id ?? 'n/a'} />
+            <Metric label="Zone" value={state.zone_id ?? 'n/a'} />
+            <Metric label="Direction" value={state.direction} />
+            <Metric label="Confidence" value={state.confidence_label} />
+            <Metric label="Accepted" value={formatBoolean(state.accepted_beyond_wall)} />
+            <Metric label="Confirmed" value={formatBoolean(state.confirmed_breakout)} />
+            <Metric label="Wick Rejection" value={formatBoolean(state.wick_rejection)} />
+            <Metric label="Failed Break" value={formatBoolean(state.failed_breakout)} />
+          </dl>
+          {state.notes.length > 0 && (
+            <div className="mt-3">
+              <NotesList notes={state.notes} emptyText="No acceptance notes" />
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   )
 }
@@ -358,6 +675,103 @@ function ZoneTable({ rows }: { rows: XauZone[] }) {
   )
 }
 
+function ReactionTable({ rows }: { rows: XauReactionRow[] }) {
+  if (rows.length === 0) {
+    return <p className="text-sm text-gray-400">No reaction rows were generated.</p>
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-left text-sm">
+        <thead className="text-xs uppercase text-gray-400">
+          <tr>
+            <th className="px-3 py-2">Reaction</th>
+            <th className="px-3 py-2">Wall</th>
+            <th className="px-3 py-2">Zone</th>
+            <th className="px-3 py-2">Label</th>
+            <th className="px-3 py-2">Confidence</th>
+            <th className="px-3 py-2">Invalidation</th>
+            <th className="px-3 py-2">Target 1</th>
+            <th className="px-3 py-2">Target 2</th>
+            <th className="px-3 py-2">Next Wall</th>
+            <th className="px-3 py-2">Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.reaction_id} className="border-t border-gray-700 align-top">
+              <td className="px-3 py-2">{row.reaction_id}</td>
+              <td className="px-3 py-2">{row.wall_id ?? 'n/a'}</td>
+              <td className="px-3 py-2">{row.zone_id ?? 'n/a'}</td>
+              <td className="px-3 py-2">{row.reaction_label}</td>
+              <td className="px-3 py-2">{row.confidence_label}</td>
+              <td className="px-3 py-2">{formatNumber(row.invalidation_level)}</td>
+              <td className="px-3 py-2">{formatNumber(row.target_level_1)}</td>
+              <td className="px-3 py-2">{formatNumber(row.target_level_2)}</td>
+              <td className="px-3 py-2">{row.next_wall_reference ?? 'n/a'}</td>
+              <td className="max-w-md px-3 py-2 text-gray-300">
+                {row.explanation_notes.join(' ')}
+                {row.no_trade_reasons.length > 0 && (
+                  <div className="mt-2 text-amber-200">
+                    {row.no_trade_reasons.join(' ')}
+                  </div>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function RiskPlanTable({ rows }: { rows: XauRiskPlan[] }) {
+  if (rows.length === 0) {
+    return <p className="text-sm text-gray-400">No bounded risk-plan rows were generated.</p>
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-left text-sm">
+        <thead className="text-xs uppercase text-gray-400">
+          <tr>
+            <th className="px-3 py-2">Plan</th>
+            <th className="px-3 py-2">Reaction</th>
+            <th className="px-3 py-2">Label</th>
+            <th className="px-3 py-2">Condition</th>
+            <th className="px-3 py-2">Invalidation</th>
+            <th className="px-3 py-2">Buffer</th>
+            <th className="px-3 py-2">Target 1</th>
+            <th className="px-3 py-2">Target 2</th>
+            <th className="px-3 py-2">Recovery</th>
+            <th className="px-3 py-2">RR State</th>
+            <th className="px-3 py-2">Cancel Conditions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.plan_id} className="border-t border-gray-700 align-top">
+              <td className="px-3 py-2">{row.plan_id}</td>
+              <td className="px-3 py-2">{row.reaction_id}</td>
+              <td className="px-3 py-2">{row.reaction_label}</td>
+              <td className="max-w-sm px-3 py-2 text-gray-300">
+                {row.entry_condition_text ?? 'n/a'}
+              </td>
+              <td className="px-3 py-2">{formatNumber(row.invalidation_level)}</td>
+              <td className="px-3 py-2">{formatNumber(row.stop_buffer_points)}</td>
+              <td className="px-3 py-2">{formatNumber(row.target_1)}</td>
+              <td className="px-3 py-2">{formatNumber(row.target_2)}</td>
+              <td className="px-3 py-2">{row.max_recovery_legs}</td>
+              <td className="px-3 py-2">{row.rr_state}</td>
+              <td className="max-w-md px-3 py-2 text-gray-300">
+                {[...row.cancel_conditions, ...row.risk_notes].join(' ')}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function NotesList({ notes, emptyText }: { notes: string[]; emptyText: string }) {
   if (notes.length === 0) {
     return <p className="text-sm text-gray-400">{emptyText}</p>
@@ -383,6 +797,10 @@ function formatDate(value: string | null): string {
 function formatNumber(value: number | null): string {
   if (value === null || Number.isNaN(value)) return 'n/a'
   return value.toLocaleString(undefined, { maximumFractionDigits: 4 })
+}
+
+function formatBoolean(value: boolean): string {
+  return value ? 'yes' : 'no'
 }
 
 function formatPercent(value: number): string {
