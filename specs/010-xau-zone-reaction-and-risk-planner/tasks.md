@@ -116,7 +116,7 @@
 - [X] T051 [US2] Implement `vrp = implied_volatility - realized_volatility` and VRP regime classification in `backend/src/xau_reaction/vol_regime.py`
 - [X] T052 [US2] Implement IV expected-range edge state classification in `backend/src/xau_reaction/vol_regime.py`
 - [X] T053 [US2] Implement RV extension state classification and volatility confidence impact notes in `backend/src/xau_reaction/vol_regime.py`
-- [ ] T054 [US2] Integrate freshness and volatility state generation into `backend/src/xau_reaction/orchestration.py`
+- [X] T054 [US2] Integrate freshness and volatility state generation into `backend/src/xau_reaction/orchestration.py`
 
 **Checkpoint**: User Stories 1 and 2 can classify using computed freshness and volatility context.
 
@@ -145,8 +145,8 @@
 - [X] T064 [US3] Implement OHLC and buffer validation helpers in `backend/src/xau_reaction/acceptance.py`
 - [X] T065 [US3] Implement wick rejection and failed breakout classification in `backend/src/xau_reaction/acceptance.py`
 - [X] T066 [US3] Implement accepted beyond wall and confirmed breakout classification using close plus next-bar hold in `backend/src/xau_reaction/acceptance.py`
-- [ ] T067 [US3] Integrate open-regime and acceptance-state generation into `backend/src/xau_reaction/orchestration.py`
-- [ ] T068 [US3] Connect computed open and acceptance states to classifier calls in `backend/src/xau_reaction/orchestration.py`
+- [X] T067 [US3] Integrate open-regime and acceptance-state generation into `backend/src/xau_reaction/orchestration.py`
+- [X] T068 [US3] Connect computed open and acceptance states to classifier calls in `backend/src/xau_reaction/orchestration.py`
 
 **Checkpoint**: User Stories 1 through 3 can classify using computed freshness, volatility, open, and candle context.
 
