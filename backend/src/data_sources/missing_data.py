@@ -95,6 +95,57 @@ def xau_options_oi_schema_action(
     )
 
 
+def cftc_cot_source_action() -> DataSourceMissingDataAction:
+    return DataSourceMissingDataAction(
+        action_id="free-derivatives-cftc-cot-source",
+        workflow_type=DataSourceWorkflowType.FREE_DERIVATIVES,
+        provider_type=DataSourceProviderType.CFTC_COT,
+        asset="XAU",
+        severity=MissingDataSeverity.INFORMATIONAL,
+        title="Collect or import CFTC COT gold positioning",
+        instructions=[
+            "Use official public CFTC COT historical files or a local fixture/import file.",
+            "Filter gold/COMEX rows and preserve futures-only versus combined report labels.",
+            "Do not treat CFTC COT as strike-level XAU options OI or intraday wall data.",
+        ],
+        blocking=False,
+    )
+
+
+def gvz_source_action() -> DataSourceMissingDataAction:
+    return DataSourceMissingDataAction(
+        action_id="free-derivatives-gvz-source",
+        workflow_type=DataSourceWorkflowType.FREE_DERIVATIVES,
+        provider_type=DataSourceProviderType.GVZ,
+        asset="XAU",
+        severity=MissingDataSeverity.INFORMATIONAL,
+        title="Collect or import GVZ daily close proxy volatility",
+        instructions=[
+            "Use a public GVZCLS daily close path or a local CSV fixture/import file.",
+            "Label GVZ as a GLD-options-derived volatility proxy.",
+            "Do not present GVZ as a CME gold options implied-volatility surface.",
+        ],
+        blocking=False,
+    )
+
+
+def deribit_public_options_action() -> DataSourceMissingDataAction:
+    return DataSourceMissingDataAction(
+        action_id="free-derivatives-deribit-public-options",
+        workflow_type=DataSourceWorkflowType.FREE_DERIVATIVES,
+        provider_type=DataSourceProviderType.DERIBIT_PUBLIC_OPTIONS,
+        asset=None,
+        severity=MissingDataSeverity.INFORMATIONAL,
+        title="Collect Deribit public crypto options snapshots",
+        instructions=[
+            "Use Deribit public market-data endpoints or local mocked fixture responses.",
+            "Normalize crypto options IV and open interest fields where public data is available.",
+            "Do not use private account, order, wallet, broker, or paid vendor credentials.",
+        ],
+        blocking=False,
+    )
+
+
 def optional_vendor_key_action(
     provider_type: DataSourceProviderType,
     env_var_name: str,
@@ -128,5 +179,8 @@ def default_missing_data_actions() -> list[DataSourceMissingDataAction]:
         proxy_ohlcv_action("QQQ", "1d"),
         proxy_ohlcv_action("GLD", "1d"),
         proxy_ohlcv_action("GC=F", "1d"),
+        cftc_cot_source_action(),
+        gvz_source_action(),
+        deribit_public_options_action(),
         xau_options_oi_schema_action(),
     ]

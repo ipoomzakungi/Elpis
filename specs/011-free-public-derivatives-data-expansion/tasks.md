@@ -19,21 +19,21 @@
 
 **Purpose**: Create the feature skeleton, route surfaces, placeholders, and fixture locations without implementing source logic.
 
-- [ ] T001 Create free derivatives package marker in `backend/src/free_derivatives/__init__.py`
-- [ ] T002 Create free derivatives schema module placeholder in `backend/src/models/free_derivatives.py`
-- [ ] T003 Create CFTC module placeholder in `backend/src/free_derivatives/cftc.py`
-- [ ] T004 Create GVZ module placeholder in `backend/src/free_derivatives/gvz.py`
-- [ ] T005 Create Deribit module placeholder in `backend/src/free_derivatives/deribit.py`
-- [ ] T006 Create processing module placeholder in `backend/src/free_derivatives/processing.py`
-- [ ] T007 Create orchestration module placeholder in `backend/src/free_derivatives/orchestration.py`
-- [ ] T008 Create report store module placeholder in `backend/src/free_derivatives/report_store.py`
-- [ ] T009 Create API route placeholder in `backend/src/api/routes/free_derivatives.py`
-- [ ] T010 Register free derivatives route placeholder in `backend/src/main.py`
-- [ ] T011 [P] Add free derivatives frontend type placeholders in `frontend/src/types/index.ts`
-- [ ] T012 [P] Add free derivatives frontend API client placeholders in `frontend/src/services/api.ts`
-- [ ] T013 [P] Add placeholder free derivatives section in `frontend/src/app/data-sources/page.tsx`
-- [ ] T014 [P] Create free derivatives fixture directory marker in `backend/tests/fixtures/free_derivatives/.gitkeep`
-- [ ] T015 Verify ignored generated output coverage for `data/raw/cftc/`, `data/raw/gvz/`, `data/raw/deribit/`, `data/processed/cftc/`, `data/processed/gvz/`, `data/processed/deribit/`, and `data/reports/free_derivatives/` in `.gitignore` and `scripts/check_generated_artifacts.ps1`
+- [X] T001 Create free derivatives package marker in `backend/src/free_derivatives/__init__.py`
+- [X] T002 Create free derivatives schema module placeholder in `backend/src/models/free_derivatives.py`
+- [X] T003 Create CFTC module placeholder in `backend/src/free_derivatives/cftc.py`
+- [X] T004 Create GVZ module placeholder in `backend/src/free_derivatives/gvz.py`
+- [X] T005 Create Deribit module placeholder in `backend/src/free_derivatives/deribit.py`
+- [X] T006 Create processing module placeholder in `backend/src/free_derivatives/processing.py`
+- [X] T007 Create orchestration module placeholder in `backend/src/free_derivatives/orchestration.py`
+- [X] T008 Create report store module placeholder in `backend/src/free_derivatives/report_store.py`
+- [X] T009 Create API route placeholder in `backend/src/api/routes/free_derivatives.py`
+- [X] T010 Register free derivatives route placeholder in `backend/src/main.py`
+- [X] T011 [P] Add free derivatives frontend type placeholders in `frontend/src/types/index.ts`
+- [X] T012 [P] Add free derivatives frontend API client placeholders in `frontend/src/services/api.ts`
+- [X] T013 [P] Add placeholder free derivatives section in `frontend/src/app/data-sources/page.tsx`
+- [X] T014 [P] Create free derivatives fixture directory marker in `backend/tests/fixtures/free_derivatives/.gitkeep`
+- [X] T015 Verify ignored generated output coverage for `data/raw/cftc/`, `data/raw/gvz/`, `data/raw/deribit/`, `data/processed/cftc/`, `data/processed/gvz/`, `data/processed/deribit/`, and `data/reports/free_derivatives/` in `.gitignore` and `scripts/check_generated_artifacts.ps1`
 
 ---
 
@@ -43,20 +43,20 @@
 
 **Critical**: No source-specific user story implementation should begin until this phase is complete.
 
-- [ ] T016 [P] Add schema validation tests for free derivatives enums, request acknowledgement, report format, safe ids, and extra-field rejection in `backend/tests/unit/test_free_derivatives_models.py`
-- [ ] T017 [P] Add report-store path safety tests for raw, processed, and report artifact roots in `backend/tests/unit/test_free_derivatives_report_store.py`
-- [ ] T018 [P] Add source limitation label tests for CFTC, GVZ, Deribit, public-only, and artifact-scope labels in `backend/tests/unit/test_free_derivatives_limitations.py`
-- [ ] T019 [P] Add route registration smoke tests for free derivatives endpoints in `backend/tests/contract/test_free_derivatives_api_contracts.py`
-- [ ] T020 Implement free derivatives enums and core request/result schemas in `backend/src/models/free_derivatives.py`
-- [ ] T021 Implement CFTC, GVZ, Deribit, public-only, and artifact-scope limitation constants in `backend/src/free_derivatives/processing.py`
-- [ ] T022 Implement safe id, safe local path, source URL, and credential-field validation helpers in `backend/src/models/free_derivatives.py`
-- [ ] T023 Implement path-safe free derivatives report-store root helpers in `backend/src/free_derivatives/report_store.py`
-- [ ] T024 Implement free derivatives artifact metadata helper in `backend/src/free_derivatives/report_store.py`
-- [ ] T025 Implement route skeleton functions with structured placeholder responses in `backend/src/api/routes/free_derivatives.py`
-- [ ] T026 Register free derivatives router with the v0 API prefix in `backend/src/main.py`
-- [ ] T027 Add `cftc_cot`, `gvz`, and `deribit_public_options` provider enum entries in `backend/src/models/data_sources.py`
-- [ ] T028 Add foundational free source capability placeholders in `backend/src/data_sources/capabilities.py`
-- [ ] T029 Add foundational missing-data action placeholders in `backend/src/data_sources/missing_data.py`
+- [X] T016 [P] Add schema validation tests for free derivatives enums, request acknowledgement, report format, safe ids, and extra-field rejection in `backend/tests/unit/test_free_derivatives_models.py`
+- [X] T017 [P] Add report-store path safety tests for raw, processed, and report artifact roots in `backend/tests/unit/test_free_derivatives_report_store.py`
+- [X] T018 [P] Add source limitation label tests for CFTC, GVZ, Deribit, public-only, and artifact-scope labels in `backend/tests/unit/test_free_derivatives_limitations.py`
+- [X] T019 [P] Add route registration smoke tests for free derivatives endpoints in `backend/tests/contract/test_free_derivatives_api_contracts.py`
+- [X] T020 Implement free derivatives enums and core request/result schemas in `backend/src/models/free_derivatives.py`
+- [X] T021 Implement CFTC, GVZ, Deribit, public-only, and artifact-scope limitation constants in `backend/src/free_derivatives/processing.py`
+- [X] T022 Implement safe id, safe local path, source URL, and credential-field validation helpers in `backend/src/models/free_derivatives.py`
+- [X] T023 Implement path-safe free derivatives report-store root helpers in `backend/src/free_derivatives/report_store.py`
+- [X] T024 Implement free derivatives artifact metadata helper in `backend/src/free_derivatives/report_store.py`
+- [X] T025 Implement route skeleton functions with structured placeholder responses in `backend/src/api/routes/free_derivatives.py`
+- [X] T026 Register free derivatives router with the v0 API prefix in `backend/src/main.py`
+- [X] T027 Add `cftc_cot`, `gvz`, and `deribit_public_options` provider enum entries in `backend/src/models/data_sources.py`
+- [X] T028 Add foundational free source capability placeholders in `backend/src/data_sources/capabilities.py`
+- [X] T029 Add foundational missing-data action placeholders in `backend/src/data_sources/missing_data.py`
 
 **Checkpoint**: Foundation ready. Free derivatives package imports, schema validation, route registration, limitation labels, and path safety are in place.
 

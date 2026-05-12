@@ -19,6 +19,9 @@ import {
   DataSourceReadiness,
   DownloadRequest,
   Feature,
+  FreeDerivativesBootstrapRequest,
+  FreeDerivativesBootstrapRun,
+  FreeDerivativesBootstrapRunListResponse,
   FirstEvidenceRunRequest,
   FirstEvidenceRunResult,
   FundingRate,
@@ -238,14 +241,35 @@ export const api = {
     return fetchApi(`/data-sources/bootstrap/runs/${encodeURIComponent(bootstrapRunId)}`);
   },
 
+  runFreeDerivativesBootstrap: async (
+    request: FreeDerivativesBootstrapRequest,
+  ): Promise<FreeDerivativesBootstrapRun> => {
+    return fetchApi('/data-sources/bootstrap/free-derivatives', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  listFreeDerivativesRuns: async (): Promise<FreeDerivativesBootstrapRunListResponse> => {
+    return fetchApi('/data-sources/bootstrap/free-derivatives/runs');
+  },
+
+  getFreeDerivativesRun: async (runId: string): Promise<FreeDerivativesBootstrapRun> => {
+    return fetchApi(`/data-sources/bootstrap/free-derivatives/runs/${encodeURIComponent(runId)}`);
+  },
+
   getDataSourceDashboardData: async (): Promise<DataSourceDashboardData> => {
-    const [readiness, capabilities, missingData, bootstrapRuns] = await Promise.all([
-      fetchApi<DataSourceReadiness>('/data-sources/readiness'),
-      fetchApi<DataSourceCapabilityListResponse>('/data-sources/capabilities'),
-      fetchApi<DataSourceMissingDataResponse>('/data-sources/missing-data'),
-      fetchApi<DataSourceBootstrapRunListResponse>('/data-sources/bootstrap/runs'),
-    ]);
-    return { readiness, capabilities, missingData, bootstrapRuns };
+    const [readiness, capabilities, missingData, bootstrapRuns, freeDerivativesRuns] =
+      await Promise.all([
+        fetchApi<DataSourceReadiness>('/data-sources/readiness'),
+        fetchApi<DataSourceCapabilityListResponse>('/data-sources/capabilities'),
+        fetchApi<DataSourceMissingDataResponse>('/data-sources/missing-data'),
+        fetchApi<DataSourceBootstrapRunListResponse>('/data-sources/bootstrap/runs'),
+        fetchApi<FreeDerivativesBootstrapRunListResponse>(
+          '/data-sources/bootstrap/free-derivatives/runs',
+        ),
+      ]);
+    return { readiness, capabilities, missingData, bootstrapRuns, freeDerivativesRuns };
   },
 
   // Backtest reports

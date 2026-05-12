@@ -10,6 +10,7 @@ import {
   DataSourceDashboardData,
   DataSourceMissingDataAction,
   DataSourceProviderStatus,
+  FreeDerivativesBootstrapRunSummary,
   FirstEvidenceRunResult,
 } from '@/types'
 
@@ -19,6 +20,12 @@ const OPTIONAL_PROVIDER_TYPES = new Set([
   'coinglass_optional',
   'cryptoquant_optional',
   'cme_quikstrike_local_or_optional',
+])
+
+const FREE_DERIVATIVES_PROVIDER_TYPES = new Set([
+  'cftc_cot',
+  'gvz',
+  'deribit_public_options',
 ])
 
 export default function DataSourcesPage() {
@@ -61,17 +68,27 @@ export default function DataSourcesPage() {
 
   const providerStatuses = data?.readiness.provider_statuses ?? []
   const capabilityRows = data?.capabilities.capabilities ?? data?.readiness.capability_matrix ?? []
+  const freeDerivativeStatuses = providerStatuses.filter((status) =>
+    FREE_DERIVATIVES_PROVIDER_TYPES.has(status.provider_type),
+  )
+  const freeDerivativeCapabilities = capabilityRows.filter((row) =>
+    FREE_DERIVATIVES_PROVIDER_TYPES.has(row.provider_type),
+  )
   const optionalStatuses = providerStatuses.filter((status) =>
     OPTIONAL_PROVIDER_TYPES.has(status.provider_type),
   )
   const defaultMissingActions = data?.missingData.actions ?? []
   const readinessMissingActions = data?.readiness.missing_data_actions ?? []
   const bootstrapRuns = data?.bootstrapRuns.runs ?? []
+  const freeDerivativeRuns = data?.freeDerivativesRuns.runs ?? []
   const missingActions = useMemo(
     () => dedupeActions([...readinessMissingActions, ...defaultMissingActions]),
     [readinessMissingActions, defaultMissingActions],
   )
   const xauAction = missingActions.find((action) => action.workflow_type === 'xau_vol_oi')
+  const freeDerivativeActions = missingActions.filter(
+    (action) => action.workflow_type === 'free_derivatives',
+  )
 
   async function loadFirstRunById() {
     if (!firstRunId.trim()) return
@@ -215,6 +232,15 @@ export default function DataSourcesPage() {
             </ReportSection>
           </div>
 
+          <ReportSection title="Free Public Derivatives">
+            <FreeDerivativesPlaceholderPanel
+              actions={freeDerivativeActions}
+              capabilities={freeDerivativeCapabilities}
+              runs={freeDerivativeRuns}
+              statuses={freeDerivativeStatuses}
+            />
+          </ReportSection>
+
           <ReportSection title="Provider Capability Matrix">
             <CapabilityTable rows={capabilityRows} />
           </ReportSection>
@@ -352,6 +378,55 @@ function XauSchemaPanel({ action }: { action: DataSourceMissingDataAction | unde
         <ChipList items={action.optional_columns} tone="neutral" emptyText="None" />
       </div>
       <NotesList notes={action.instructions} emptyText="No XAU import instructions." />
+    </div>
+  )
+}
+
+function FreeDerivativesPlaceholderPanel({
+  actions,
+  capabilities,
+  runs,
+  statuses,
+}: {
+  actions: DataSourceMissingDataAction[]
+  capabilities: DataSourceCapability[]
+  runs: FreeDerivativesBootstrapRunSummary[]
+  statuses: DataSourceProviderStatus[]
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <SummaryCard label="Sources" value={statuses.length} />
+        <SummaryCard label="Bootstrap runs" value={runs.length} />
+        <SummaryCard label="Latest run" value={runs[0]?.run_id ?? 'none'} />
+        <SummaryCard label="Scope" value="research only" />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        {statuses.map((status) => (
+          <MiniPanel key={status.provider_type} title={status.capabilities.display_name}>
+            <div className="mb-3">
+              <StatusPill status={status.status} />
+            </div>
+            <NotesList notes={status.limitations} emptyText="No limitations reported." compact />
+          </MiniPanel>
+        ))}
+      </div>
+
+      <MiniPanel title="Foundational capabilities">
+        <CapabilityTable rows={capabilities} />
+      </MiniPanel>
+
+      <MiniPanel title="Missing-data actions">
+        <MissingDataChecklist actions={actions} />
+      </MiniPanel>
+
+      <p className="text-xs leading-5 text-gray-400">
+        The free-derivatives bootstrap route is registered as a structured placeholder in
+        this slice. Source-specific CFTC, GVZ, and Deribit collection is added in later
+        tasks; generated outputs must remain under ignored data/raw, data/processed, and
+        data/reports paths.
+      </p>
     </div>
   )
 }
