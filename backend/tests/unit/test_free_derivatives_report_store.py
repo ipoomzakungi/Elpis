@@ -1,12 +1,18 @@
+import csv
+import json
 from pathlib import Path
 
 import pytest
 
+from src.free_derivatives.orchestration import assemble_placeholder_bootstrap_run
 from src.free_derivatives.report_store import FreeDerivativesReportStore
 from src.models.free_derivatives import (
     FreeDerivativesArtifactFormat,
     FreeDerivativesArtifactType,
+    FreeDerivativesBootstrapRequest,
+    FreeDerivativesRunStatus,
     FreeDerivativesSource,
+    FreeDerivativesSourceStatus,
 )
 
 
@@ -91,3 +97,63 @@ def test_free_derivatives_report_store_builds_path_safe_artifact_metadata(tmp_pa
             artifact_format=FreeDerivativesArtifactFormat.JSON,
         )
 
+
+def test_free_derivatives_report_store_persists_and_reads_full_run_report(tmp_path):
+    cftc_fixture = _write_cftc_csv(tmp_path / "cot.csv")
+    store = FreeDerivativesReportStore(
+        raw_dir=tmp_path / "raw",
+        processed_dir=tmp_path / "processed",
+        reports_dir=tmp_path / "reports",
+    )
+    request = FreeDerivativesBootstrapRequest(
+        include_cftc=True,
+        include_gvz=False,
+        include_deribit=False,
+        run_label="store_persist",
+        cftc={"local_fixture_paths": [cftc_fixture]},
+        research_only_acknowledged=True,
+    )
+    run = assemble_placeholder_bootstrap_run(request, store=store)
+
+    persisted = store.persist_run(run)
+    read_run = store.read_run(persisted.run_id)
+    summaries = store.list_run_summaries()
+    metadata = json.loads(
+        store.artifact_path(persisted.run_id, "metadata.json").read_text(encoding="utf-8")
+    )
+    markdown = store.artifact_path(persisted.run_id, "report.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert persisted.status == FreeDerivativesRunStatus.COMPLETED
+    assert read_run.run_id == persisted.run_id
+    assert read_run.source_results[0].status == FreeDerivativesSourceStatus.COMPLETED
+    assert summaries[0].run_id == persisted.run_id
+    assert metadata["run_id"] == persisted.run_id
+    assert metadata["sources"][0]["source"] == "cftc_cot"
+    assert "Research-only public/local data expansion report" in markdown
+    assert {"run_metadata", "run_json", "run_markdown"}.issubset(
+        {artifact.artifact_type.value for artifact in persisted.artifacts}
+    )
+    assert store.artifact_path(persisted.run_id, "report.json").exists()
+
+
+def _write_cftc_csv(path: Path) -> Path:
+    rows = [
+        {
+            "report_category": "futures_only",
+            "As_of_Date_In_Form_YYMMDD": "250107",
+            "Market_and_Exchange_Names": "GOLD - COMMODITY EXCHANGE INC.",
+            "Open_Interest_All": "1000",
+            "Noncommercial_Long_All": "130",
+            "Noncommercial_Short_All": "70",
+            "Commercial_Long_All": "200",
+            "Commercial_Short_All": "210",
+        },
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(rows)
+    return path

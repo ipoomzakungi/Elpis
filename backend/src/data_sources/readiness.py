@@ -5,7 +5,12 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 
 from src.data_sources.capabilities import capability_matrix
-from src.data_sources.missing_data import optional_vendor_key_action
+from src.data_sources.missing_data import (
+    cftc_cot_source_action,
+    deribit_public_options_action,
+    gvz_source_action,
+    optional_vendor_key_action,
+)
 from src.models.data_sources import (
     DataSourceCapability,
     DataSourceProviderStatus,
@@ -21,6 +26,11 @@ OPTIONAL_PROVIDER_ENV_VARS: dict[DataSourceProviderType, str] = {
     DataSourceProviderType.COINGLASS_OPTIONAL: "COINGLASS_API_KEY",
     DataSourceProviderType.CRYPTOQUANT_OPTIONAL: "CRYPTOQUANT_API_KEY",
     DataSourceProviderType.CME_QUIKSTRIKE_LOCAL_OR_OPTIONAL: "CME_QUIKSTRIKE_API_KEY",
+}
+FREE_DERIVATIVES_MISSING_ACTIONS = {
+    DataSourceProviderType.CFTC_COT: cftc_cot_source_action,
+    DataSourceProviderType.GVZ: gvz_source_action,
+    DataSourceProviderType.DERIBIT_PUBLIC_OPTIONS: deribit_public_options_action,
 }
 
 RESEARCH_ONLY_WARNING = (
@@ -55,6 +65,10 @@ def provider_statuses(
         ):
             missing_actions.append(
                 optional_vendor_key_action(capability.provider_type, env_var_name or "")
+            )
+        elif capability.provider_type in FREE_DERIVATIVES_MISSING_ACTIONS:
+            missing_actions.append(
+                FREE_DERIVATIVES_MISSING_ACTIONS[capability.provider_type]()
             )
 
         statuses.append(

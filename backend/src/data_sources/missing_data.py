@@ -106,6 +106,7 @@ def cftc_cot_source_action() -> DataSourceMissingDataAction:
         instructions=[
             "Use official public CFTC COT historical files or a local fixture/import file.",
             "Filter gold/COMEX rows and preserve futures-only versus combined report labels.",
+            "Use CFTC as weekly broad positioning context only.",
             "Do not treat CFTC COT as strike-level XAU options OI or intraday wall data.",
         ],
         blocking=False,
@@ -124,6 +125,7 @@ def gvz_source_action() -> DataSourceMissingDataAction:
             "Use a public GVZCLS daily close path or a local CSV fixture/import file.",
             "Label GVZ as a GLD-options-derived volatility proxy.",
             "Do not present GVZ as a CME gold options implied-volatility surface.",
+            "Do not use GVZ as strike-level XAU options OI.",
         ],
         blocking=False,
     )
@@ -140,6 +142,7 @@ def deribit_public_options_action() -> DataSourceMissingDataAction:
         instructions=[
             "Use Deribit public market-data endpoints or local mocked fixture responses.",
             "Normalize crypto options IV and open interest fields where public data is available.",
+            "Label Deribit as crypto options data only, not gold or XAU data.",
             "Do not use private account, order, wallet, broker, or paid vendor credentials.",
         ],
         blocking=False,

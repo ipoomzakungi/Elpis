@@ -269,7 +269,21 @@ export const api = {
           '/data-sources/bootstrap/free-derivatives/runs',
         ),
       ]);
-    return { readiness, capabilities, missingData, bootstrapRuns, freeDerivativesRuns };
+    const latestFreeDerivativesRun = freeDerivativesRuns.runs[0]
+      ? await fetchApi<FreeDerivativesBootstrapRun>(
+          `/data-sources/bootstrap/free-derivatives/runs/${encodeURIComponent(
+            freeDerivativesRuns.runs[0].run_id,
+          )}`,
+        )
+      : null;
+    return {
+      readiness,
+      capabilities,
+      missingData,
+      bootstrapRuns,
+      freeDerivativesRuns,
+      latestFreeDerivativesRun,
+    };
   },
 
   // Backtest reports

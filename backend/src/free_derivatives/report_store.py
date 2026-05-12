@@ -15,7 +15,11 @@ from src.models.free_derivatives import (
     FreeDerivativesArtifact,
     FreeDerivativesArtifactFormat,
     FreeDerivativesArtifactType,
+    FreeDerivativesBootstrapRun,
+    FreeDerivativesBootstrapRunListResponse,
+    FreeDerivativesBootstrapRunSummary,
     FreeDerivativesSource,
+    FreeDerivativesSourceStatus,
     GvzDailyCloseRecord,
     GvzGapSummary,
     validate_filesystem_safe_id,
@@ -296,6 +300,103 @@ class FreeDerivativesReportStore:
             rows=len(walls),
         )
 
+    def persist_run(self, run: FreeDerivativesBootstrapRun) -> FreeDerivativesBootstrapRun:
+        """Persist a complete bootstrap run and return it with report artifacts attached."""
+
+        self.ensure_run_dir(run.run_id)
+        metadata_path = self.artifact_path(run.run_id, "metadata.json")
+        json_path = self.artifact_path(run.run_id, "report.json")
+        markdown_path = self.artifact_path(run.run_id, "report.md")
+        report_source = (
+            run.source_results[0].source
+            if run.source_results
+            else FreeDerivativesSource.CFTC_COT
+        )
+
+        report_artifacts = [
+            self.artifact(
+                artifact_type=FreeDerivativesArtifactType.RUN_METADATA,
+                source=report_source,
+                path=metadata_path,
+                artifact_format=FreeDerivativesArtifactFormat.JSON,
+            ),
+            self.artifact(
+                artifact_type=FreeDerivativesArtifactType.RUN_JSON,
+                source=report_source,
+                path=json_path,
+                artifact_format=FreeDerivativesArtifactFormat.JSON,
+            ),
+            self.artifact(
+                artifact_type=FreeDerivativesArtifactType.RUN_MARKDOWN,
+                source=report_source,
+                path=markdown_path,
+                artifact_format=FreeDerivativesArtifactFormat.MARKDOWN,
+            ),
+        ]
+        persisted_run = run.model_copy(
+            update={
+                "artifacts": _dedupe_artifacts([*run.artifacts, *report_artifacts]),
+            }
+        )
+
+        self._write_json_document(metadata_path, self._run_metadata(persisted_run))
+        self._write_json_document(json_path, persisted_run.model_dump(mode="json"))
+        markdown_path.write_text(self._run_markdown(persisted_run), encoding="utf-8")
+        return persisted_run
+
+    def read_run(self, run_id: str) -> FreeDerivativesBootstrapRun:
+        path = self.artifact_path(run_id, "report.json")
+        if not path.exists():
+            raise FileNotFoundError(f"Free derivatives run '{run_id}' was not found")
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return FreeDerivativesBootstrapRun.model_validate(payload)
+
+    def list_run_summaries(self) -> list[FreeDerivativesBootstrapRunSummary]:
+        root = self.report_root()
+        if not root.exists():
+            return []
+
+        summaries: list[FreeDerivativesBootstrapRunSummary] = []
+        for report_path in root.glob("*/report.json"):
+            try:
+                run = FreeDerivativesBootstrapRun.model_validate(
+                    json.loads(report_path.read_text(encoding="utf-8"))
+                )
+            except (OSError, ValueError, json.JSONDecodeError):
+                continue
+            summaries.append(self.summarize_run(run))
+        return sorted(summaries, key=lambda item: item.created_at, reverse=True)
+
+    def list_runs(self) -> FreeDerivativesBootstrapRunListResponse:
+        return FreeDerivativesBootstrapRunListResponse(runs=self.list_run_summaries())
+
+    def summarize_run(
+        self,
+        run: FreeDerivativesBootstrapRun,
+    ) -> FreeDerivativesBootstrapRunSummary:
+        return FreeDerivativesBootstrapRunSummary(
+            run_id=run.run_id,
+            status=run.status,
+            created_at=run.created_at,
+            completed_at=run.completed_at,
+            completed_source_count=sum(
+                result.status == FreeDerivativesSourceStatus.COMPLETED
+                for result in run.source_results
+            ),
+            partial_source_count=sum(
+                result.status == FreeDerivativesSourceStatus.PARTIAL
+                for result in run.source_results
+            ),
+            failed_source_count=sum(
+                result.status == FreeDerivativesSourceStatus.FAILED
+                for result in run.source_results
+            ),
+            artifact_count=len(run.artifacts),
+            warning_count=len(run.warnings)
+            + sum(len(result.warnings) for result in run.source_results),
+            limitation_count=len(run.limitations),
+        )
+
     def artifact(
         self,
         *,
@@ -347,3 +448,104 @@ class FreeDerivativesReportStore:
     def _write_json(self, path: Path, rows: list[dict[str, Any]]) -> None:
         with path.open("w", encoding="utf-8") as handle:
             json.dump(rows, handle, indent=2, sort_keys=True, default=str)
+
+    def _write_json_document(self, path: Path, payload: dict[str, Any]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True, default=str)
+
+    def _run_metadata(self, run: FreeDerivativesBootstrapRun) -> dict[str, Any]:
+        return {
+            "run_id": run.run_id,
+            "status": run.status.value,
+            "created_at": run.created_at.isoformat(),
+            "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+            "source_count": len(run.source_results),
+            "artifact_count": len(run.artifacts),
+            "warning_count": len(run.warnings)
+            + sum(len(result.warnings) for result in run.source_results),
+            "limitation_count": len(run.limitations),
+            "sources": [
+                {
+                    "source": result.source.value,
+                    "status": result.status.value,
+                    "row_count": result.row_count,
+                    "instrument_count": result.instrument_count,
+                    "artifact_count": len(result.artifacts),
+                }
+                for result in run.source_results
+            ],
+            "research_only_warnings": run.research_only_warnings,
+        }
+
+    def _run_markdown(self, run: FreeDerivativesBootstrapRun) -> str:
+        lines = [
+            f"# Free Derivatives Bootstrap Run {run.run_id}",
+            "",
+            "Research-only public/local data expansion report. It is not order routing, "
+            "account access, or a paid vendor workflow.",
+            "",
+            "## Summary",
+            "",
+            f"- Status: {run.status.value}",
+            f"- Created at: {run.created_at.isoformat()}",
+            f"- Completed at: {run.completed_at.isoformat() if run.completed_at else 'n/a'}",
+            f"- Sources: {len(run.source_results)}",
+            f"- Artifacts: {len(run.artifacts)}",
+            "",
+            "## Source Results",
+            "",
+            "| Source | Status | Rows | Instruments | Coverage | Snapshot |",
+            "| --- | --- | ---: | ---: | --- | --- |",
+        ]
+        for result in run.source_results:
+            coverage_start = (
+                result.coverage_start.isoformat() if result.coverage_start else "n/a"
+            )
+            coverage_end = result.coverage_end.isoformat() if result.coverage_end else "n/a"
+            snapshot = (
+                result.snapshot_timestamp.isoformat()
+                if result.snapshot_timestamp
+                else "n/a"
+            )
+            lines.append(
+                "| "
+                f"{result.source.value} | {result.status.value} | {result.row_count} | "
+                f"{result.instrument_count} | {coverage_start} to {coverage_end} | "
+                f"{snapshot} |"
+            )
+        lines.extend(["", "## Artifacts", ""])
+        if run.artifacts:
+            for artifact in run.artifacts:
+                rows = artifact.rows if artifact.rows is not None else "n/a"
+                lines.append(
+                    f"- {artifact.artifact_type.value}: {artifact.path} "
+                    f"({artifact.format.value}, rows={rows})"
+                )
+        else:
+            lines.append("- No artifacts were written.")
+
+        lines.extend(["", "## Limitations", ""])
+        lines.extend(f"- {limitation}" for limitation in run.limitations)
+        lines.extend(["", "## Missing Data Actions", ""])
+        if run.missing_data_actions:
+            lines.extend(f"- {action}" for action in run.missing_data_actions)
+        else:
+            lines.append("- No missing-data actions reported.")
+        lines.extend(["", "## Research-Only Warnings", ""])
+        lines.extend(f"- {warning}" for warning in run.research_only_warnings)
+        lines.append("")
+        return "\n".join(lines)
+
+
+def _dedupe_artifacts(
+    artifacts: list[FreeDerivativesArtifact],
+) -> list[FreeDerivativesArtifact]:
+    deduped: list[FreeDerivativesArtifact] = []
+    seen: set[tuple[str, str]] = set()
+    for artifact in artifacts:
+        key = (artifact.artifact_type.value, artifact.path)
+        if key not in seen:
+            deduped.append(artifact)
+            seen.add(key)
+    return deduped

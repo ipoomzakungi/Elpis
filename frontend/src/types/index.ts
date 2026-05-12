@@ -1629,4 +1629,5 @@ export interface DataSourceDashboardData {
   missingData: DataSourceMissingDataResponse;
   bootstrapRuns: DataSourceBootstrapRunListResponse;
   freeDerivativesRuns: FreeDerivativesBootstrapRunListResponse;
+  latestFreeDerivativesRun: FreeDerivativesBootstrapRun | null;
 }

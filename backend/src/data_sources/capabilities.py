@@ -7,6 +7,8 @@ from src.free_derivatives.processing import (
     CFTC_CATEGORY_LIMITATION,
     CFTC_WEEKLY_POSITIONING_LIMITATION,
     DERIBIT_CRYPTO_OPTIONS_LIMITATION,
+    DERIBIT_UNSUPPORTED_UNDERLYING_LIMITATION,
+    GVZ_NOT_STRIKE_LEVEL_OI_LIMITATION,
     GVZ_PROXY_LIMITATION,
     PUBLIC_ONLY_LIMITATION,
 )
@@ -138,7 +140,12 @@ def capability_matrix() -> list[DataSourceCapability]:
             requires_key=False,
             requires_local_file=False,
             is_optional=False,
-            limitations=[GVZ_PROXY_LIMITATION, PUBLIC_ONLY_LIMITATION, ARTIFACT_SCOPE_LIMITATION],
+            limitations=[
+                GVZ_PROXY_LIMITATION,
+                GVZ_NOT_STRIKE_LEVEL_OI_LIMITATION,
+                PUBLIC_ONLY_LIMITATION,
+                ARTIFACT_SCOPE_LIMITATION,
+            ],
         ),
         DataSourceCapability(
             provider_type=DataSourceProviderType.DERIBIT_PUBLIC_OPTIONS,
@@ -160,6 +167,7 @@ def capability_matrix() -> list[DataSourceCapability]:
             is_optional=False,
             limitations=[
                 DERIBIT_CRYPTO_OPTIONS_LIMITATION,
+                DERIBIT_UNSUPPORTED_UNDERLYING_LIMITATION,
                 PUBLIC_ONLY_LIMITATION,
                 ARTIFACT_SCOPE_LIMITATION,
             ],

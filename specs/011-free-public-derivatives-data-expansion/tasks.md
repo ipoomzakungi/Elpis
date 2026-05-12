@@ -159,31 +159,31 @@
 
 ### Tests for User Story 4
 
-- [ ] T071 [P] [US4] Add API contract tests for create free derivatives bootstrap run in `backend/tests/contract/test_free_derivatives_api_contracts.py`
-- [ ] T072 [P] [US4] Add API contract tests for list and detail free derivatives bootstrap runs in `backend/tests/contract/test_free_derivatives_api_contracts.py`
-- [ ] T073 [P] [US4] Add API contract tests for invalid requests, missing run ids, and blocked all-source runs in `backend/tests/contract/test_free_derivatives_api_contracts.py`
-- [ ] T074 [P] [US4] Add readiness and capability contract tests for `cftc_cot`, `gvz`, and `deribit_public_options` in `backend/tests/contract/test_free_derivatives_api_contracts.py`
-- [ ] T075 [P] [US4] Add integration fixture flow test for CFTC plus GVZ plus Deribit partial preservation in `backend/tests/integration/test_free_derivatives_flow.py`
-- [ ] T076 [P] [US4] Add integration test proving responses contain no secret values or forbidden execution wording in `backend/tests/integration/test_free_derivatives_flow.py`
-- [ ] T077 [P] [US4] Add report persistence read/write tests for metadata, JSON, Markdown, source results, and artifact references in `backend/tests/unit/test_free_derivatives_report_store.py`
+- [X] T071 [P] [US4] Add API contract tests for create free derivatives bootstrap run in `backend/tests/contract/test_free_derivatives_api_contracts.py`
+- [X] T072 [P] [US4] Add API contract tests for list and detail free derivatives bootstrap runs in `backend/tests/contract/test_free_derivatives_api_contracts.py`
+- [X] T073 [P] [US4] Add API contract tests for invalid requests, missing run ids, and blocked all-source runs in `backend/tests/contract/test_free_derivatives_api_contracts.py`
+- [X] T074 [P] [US4] Add readiness and capability contract tests for `cftc_cot`, `gvz`, and `deribit_public_options` in `backend/tests/contract/test_free_derivatives_api_contracts.py`
+- [X] T075 [P] [US4] Add integration fixture flow test for CFTC plus GVZ plus Deribit partial preservation in `backend/tests/integration/test_free_derivatives_flow.py`
+- [X] T076 [P] [US4] Add integration test proving responses contain no secret values or forbidden execution wording in `backend/tests/integration/test_free_derivatives_flow.py`
+- [X] T077 [P] [US4] Add report persistence read/write tests for metadata, JSON, Markdown, source results, and artifact references in `backend/tests/unit/test_free_derivatives_report_store.py`
 
 ### Implementation for User Story 4
 
-- [ ] T078 [US4] Implement run status aggregation and partial-result preservation in `backend/src/free_derivatives/orchestration.py`
-- [ ] T079 [US4] Implement full report metadata, JSON, and Markdown persistence in `backend/src/free_derivatives/report_store.py`
-- [ ] T080 [US4] Implement saved run list and detail reads in `backend/src/free_derivatives/report_store.py`
-- [ ] T081 [US4] Implement `POST /api/v1/data-sources/bootstrap/free-derivatives` in `backend/src/api/routes/free_derivatives.py`
-- [ ] T082 [US4] Implement `GET /api/v1/data-sources/bootstrap/free-derivatives/runs` and `GET /api/v1/data-sources/bootstrap/free-derivatives/runs/{run_id}` in `backend/src/api/routes/free_derivatives.py`
-- [ ] T083 [US4] Implement structured validation, missing-data, and not-found errors for free derivatives routes in `backend/src/api/routes/free_derivatives.py`
-- [ ] T084 [US4] Extend data-source capability matrix entries in `backend/src/data_sources/capabilities.py`
-- [ ] T085 [US4] Extend data-source readiness statuses for free public derivatives in `backend/src/data_sources/readiness.py`
-- [ ] T086 [US4] Extend missing-data actions for free derivatives source fallback and XAU local OI reminder in `backend/src/data_sources/missing_data.py`
-- [ ] T087 [US4] Implement free derivatives frontend request and response types in `frontend/src/types/index.ts`
-- [ ] T088 [US4] Implement `runFreeDerivativesBootstrap`, `listFreeDerivativesRuns`, and `getFreeDerivativesRun` client methods in `frontend/src/services/api.ts`
-- [ ] T089 [US4] Extend data-source dashboard data loading for free derivatives runs in `frontend/src/services/api.ts`
-- [ ] T090 [US4] Render CFTC, GVZ, and Deribit readiness entries in `frontend/src/app/data-sources/page.tsx`
-- [ ] T091 [US4] Render free derivatives run selector, source status table, output paths, limitations, and missing-data actions in `frontend/src/app/data-sources/page.tsx`
-- [ ] T092 [US4] Render free derivatives research-only and no-secret disclaimer text in `frontend/src/app/data-sources/page.tsx`
+- [X] T078 [US4] Implement run status aggregation and partial-result preservation in `backend/src/free_derivatives/orchestration.py`
+- [X] T079 [US4] Implement full report metadata, JSON, and Markdown persistence in `backend/src/free_derivatives/report_store.py`
+- [X] T080 [US4] Implement saved run list and detail reads in `backend/src/free_derivatives/report_store.py`
+- [X] T081 [US4] Implement `POST /api/v1/data-sources/bootstrap/free-derivatives` in `backend/src/api/routes/free_derivatives.py`
+- [X] T082 [US4] Implement `GET /api/v1/data-sources/bootstrap/free-derivatives/runs` and `GET /api/v1/data-sources/bootstrap/free-derivatives/runs/{run_id}` in `backend/src/api/routes/free_derivatives.py`
+- [X] T083 [US4] Implement structured validation, missing-data, and not-found errors for free derivatives routes in `backend/src/api/routes/free_derivatives.py`
+- [X] T084 [US4] Extend data-source capability matrix entries in `backend/src/data_sources/capabilities.py`
+- [X] T085 [US4] Extend data-source readiness statuses for free public derivatives in `backend/src/data_sources/readiness.py`
+- [X] T086 [US4] Extend missing-data actions for free derivatives source fallback and XAU local OI reminder in `backend/src/data_sources/missing_data.py`
+- [X] T087 [US4] Implement free derivatives frontend request and response types in `frontend/src/types/index.ts`
+- [X] T088 [US4] Implement `runFreeDerivativesBootstrap`, `listFreeDerivativesRuns`, and `getFreeDerivativesRun` client methods in `frontend/src/services/api.ts`
+- [X] T089 [US4] Extend data-source dashboard data loading for free derivatives runs in `frontend/src/services/api.ts`
+- [X] T090 [US4] Render CFTC, GVZ, and Deribit readiness entries in `frontend/src/app/data-sources/page.tsx`
+- [X] T091 [US4] Render free derivatives run selector, source status table, output paths, limitations, and missing-data actions in `frontend/src/app/data-sources/page.tsx`
+- [X] T092 [US4] Render free derivatives research-only and no-secret disclaimer text in `frontend/src/app/data-sources/page.tsx`
 
 **Checkpoint**: User Story 4 is independently functional through API and dashboard inspection.
 
