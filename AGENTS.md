@@ -410,5 +410,5 @@ After smoke test passes:
 - report files changed, commands run, results, commit hash, and remaining risks.
 
 <!-- SPECKIT START -->
-Active Speckit plan: specs/009-public-data-bootstrapper/plan.md
+Active Speckit plan: specs/010-xau-zone-reaction-and-risk-planner/plan.md
 <!-- SPECKIT END -->
