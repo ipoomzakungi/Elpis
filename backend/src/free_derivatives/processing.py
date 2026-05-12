@@ -3,6 +3,8 @@ from datetime import date, timedelta
 from src.models.free_derivatives import (
     CftcCotGoldRecord,
     CftcGoldPositioningSummary,
+    DeribitOptionSummarySnapshot,
+    DeribitOptionWallSnapshot,
     FreeDerivativesSource,
     GvzDailyCloseRecord,
     GvzGapSummary,
@@ -25,6 +27,14 @@ GVZ_NOT_STRIKE_LEVEL_OI_LIMITATION = (
 )
 DERIBIT_CRYPTO_OPTIONS_LIMITATION = (
     "Deribit public options data is crypto options data only, not gold or XAU data."
+)
+DERIBIT_MISSING_IV_OI_LIMITATION = (
+    "Deribit public option summaries may have missing public IV/OI fields; missing "
+    "values are retained as partial research context."
+)
+DERIBIT_UNSUPPORTED_UNDERLYING_LIMITATION = (
+    "Unsupported or unavailable Deribit underlyings are visible as skipped or "
+    "partial public options context."
 )
 PUBLIC_ONLY_LIMITATION = (
     "This run uses public/no-key market-data access only and does not use private "
@@ -64,6 +74,7 @@ def source_limitations(source: FreeDerivativesSource) -> list[str]:
     if source == FreeDerivativesSource.DERIBIT_PUBLIC_OPTIONS:
         return [
             DERIBIT_CRYPTO_OPTIONS_LIMITATION,
+            DERIBIT_UNSUPPORTED_UNDERLYING_LIMITATION,
             PUBLIC_ONLY_LIMITATION,
             ARTIFACT_SCOPE_LIMITATION,
         ]
@@ -79,6 +90,7 @@ def foundational_limitations() -> list[str]:
         GVZ_PROXY_LIMITATION,
         GVZ_NOT_STRIKE_LEVEL_OI_LIMITATION,
         DERIBIT_CRYPTO_OPTIONS_LIMITATION,
+        DERIBIT_UNSUPPORTED_UNDERLYING_LIMITATION,
         PUBLIC_ONLY_LIMITATION,
         ARTIFACT_SCOPE_LIMITATION,
         FREE_DERIVATIVES_NO_REPLACEMENT_LIMITATION,
@@ -166,6 +178,98 @@ def build_gvz_gap_summary(
     )
 
 
+def build_deribit_option_wall_snapshots(
+    snapshots: list[DeribitOptionSummarySnapshot],
+) -> list[DeribitOptionWallSnapshot]:
+    """Aggregate public Deribit option summaries into strike-level wall snapshots."""
+
+    grouped: dict[
+        tuple[str, date, float, str, object],
+        list[DeribitOptionSummarySnapshot],
+    ] = {}
+    for snapshot in snapshots:
+        key = (
+            snapshot.underlying,
+            snapshot.expiry,
+            snapshot.strike,
+            snapshot.option_type.value,
+            snapshot.snapshot_timestamp,
+        )
+        grouped.setdefault(key, []).append(snapshot)
+
+    walls: list[DeribitOptionWallSnapshot] = []
+    for group_snapshots in grouped.values():
+        first = group_snapshots[0]
+        open_interest_values = [
+            snapshot.open_interest
+            for snapshot in group_snapshots
+            if snapshot.open_interest is not None
+        ]
+        mark_iv_values = [
+            snapshot.mark_iv for snapshot in group_snapshots if snapshot.mark_iv is not None
+        ]
+        limitations = [
+            DERIBIT_CRYPTO_OPTIONS_LIMITATION,
+            *[
+                limitation
+                for snapshot in group_snapshots
+                for limitation in snapshot.limitations
+            ],
+        ]
+        if not open_interest_values:
+            limitations.append(DERIBIT_MISSING_IV_OI_LIMITATION)
+        walls.append(
+            DeribitOptionWallSnapshot(
+                snapshot_timestamp=first.snapshot_timestamp,
+                underlying=first.underlying,
+                expiry=first.expiry,
+                strike=first.strike,
+                option_type=first.option_type,
+                total_open_interest=_sum_optional(open_interest_values),
+                average_mark_iv=_average(mark_iv_values),
+                bid_iv=_average(
+                    [
+                        snapshot.bid_iv
+                        for snapshot in group_snapshots
+                        if snapshot.bid_iv is not None
+                    ]
+                ),
+                ask_iv=_average(
+                    [
+                        snapshot.ask_iv
+                        for snapshot in group_snapshots
+                        if snapshot.ask_iv is not None
+                    ]
+                ),
+                underlying_price=_average(
+                    [
+                        snapshot.underlying_price
+                        for snapshot in group_snapshots
+                        if snapshot.underlying_price is not None
+                    ]
+                ),
+                volume=_sum_optional(
+                    [
+                        snapshot.volume
+                        for snapshot in group_snapshots
+                        if snapshot.volume is not None
+                    ]
+                ),
+                instrument_count=len(group_snapshots),
+                limitations=list(dict.fromkeys(limitations)),
+            )
+        )
+    return sorted(
+        walls,
+        key=lambda wall: (
+            wall.underlying,
+            wall.expiry,
+            wall.strike,
+            wall.option_type.value,
+        ),
+    )
+
+
 def _net(long_value: float | None, short_value: float | None) -> float | None:
     if long_value is None or short_value is None:
         return None
@@ -183,3 +287,15 @@ def _inclusive_dates(start_date: date, end_date: date):
     while current_date <= end_date:
         yield current_date
         current_date += timedelta(days=1)
+
+
+def _average(values: list[float]) -> float | None:
+    if not values:
+        return None
+    return sum(values) / len(values)
+
+
+def _sum_optional(values: list[float]) -> float | None:
+    if not values:
+        return None
+    return sum(values)

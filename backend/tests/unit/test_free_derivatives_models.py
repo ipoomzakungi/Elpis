@@ -96,6 +96,19 @@ def test_deribit_request_normalizes_and_deduplicates_underlyings():
         DeribitOptionsRequest(underlyings=["BTC/../../BAD"])
 
 
+def test_deribit_request_rejects_private_account_order_and_auth_fields():
+    forbidden_payloads = [
+        {"account_id": "not-allowed"},
+        {"order_id": "not-allowed"},
+        {"private_endpoint": "/private/get_positions"},
+        {"authentication": "not-allowed"},
+    ]
+
+    for payload in forbidden_payloads:
+        with pytest.raises(ValidationError, match="credential or execution fields"):
+            DeribitOptionsRequest(**payload)
+
+
 def test_validate_filesystem_safe_id_rejects_unsafe_values():
     assert validate_filesystem_safe_id("free_derivatives_20260512") == (
         "free_derivatives_20260512"
@@ -103,4 +116,3 @@ def test_validate_filesystem_safe_id_rejects_unsafe_values():
     for value in ("", "../outside", "nested/run", "bad id"):
         with pytest.raises(ValueError):
             validate_filesystem_safe_id(value)
-

@@ -48,3 +48,16 @@ def test_gvz_limitations_state_proxy_context_and_reject_cme_iv_surface_wording()
     assert "not a cme gold options implied-volatility surface" in joined
     assert "not strike-level options open interest" in joined
     assert "gvz is a cme gold options implied-volatility surface" not in joined
+
+
+def test_deribit_limitations_state_crypto_public_only_and_no_gold_replacement():
+    limitations = source_limitations(FreeDerivativesSource.DERIBIT_PUBLIC_OPTIONS)
+    joined = " ".join(limitations).lower()
+
+    assert DERIBIT_CRYPTO_OPTIONS_LIMITATION in limitations
+    assert "crypto options data only" in joined
+    assert "not gold or xau data" in joined
+    assert "public/no-key" in joined
+    assert "private account" in joined
+    assert "order" in joined
+    assert "cme gold options" not in joined

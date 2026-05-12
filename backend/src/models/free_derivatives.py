@@ -19,6 +19,8 @@ FORBIDDEN_FREE_DERIVATIVES_FIELDS = {
     "accountid",
     "apikey",
     "apisecret",
+    "auth",
+    "authentication",
     "broker",
     "credential",
     "credentials",
@@ -30,11 +32,16 @@ FORBIDDEN_FREE_DERIVATIVES_FIELDS = {
     "ordertype",
     "paidkey",
     "paidvendorkey",
+    "position",
+    "positions",
     "private",
+    "privateendpoint",
     "privatekey",
     "secret",
     "secretkey",
     "shadowtrading",
+    "trade",
+    "tradeid",
     "wallet",
     "walletaddress",
 }
@@ -229,6 +236,109 @@ class GvzGapSummary(FreeDerivativesBaseModel):
         if self.start_date > self.end_date:
             raise ValueError("GVZ gap summary start_date must be on or before end_date")
         return self
+
+
+class DeribitOptionInstrument(FreeDerivativesBaseModel):
+    instrument_name: str
+    underlying: str
+    expiry: date
+    strike: float = Field(ge=0)
+    option_type: DeribitOptionType
+    is_active: bool = True
+    raw_payload: dict[str, Any] = Field(default_factory=dict)
+    limitations: list[str] = Field(default_factory=list)
+
+    @field_validator("instrument_name")
+    @classmethod
+    def normalize_instrument_name(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if not normalized:
+            raise ValueError("Deribit instrument_name must not be blank")
+        return normalized
+
+    @field_validator("underlying")
+    @classmethod
+    def normalize_underlying(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if not SAFE_DERIBIT_UNDERLYING_PATTERN.fullmatch(normalized):
+            raise ValueError("Deribit underlying must be a safe uppercase symbol")
+        return normalized
+
+    @field_validator("limitations")
+    @classmethod
+    def normalize_deribit_instrument_limitations(cls, values: list[str]) -> list[str]:
+        return _dedupe_nonblank_strings(values)
+
+
+class DeribitOptionSummarySnapshot(FreeDerivativesBaseModel):
+    snapshot_timestamp: datetime
+    instrument_name: str
+    underlying: str
+    expiry: date
+    strike: float = Field(ge=0)
+    option_type: DeribitOptionType
+    open_interest: float | None = Field(default=None, ge=0)
+    mark_iv: float | None = Field(default=None, ge=0)
+    bid_iv: float | None = Field(default=None, ge=0)
+    ask_iv: float | None = Field(default=None, ge=0)
+    underlying_price: float | None = Field(default=None, ge=0)
+    volume: float | None = Field(default=None, ge=0)
+    delta: float | None = None
+    gamma: float | None = None
+    vega: float | None = None
+    theta: float | None = None
+    raw_payload: dict[str, Any] = Field(default_factory=dict)
+    limitations: list[str] = Field(default_factory=list)
+
+    @field_validator("instrument_name")
+    @classmethod
+    def normalize_instrument_name(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if not normalized:
+            raise ValueError("Deribit summary instrument_name must not be blank")
+        return normalized
+
+    @field_validator("underlying")
+    @classmethod
+    def normalize_underlying(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if not SAFE_DERIBIT_UNDERLYING_PATTERN.fullmatch(normalized):
+            raise ValueError("Deribit summary underlying must be a safe uppercase symbol")
+        return normalized
+
+    @field_validator("limitations")
+    @classmethod
+    def normalize_deribit_snapshot_limitations(cls, values: list[str]) -> list[str]:
+        return _dedupe_nonblank_strings(values)
+
+
+class DeribitOptionWallSnapshot(FreeDerivativesBaseModel):
+    snapshot_timestamp: datetime
+    underlying: str
+    expiry: date
+    strike: float = Field(ge=0)
+    option_type: DeribitOptionType
+    total_open_interest: float | None = Field(default=None, ge=0)
+    average_mark_iv: float | None = Field(default=None, ge=0)
+    bid_iv: float | None = Field(default=None, ge=0)
+    ask_iv: float | None = Field(default=None, ge=0)
+    underlying_price: float | None = Field(default=None, ge=0)
+    volume: float | None = Field(default=None, ge=0)
+    instrument_count: int = Field(ge=1)
+    limitations: list[str] = Field(default_factory=list)
+
+    @field_validator("underlying")
+    @classmethod
+    def normalize_underlying(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if not SAFE_DERIBIT_UNDERLYING_PATTERN.fullmatch(normalized):
+            raise ValueError("Deribit wall underlying must be a safe uppercase symbol")
+        return normalized
+
+    @field_validator("limitations")
+    @classmethod
+    def normalize_deribit_wall_limitations(cls, values: list[str]) -> list[str]:
+        return _dedupe_nonblank_strings(values)
 
 
 class CftcCotRequest(FreeDerivativesBaseModel):

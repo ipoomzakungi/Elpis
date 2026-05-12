@@ -128,24 +128,24 @@
 
 ### Tests for User Story 3
 
-- [ ] T056 [P] [US3] Add Deribit request planner tests for underlyings, expired flag, fixture paths, and snapshot timestamp in `backend/tests/unit/test_free_derivatives_deribit.py`
-- [ ] T057 [P] [US3] Add Deribit instrument parsing tests for expiry, strike, call, put, unsupported underlying, and unsafe symbol cases in `backend/tests/unit/test_free_derivatives_deribit.py`
-- [ ] T058 [P] [US3] Add Deribit public summary normalization tests for open interest, mark IV, bid IV, ask IV, underlying price, volume, and greeks in `backend/tests/unit/test_free_derivatives_deribit.py`
-- [ ] T059 [P] [US3] Add Deribit partial-field limitation tests for missing IV/OI fields in `backend/tests/unit/test_free_derivatives_deribit.py`
-- [ ] T060 [P] [US3] Add Deribit option wall aggregation tests by underlying, expiry, strike, and option type in `backend/tests/unit/test_free_derivatives_deribit.py`
-- [ ] T061 [P] [US3] Add Deribit public-only guard tests proving private/account/order fields are rejected in `backend/tests/unit/test_free_derivatives_models.py`
-- [ ] T062 [P] [US3] Add Deribit crypto-options-only limitation tests in `backend/tests/unit/test_free_derivatives_limitations.py`
+- [X] T056 [P] [US3] Add Deribit request planner tests for underlyings, expired flag, fixture paths, and snapshot timestamp in `backend/tests/unit/test_free_derivatives_deribit.py`
+- [X] T057 [P] [US3] Add Deribit instrument parsing tests for expiry, strike, call, put, unsupported underlying, and unsafe symbol cases in `backend/tests/unit/test_free_derivatives_deribit.py`
+- [X] T058 [P] [US3] Add Deribit public summary normalization tests for open interest, mark IV, bid IV, ask IV, underlying price, volume, and greeks in `backend/tests/unit/test_free_derivatives_deribit.py`
+- [X] T059 [P] [US3] Add Deribit partial-field limitation tests for missing IV/OI fields in `backend/tests/unit/test_free_derivatives_deribit.py`
+- [X] T060 [P] [US3] Add Deribit option wall aggregation tests by underlying, expiry, strike, and option type in `backend/tests/unit/test_free_derivatives_deribit.py`
+- [X] T061 [P] [US3] Add Deribit public-only guard tests proving private/account/order fields are rejected in `backend/tests/unit/test_free_derivatives_models.py`
+- [X] T062 [P] [US3] Add Deribit crypto-options-only limitation tests in `backend/tests/unit/test_free_derivatives_limitations.py`
 
 ### Implementation for User Story 3
 
-- [ ] T063 [US3] Implement Deribit public request plan creation in `backend/src/free_derivatives/deribit.py`
-- [ ] T064 [US3] Implement Deribit instrument fixture and public response parsing in `backend/src/free_derivatives/deribit.py`
-- [ ] T065 [US3] Implement Deribit instrument name parsing for underlying, expiry, strike, and option type in `backend/src/free_derivatives/deribit.py`
-- [ ] T066 [US3] Implement Deribit public option summary normalization in `backend/src/free_derivatives/deribit.py`
-- [ ] T067 [US3] Implement Deribit missing-field and unsupported-underlying limitations in `backend/src/free_derivatives/deribit.py`
-- [ ] T068 [US3] Implement Deribit option wall snapshot aggregation in `backend/src/free_derivatives/processing.py`
-- [ ] T069 [US3] Implement raw Deribit JSON and processed Deribit Parquet artifact writers in `backend/src/free_derivatives/report_store.py`
-- [ ] T070 [US3] Connect Deribit source execution into bootstrap orchestration without requiring CFTC or GVZ in `backend/src/free_derivatives/orchestration.py`
+- [X] T063 [US3] Implement Deribit public request plan creation in `backend/src/free_derivatives/deribit.py`
+- [X] T064 [US3] Implement Deribit instrument fixture and public response parsing in `backend/src/free_derivatives/deribit.py`
+- [X] T065 [US3] Implement Deribit instrument name parsing for underlying, expiry, strike, and option type in `backend/src/free_derivatives/deribit.py`
+- [X] T066 [US3] Implement Deribit public option summary normalization in `backend/src/free_derivatives/deribit.py`
+- [X] T067 [US3] Implement Deribit missing-field and unsupported-underlying limitations in `backend/src/free_derivatives/deribit.py`
+- [X] T068 [US3] Implement Deribit option wall snapshot aggregation in `backend/src/free_derivatives/processing.py`
+- [X] T069 [US3] Implement raw Deribit JSON and processed Deribit Parquet artifact writers in `backend/src/free_derivatives/report_store.py`
+- [X] T070 [US3] Connect Deribit source execution into bootstrap orchestration without requiring CFTC or GVZ in `backend/src/free_derivatives/orchestration.py`
 
 **Checkpoint**: User Story 3 is independently functional with fixture Deribit public crypto options snapshots and public-only guardrails.
 

@@ -5,6 +5,12 @@ from src.free_derivatives.cftc import (
     load_cftc_gold_records,
     read_cftc_fixture_rows,
 )
+from src.free_derivatives.deribit import (
+    create_deribit_request_plan,
+    load_deribit_fixture_rows,
+    load_deribit_instruments,
+    load_deribit_summary_snapshots,
+)
 from src.free_derivatives.gvz import (
     create_gvz_request_plan,
     load_gvz_daily_close_records,
@@ -12,9 +18,11 @@ from src.free_derivatives.gvz import (
 )
 from src.free_derivatives.processing import (
     CFTC_WEEKLY_POSITIONING_LIMITATION,
+    DERIBIT_MISSING_IV_OI_LIMITATION,
     FREE_DERIVATIVES_NO_REPLACEMENT_LIMITATION,
     FREE_DERIVATIVES_RESEARCH_ONLY_WARNING,
     build_cftc_gold_positioning_summary,
+    build_deribit_option_wall_snapshots,
     build_gvz_gap_summary,
     foundational_limitations,
     source_limitations,
@@ -46,9 +54,7 @@ def assemble_placeholder_bootstrap_run(
     if request.include_gvz:
         source_results.append(_run_gvz_source(request, run_id, artifact_store))
     if request.include_deribit:
-        source_results.append(
-            _placeholder_source_result(FreeDerivativesSource.DERIBIT_PUBLIC_OPTIONS)
-        )
+        source_results.append(_run_deribit_source(request, run_id, artifact_store))
 
     return FreeDerivativesBootstrapRun(
         run_id=run_id,
@@ -270,6 +276,129 @@ def _run_gvz_source(
             limitations=limitations,
             missing_data_actions=[
                 "Use a readable GVZ CSV fixture with DATE and GVZCLS or close columns."
+            ],
+        )
+
+
+def _run_deribit_source(
+    request: FreeDerivativesBootstrapRequest,
+    run_id: str,
+    store: FreeDerivativesReportStore,
+) -> FreeDerivativesSourceResult:
+    plan = create_deribit_request_plan(request.deribit)
+    requested_items = [item.requested_item for item in plan]
+    limitations = source_limitations(FreeDerivativesSource.DERIBIT_PUBLIC_OPTIONS)
+    if (
+        request.deribit.fixture_instruments_path is None
+        or request.deribit.fixture_summary_path is None
+    ):
+        return FreeDerivativesSourceResult(
+            source=FreeDerivativesSource.DERIBIT_PUBLIC_OPTIONS,
+            status=FreeDerivativesSourceStatus.SKIPPED,
+            requested_items=requested_items,
+            skipped_items=requested_items,
+            warnings=[
+                (
+                    "Deribit source execution needs local public instruments and "
+                    "summary fixtures in this slice."
+                )
+            ],
+            limitations=limitations,
+            missing_data_actions=[
+                (
+                    "Provide Deribit public instruments and book-summary JSON "
+                    "fixtures before running options processing."
+                )
+            ],
+        )
+
+    try:
+        raw_instruments = load_deribit_fixture_rows(
+            request.deribit.fixture_instruments_path,
+        )
+        raw_summary = load_deribit_fixture_rows(request.deribit.fixture_summary_path)
+        instruments = load_deribit_instruments(request.deribit)
+        snapshots = load_deribit_summary_snapshots(request.deribit)
+        raw_artifacts = [
+            store.write_deribit_raw_instruments(run_id, raw_instruments),
+            store.write_deribit_raw_summary(run_id, raw_summary),
+        ]
+        if not instruments or not snapshots:
+            return FreeDerivativesSourceResult(
+                source=FreeDerivativesSource.DERIBIT_PUBLIC_OPTIONS,
+                status=FreeDerivativesSourceStatus.PARTIAL,
+                requested_items=requested_items,
+                skipped_items=requested_items,
+                row_count=len(snapshots),
+                instrument_count=len(instruments),
+                snapshot_timestamp=request.deribit.snapshot_timestamp,
+                artifacts=raw_artifacts,
+                warnings=[
+                    (
+                        "Deribit fixtures were readable but requested public options "
+                        "instruments or summaries were unavailable."
+                    )
+                ],
+                limitations=limitations,
+                missing_data_actions=[
+                    (
+                        "Check requested Deribit underlyings and public fixture coverage "
+                        "for option instruments and summaries."
+                    )
+                ],
+            )
+
+        walls = build_deribit_option_wall_snapshots(snapshots)
+        artifacts = [
+            *raw_artifacts,
+            store.write_deribit_options(run_id, snapshots),
+            store.write_deribit_walls(run_id, walls),
+        ]
+        missing_iv_oi = any(
+            DERIBIT_MISSING_IV_OI_LIMITATION in snapshot.limitations
+            for snapshot in snapshots
+        )
+        status = (
+            FreeDerivativesSourceStatus.PARTIAL
+            if missing_iv_oi
+            else FreeDerivativesSourceStatus.COMPLETED
+        )
+        warnings = (
+            [DERIBIT_MISSING_IV_OI_LIMITATION]
+            if missing_iv_oi
+            else []
+        )
+        timestamp = snapshots[0].snapshot_timestamp
+        return FreeDerivativesSourceResult(
+            source=FreeDerivativesSource.DERIBIT_PUBLIC_OPTIONS,
+            status=status,
+            requested_items=requested_items,
+            completed_items=sorted({snapshot.underlying for snapshot in snapshots}),
+            row_count=len(snapshots),
+            instrument_count=len(instruments),
+            snapshot_timestamp=timestamp,
+            artifacts=artifacts,
+            warnings=warnings,
+            limitations=limitations,
+            missing_data_actions=(
+                ["Review public Deribit rows with missing IV/OI before downstream use."]
+                if missing_iv_oi
+                else []
+            ),
+        )
+    except Exception as exc:
+        return FreeDerivativesSourceResult(
+            source=FreeDerivativesSource.DERIBIT_PUBLIC_OPTIONS,
+            status=FreeDerivativesSourceStatus.FAILED,
+            requested_items=requested_items,
+            failed_items=requested_items,
+            warnings=[f"Deribit fixture processing failed: {exc}"],
+            limitations=limitations,
+            missing_data_actions=[
+                (
+                    "Use readable Deribit public JSON fixtures with instrument_name "
+                    "and public IV/OI summary fields."
+                )
             ],
         )
 

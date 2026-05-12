@@ -1,4 +1,5 @@
 import csv
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -9,6 +10,8 @@ from src.config import get_settings
 from src.models.free_derivatives import (
     CftcCotGoldRecord,
     CftcGoldPositioningSummary,
+    DeribitOptionSummarySnapshot,
+    DeribitOptionWallSnapshot,
     FreeDerivativesArtifact,
     FreeDerivativesArtifactFormat,
     FreeDerivativesArtifactType,
@@ -202,6 +205,97 @@ class FreeDerivativesReportStore:
             rows=1,
         )
 
+    def write_deribit_raw_instruments(
+        self,
+        run_id: str,
+        rows: list[dict[str, Any]],
+    ) -> FreeDerivativesArtifact:
+        self.raw_source_root(FreeDerivativesSource.DERIBIT_PUBLIC_OPTIONS).mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        safe_run_id = validate_filesystem_safe_id(run_id, label="run_id")
+        path = self.raw_source_root(FreeDerivativesSource.DERIBIT_PUBLIC_OPTIONS) / (
+            f"{safe_run_id}_instruments.json"
+        )
+        self._write_json(path, rows)
+        return self.artifact(
+            artifact_type=FreeDerivativesArtifactType.RAW_DERIBIT_INSTRUMENTS,
+            source=FreeDerivativesSource.DERIBIT_PUBLIC_OPTIONS,
+            path=path,
+            artifact_format=FreeDerivativesArtifactFormat.JSON,
+            rows=len(rows),
+        )
+
+    def write_deribit_raw_summary(
+        self,
+        run_id: str,
+        rows: list[dict[str, Any]],
+    ) -> FreeDerivativesArtifact:
+        self.raw_source_root(FreeDerivativesSource.DERIBIT_PUBLIC_OPTIONS).mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        safe_run_id = validate_filesystem_safe_id(run_id, label="run_id")
+        path = self.raw_source_root(FreeDerivativesSource.DERIBIT_PUBLIC_OPTIONS) / (
+            f"{safe_run_id}_book_summary.json"
+        )
+        self._write_json(path, rows)
+        return self.artifact(
+            artifact_type=FreeDerivativesArtifactType.RAW_DERIBIT_SUMMARY,
+            source=FreeDerivativesSource.DERIBIT_PUBLIC_OPTIONS,
+            path=path,
+            artifact_format=FreeDerivativesArtifactFormat.JSON,
+            rows=len(rows),
+        )
+
+    def write_deribit_options(
+        self,
+        run_id: str,
+        snapshots: list[DeribitOptionSummarySnapshot],
+    ) -> FreeDerivativesArtifact:
+        self.processed_source_root(FreeDerivativesSource.DERIBIT_PUBLIC_OPTIONS).mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        safe_run_id = validate_filesystem_safe_id(run_id, label="run_id")
+        path = self.processed_source_root(FreeDerivativesSource.DERIBIT_PUBLIC_OPTIONS) / (
+            f"{safe_run_id}_options.parquet"
+        )
+        self._write_parquet(
+            path,
+            [snapshot.model_dump(mode="json") for snapshot in snapshots],
+        )
+        return self.artifact(
+            artifact_type=FreeDerivativesArtifactType.PROCESSED_DERIBIT_OPTIONS,
+            source=FreeDerivativesSource.DERIBIT_PUBLIC_OPTIONS,
+            path=path,
+            artifact_format=FreeDerivativesArtifactFormat.PARQUET,
+            rows=len(snapshots),
+        )
+
+    def write_deribit_walls(
+        self,
+        run_id: str,
+        walls: list[DeribitOptionWallSnapshot],
+    ) -> FreeDerivativesArtifact:
+        self.processed_source_root(FreeDerivativesSource.DERIBIT_PUBLIC_OPTIONS).mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        safe_run_id = validate_filesystem_safe_id(run_id, label="run_id")
+        path = self.processed_source_root(FreeDerivativesSource.DERIBIT_PUBLIC_OPTIONS) / (
+            f"{safe_run_id}_option_walls.parquet"
+        )
+        self._write_parquet(path, [wall.model_dump(mode="json") for wall in walls])
+        return self.artifact(
+            artifact_type=FreeDerivativesArtifactType.PROCESSED_DERIBIT_WALLS,
+            source=FreeDerivativesSource.DERIBIT_PUBLIC_OPTIONS,
+            path=path,
+            artifact_format=FreeDerivativesArtifactFormat.PARQUET,
+            rows=len(walls),
+        )
+
     def artifact(
         self,
         *,
@@ -249,3 +343,7 @@ class FreeDerivativesReportStore:
             pl.DataFrame(rows).write_parquet(path)
             return
         pl.DataFrame().write_parquet(path)
+
+    def _write_json(self, path: Path, rows: list[dict[str, Any]]) -> None:
+        with path.open("w", encoding="utf-8") as handle:
+            json.dump(rows, handle, indent=2, sort_keys=True, default=str)
