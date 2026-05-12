@@ -5,11 +5,17 @@ from src.free_derivatives.cftc import (
     load_cftc_gold_records,
     read_cftc_fixture_rows,
 )
+from src.free_derivatives.gvz import (
+    create_gvz_request_plan,
+    load_gvz_daily_close_records,
+    read_gvz_fixture_rows,
+)
 from src.free_derivatives.processing import (
     CFTC_WEEKLY_POSITIONING_LIMITATION,
     FREE_DERIVATIVES_NO_REPLACEMENT_LIMITATION,
     FREE_DERIVATIVES_RESEARCH_ONLY_WARNING,
     build_cftc_gold_positioning_summary,
+    build_gvz_gap_summary,
     foundational_limitations,
     source_limitations,
 )
@@ -38,7 +44,7 @@ def assemble_placeholder_bootstrap_run(
     if request.include_cftc:
         source_results.append(_run_cftc_source(request, run_id, artifact_store))
     if request.include_gvz:
-        source_results.append(_placeholder_source_result(FreeDerivativesSource.GVZ))
+        source_results.append(_run_gvz_source(request, run_id, artifact_store))
     if request.include_deribit:
         source_results.append(
             _placeholder_source_result(FreeDerivativesSource.DERIBIT_PUBLIC_OPTIONS)
@@ -160,6 +166,114 @@ def _run_cftc_source(
         )
 
 
+def _run_gvz_source(
+    request: FreeDerivativesBootstrapRequest,
+    run_id: str,
+    store: FreeDerivativesReportStore,
+) -> FreeDerivativesSourceResult:
+    plan = create_gvz_request_plan(request.gvz)
+    requested_items = [plan.requested_item]
+    limitations = source_limitations(FreeDerivativesSource.GVZ)
+    if request.gvz.local_fixture_path is None:
+        return FreeDerivativesSourceResult(
+            source=FreeDerivativesSource.GVZ,
+            status=FreeDerivativesSourceStatus.SKIPPED,
+            requested_items=requested_items,
+            skipped_items=requested_items,
+            warnings=["GVZ source execution needs a local fixture/import file in this slice."],
+            limitations=limitations,
+            missing_data_actions=[
+                (
+                    "Provide a public GVZ daily close CSV as a local fixture before "
+                    "running GVZ processing."
+                )
+            ],
+        )
+
+    try:
+        raw_rows = read_gvz_fixture_rows(request.gvz.local_fixture_path)
+        records = load_gvz_daily_close_records(request.gvz)
+        raw_artifact = store.write_gvz_raw_rows(run_id, raw_rows)
+        if not records:
+            return FreeDerivativesSourceResult(
+                source=FreeDerivativesSource.GVZ,
+                status=FreeDerivativesSourceStatus.PARTIAL,
+                requested_items=requested_items,
+                skipped_items=requested_items,
+                row_count=0,
+                artifacts=[raw_artifact],
+                warnings=["GVZ fixture was readable but no rows matched the date window."],
+                limitations=limitations,
+                missing_data_actions=[
+                    "Check the GVZ fixture date coverage or adjust the requested date window."
+                ],
+            )
+
+        observed_records = [record for record in records if not record.is_missing]
+        gap_summary = build_gvz_gap_summary(
+            records,
+            start_date=request.gvz.start_date,
+            end_date=request.gvz.end_date,
+        )
+        artifacts = [
+            raw_artifact,
+            store.write_gvz_daily_close(run_id, records),
+            store.write_gvz_gap_summary(run_id, gap_summary),
+        ]
+        if not observed_records:
+            return FreeDerivativesSourceResult(
+                source=FreeDerivativesSource.GVZ,
+                status=FreeDerivativesSourceStatus.PARTIAL,
+                requested_items=requested_items,
+                skipped_items=requested_items,
+                row_count=len(records),
+                coverage_start=min(record.date for record in records),
+                coverage_end=max(record.date for record in records),
+                artifacts=artifacts,
+                warnings=["GVZ fixture had rows but no usable close observations."],
+                limitations=limitations,
+                missing_data_actions=[
+                    "Provide GVZ rows with numeric daily close values for volatility proxy context."
+                ],
+            )
+
+        warnings: list[str] = []
+        if gap_summary.missing_date_count:
+            warnings.append(
+                "GVZ date coverage has "
+                f"{gap_summary.missing_date_count} missing daily observations."
+            )
+        return FreeDerivativesSourceResult(
+            source=FreeDerivativesSource.GVZ,
+            status=FreeDerivativesSourceStatus.COMPLETED,
+            requested_items=requested_items,
+            completed_items=[
+                f"{record.series_id}:{record.date.isoformat()}"
+                for record in records
+                if not record.is_missing
+            ],
+            row_count=len(records),
+            coverage_start=min(record.date for record in records),
+            coverage_end=max(record.date for record in records),
+            artifacts=artifacts,
+            warnings=warnings,
+            limitations=limitations,
+            missing_data_actions=[],
+        )
+    except Exception as exc:
+        return FreeDerivativesSourceResult(
+            source=FreeDerivativesSource.GVZ,
+            status=FreeDerivativesSourceStatus.FAILED,
+            requested_items=requested_items,
+            failed_items=requested_items,
+            warnings=[f"GVZ fixture processing failed: {exc}"],
+            limitations=limitations,
+            missing_data_actions=[
+                "Use a readable GVZ CSV fixture with DATE and GVZCLS or close columns."
+            ],
+        )
+
+
 def _placeholder_source_result(source: FreeDerivativesSource) -> FreeDerivativesSourceResult:
     return FreeDerivativesSourceResult(
         source=source,
@@ -195,6 +309,8 @@ def _aggregate_run_status(
     if len(completed) == len(source_results):
         return FreeDerivativesRunStatus.COMPLETED
     if completed:
+        return FreeDerivativesRunStatus.PARTIAL
+    if any(result.status == FreeDerivativesSourceStatus.PARTIAL for result in source_results):
         return FreeDerivativesRunStatus.PARTIAL
     if any(result.status == FreeDerivativesSourceStatus.FAILED for result in source_results):
         return FreeDerivativesRunStatus.FAILED

@@ -100,21 +100,21 @@
 
 ### Tests for User Story 2
 
-- [ ] T044 [P] [US2] Add GVZ request planner tests for series id, date windows, public URL, and fixture path in `backend/tests/unit/test_free_derivatives_gvz.py`
-- [ ] T045 [P] [US2] Add GVZ CSV fixture parser tests for date and close normalization in `backend/tests/unit/test_free_derivatives_gvz.py`
-- [ ] T046 [P] [US2] Add GVZ missing-date and gap summary tests in `backend/tests/unit/test_free_derivatives_gvz.py`
-- [ ] T047 [P] [US2] Add GVZ proxy limitation tests that reject CME gold IV surface wording in `backend/tests/unit/test_free_derivatives_limitations.py`
-- [ ] T048 [P] [US2] Add GVZ partial/missing source result tests in `backend/tests/unit/test_free_derivatives_gvz.py`
+- [X] T044 [P] [US2] Add GVZ request planner tests for series id, date windows, public URL, and fixture path in `backend/tests/unit/test_free_derivatives_gvz.py`
+- [X] T045 [P] [US2] Add GVZ CSV fixture parser tests for date and close normalization in `backend/tests/unit/test_free_derivatives_gvz.py`
+- [X] T046 [P] [US2] Add GVZ missing-date and gap summary tests in `backend/tests/unit/test_free_derivatives_gvz.py`
+- [X] T047 [P] [US2] Add GVZ proxy limitation tests that reject CME gold IV surface wording in `backend/tests/unit/test_free_derivatives_limitations.py`
+- [X] T048 [P] [US2] Add GVZ partial/missing source result tests in `backend/tests/unit/test_free_derivatives_gvz.py`
 
 ### Implementation for User Story 2
 
-- [ ] T049 [US2] Implement GVZ request plan creation in `backend/src/free_derivatives/gvz.py`
-- [ ] T050 [US2] Implement GVZ local fixture CSV reading and public daily close payload normalization in `backend/src/free_derivatives/gvz.py`
-- [ ] T051 [US2] Implement GVZ date-window filtering and daily close validation in `backend/src/free_derivatives/gvz.py`
-- [ ] T052 [US2] Implement GVZ gap summary generation in `backend/src/free_derivatives/processing.py`
-- [ ] T053 [US2] Implement raw GVZ and processed GVZ artifact writers in `backend/src/free_derivatives/report_store.py`
-- [ ] T054 [US2] Add GVZ proxy limitation labels to source results in `backend/src/free_derivatives/processing.py`
-- [ ] T055 [US2] Connect GVZ source execution into bootstrap orchestration without requiring CFTC or Deribit in `backend/src/free_derivatives/orchestration.py`
+- [X] T049 [US2] Implement GVZ request plan creation in `backend/src/free_derivatives/gvz.py`
+- [X] T050 [US2] Implement GVZ local fixture CSV reading and public daily close payload normalization in `backend/src/free_derivatives/gvz.py`
+- [X] T051 [US2] Implement GVZ date-window filtering and daily close validation in `backend/src/free_derivatives/gvz.py`
+- [X] T052 [US2] Implement GVZ gap summary generation in `backend/src/free_derivatives/processing.py`
+- [X] T053 [US2] Implement raw GVZ and processed GVZ artifact writers in `backend/src/free_derivatives/report_store.py`
+- [X] T054 [US2] Add GVZ proxy limitation labels to source results in `backend/src/free_derivatives/processing.py`
+- [X] T055 [US2] Connect GVZ source execution into bootstrap orchestration without requiring CFTC or Deribit in `backend/src/free_derivatives/orchestration.py`
 
 **Checkpoint**: User Story 2 is independently functional with fixture GVZ proxy outputs and explicit proxy limitations.
 

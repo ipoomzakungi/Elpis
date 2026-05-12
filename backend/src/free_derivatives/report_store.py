@@ -13,6 +13,8 @@ from src.models.free_derivatives import (
     FreeDerivativesArtifactFormat,
     FreeDerivativesArtifactType,
     FreeDerivativesSource,
+    GvzDailyCloseRecord,
+    GvzGapSummary,
     validate_filesystem_safe_id,
 )
 
@@ -132,6 +134,72 @@ class FreeDerivativesReportStore:
             path=path,
             artifact_format=FreeDerivativesArtifactFormat.PARQUET,
             rows=len(summaries),
+        )
+
+    def write_gvz_raw_rows(
+        self,
+        run_id: str,
+        rows: list[dict[str, str]],
+    ) -> FreeDerivativesArtifact:
+        self.raw_source_root(FreeDerivativesSource.GVZ).mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        safe_run_id = validate_filesystem_safe_id(run_id, label="run_id")
+        path = self.raw_source_root(FreeDerivativesSource.GVZ) / (
+            f"{safe_run_id}_raw_rows.csv"
+        )
+        self._write_csv(path, rows)
+        return self.artifact(
+            artifact_type=FreeDerivativesArtifactType.RAW_GVZ,
+            source=FreeDerivativesSource.GVZ,
+            path=path,
+            artifact_format=FreeDerivativesArtifactFormat.CSV,
+            rows=len(rows),
+        )
+
+    def write_gvz_daily_close(
+        self,
+        run_id: str,
+        records: list[GvzDailyCloseRecord],
+    ) -> FreeDerivativesArtifact:
+        self.processed_source_root(FreeDerivativesSource.GVZ).mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        safe_run_id = validate_filesystem_safe_id(run_id, label="run_id")
+        path = self.processed_source_root(FreeDerivativesSource.GVZ) / (
+            f"{safe_run_id}_gvz_daily_close.parquet"
+        )
+        self._write_parquet(path, [record.model_dump(mode="json") for record in records])
+        return self.artifact(
+            artifact_type=FreeDerivativesArtifactType.PROCESSED_GVZ,
+            source=FreeDerivativesSource.GVZ,
+            path=path,
+            artifact_format=FreeDerivativesArtifactFormat.PARQUET,
+            rows=len(records),
+        )
+
+    def write_gvz_gap_summary(
+        self,
+        run_id: str,
+        summary: GvzGapSummary,
+    ) -> FreeDerivativesArtifact:
+        self.processed_source_root(FreeDerivativesSource.GVZ).mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        safe_run_id = validate_filesystem_safe_id(run_id, label="run_id")
+        path = self.processed_source_root(FreeDerivativesSource.GVZ) / (
+            f"{safe_run_id}_gvz_gap_summary.parquet"
+        )
+        self._write_parquet(path, [summary.model_dump(mode="json")])
+        return self.artifact(
+            artifact_type=FreeDerivativesArtifactType.PROCESSED_GVZ,
+            source=FreeDerivativesSource.GVZ,
+            path=path,
+            artifact_format=FreeDerivativesArtifactFormat.PARQUET,
+            rows=1,
         )
 
     def artifact(

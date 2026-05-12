@@ -173,6 +173,64 @@ class CftcGoldPositioningSummary(FreeDerivativesBaseModel):
         return _dedupe_nonblank_strings(values)
 
 
+class GvzDailyCloseRecord(FreeDerivativesBaseModel):
+    date: date
+    series_id: str = "GVZCLS"
+    close: float | None = None
+    source: str
+    is_missing: bool = False
+    limitations: list[str] = Field(default_factory=list)
+
+    @field_validator("series_id")
+    @classmethod
+    def normalize_series_id(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if not normalized:
+            raise ValueError("GVZ series_id must not be blank")
+        return normalized
+
+    @field_validator("source")
+    @classmethod
+    def normalize_source(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("GVZ source must not be blank")
+        return normalized
+
+    @field_validator("limitations")
+    @classmethod
+    def normalize_gvz_limitations(cls, values: list[str]) -> list[str]:
+        return _dedupe_nonblank_strings(values)
+
+    @model_validator(mode="after")
+    def validate_close_missing_state(self) -> "GvzDailyCloseRecord":
+        if self.close is None and not self.is_missing:
+            raise ValueError("GVZ close can be null only when is_missing is true")
+        if self.close is not None and self.close < 0:
+            raise ValueError("GVZ close must be non-negative")
+        return self
+
+
+class GvzGapSummary(FreeDerivativesBaseModel):
+    start_date: date
+    end_date: date
+    observed_row_count: int = Field(ge=0)
+    missing_date_count: int = Field(ge=0)
+    missing_dates: list[date] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+    @field_validator("limitations")
+    @classmethod
+    def normalize_gvz_gap_limitations(cls, values: list[str]) -> list[str]:
+        return _dedupe_nonblank_strings(values)
+
+    @model_validator(mode="after")
+    def validate_date_range(self) -> "GvzGapSummary":
+        if self.start_date > self.end_date:
+            raise ValueError("GVZ gap summary start_date must be on or before end_date")
+        return self
+
+
 class CftcCotRequest(FreeDerivativesBaseModel):
     years: list[int] = Field(default_factory=list)
     categories: list[CftcCotReportCategory] = Field(

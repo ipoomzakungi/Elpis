@@ -2,6 +2,7 @@ from src.free_derivatives.processing import (
     ARTIFACT_SCOPE_LIMITATION,
     CFTC_WEEKLY_POSITIONING_LIMITATION,
     DERIBIT_CRYPTO_OPTIONS_LIMITATION,
+    GVZ_NOT_STRIKE_LEVEL_OI_LIMITATION,
     GVZ_PROXY_LIMITATION,
     PUBLIC_ONLY_LIMITATION,
     source_limitations,
@@ -35,3 +36,15 @@ def test_cftc_limitations_state_weekly_context_and_no_wall_level_replacement():
     assert "weekly broad positioning context" in joined
     assert "not strike-level options open interest" in joined
     assert "not intraday wall data" in joined
+
+
+def test_gvz_limitations_state_proxy_context_and_reject_cme_iv_surface_wording():
+    limitations = source_limitations(FreeDerivativesSource.GVZ)
+    joined = " ".join(limitations).lower()
+
+    assert GVZ_PROXY_LIMITATION in limitations
+    assert GVZ_NOT_STRIKE_LEVEL_OI_LIMITATION in limitations
+    assert "gld-options-derived volatility proxy" in joined
+    assert "not a cme gold options implied-volatility surface" in joined
+    assert "not strike-level options open interest" in joined
+    assert "gvz is a cme gold options implied-volatility surface" not in joined

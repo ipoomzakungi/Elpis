@@ -1,7 +1,11 @@
+from datetime import date, timedelta
+
 from src.models.free_derivatives import (
     CftcCotGoldRecord,
     CftcGoldPositioningSummary,
     FreeDerivativesSource,
+    GvzDailyCloseRecord,
+    GvzGapSummary,
 )
 
 CFTC_WEEKLY_POSITIONING_LIMITATION = (
@@ -14,6 +18,10 @@ CFTC_CATEGORY_LIMITATION = (
 GVZ_PROXY_LIMITATION = (
     "GVZ is a GLD-options-derived volatility proxy, not a CME gold options "
     "implied-volatility surface."
+)
+GVZ_NOT_STRIKE_LEVEL_OI_LIMITATION = (
+    "GVZ is not strike-level options open interest and cannot replace local XAU "
+    "options OI."
 )
 DERIBIT_CRYPTO_OPTIONS_LIMITATION = (
     "Deribit public options data is crypto options data only, not gold or XAU data."
@@ -47,7 +55,12 @@ def source_limitations(source: FreeDerivativesSource) -> list[str]:
             ARTIFACT_SCOPE_LIMITATION,
         ]
     if source == FreeDerivativesSource.GVZ:
-        return [GVZ_PROXY_LIMITATION, PUBLIC_ONLY_LIMITATION, ARTIFACT_SCOPE_LIMITATION]
+        return [
+            GVZ_PROXY_LIMITATION,
+            GVZ_NOT_STRIKE_LEVEL_OI_LIMITATION,
+            PUBLIC_ONLY_LIMITATION,
+            ARTIFACT_SCOPE_LIMITATION,
+        ]
     if source == FreeDerivativesSource.DERIBIT_PUBLIC_OPTIONS:
         return [
             DERIBIT_CRYPTO_OPTIONS_LIMITATION,
@@ -64,6 +77,7 @@ def foundational_limitations() -> list[str]:
         CFTC_WEEKLY_POSITIONING_LIMITATION,
         CFTC_CATEGORY_LIMITATION,
         GVZ_PROXY_LIMITATION,
+        GVZ_NOT_STRIKE_LEVEL_OI_LIMITATION,
         DERIBIT_CRYPTO_OPTIONS_LIMITATION,
         PUBLIC_ONLY_LIMITATION,
         ARTIFACT_SCOPE_LIMITATION,
@@ -123,6 +137,35 @@ def build_cftc_gold_positioning_summary(
     )
 
 
+def build_gvz_gap_summary(
+    records: list[GvzDailyCloseRecord],
+    *,
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> GvzGapSummary:
+    """Summarize missing GVZ daily close observations without fabricating values."""
+
+    if not records and (start_date is None or end_date is None):
+        raise ValueError("GVZ gap summary needs records or an explicit date window")
+    observed_dates = {record.date for record in records if not record.is_missing}
+    all_record_dates = {record.date for record in records}
+    window_start = start_date or min(all_record_dates)
+    window_end = end_date or max(all_record_dates)
+    missing_dates = [
+        current_date
+        for current_date in _inclusive_dates(window_start, window_end)
+        if current_date not in observed_dates
+    ]
+    return GvzGapSummary(
+        start_date=window_start,
+        end_date=window_end,
+        observed_row_count=len(observed_dates),
+        missing_date_count=len(missing_dates),
+        missing_dates=missing_dates,
+        limitations=[GVZ_PROXY_LIMITATION, GVZ_NOT_STRIKE_LEVEL_OI_LIMITATION],
+    )
+
+
 def _net(long_value: float | None, short_value: float | None) -> float | None:
     if long_value is None or short_value is None:
         return None
@@ -133,3 +176,10 @@ def _difference(value: float | None, previous: float | None) -> float | None:
     if value is None or previous is None:
         return None
     return value - previous
+
+
+def _inclusive_dates(start_date: date, end_date: date):
+    current_date = start_date
+    while current_date <= end_date:
+        yield current_date
+        current_date += timedelta(days=1)
