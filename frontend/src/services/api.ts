@@ -54,6 +54,7 @@ import {
   ValidationWalkForwardResponse,
   XauVolOiReport,
   XauDashboardData,
+  XauReactionDashboardData,
   XauReactionReport,
   XauReactionReportListResponse,
   XauReactionReportRequest,
@@ -449,7 +450,7 @@ export const api = {
     return { report, walls, zones };
   },
 
-  // XAU reaction report placeholders
+  // XAU reaction reports
   createXauReactionReport: async (
     request: XauReactionReportRequest,
   ): Promise<XauReactionReport> => {
@@ -473,5 +474,17 @@ export const api = {
 
   getXauRiskPlanRows: async (reportId: string): Promise<XauRiskPlanRowsResponse> => {
     return fetchApi(`/xau/reaction-reports/${encodeURIComponent(reportId)}/risk-plan`);
+  },
+
+  getXauReactionDashboardData: async (
+    reportId: string,
+  ): Promise<XauReactionDashboardData> => {
+    const encodedReportId = encodeURIComponent(reportId);
+    const [report, reactions, riskPlan] = await Promise.all([
+      fetchApi<XauReactionReport>(`/xau/reaction-reports/${encodedReportId}`),
+      fetchApi<XauReactionRowsResponse>(`/xau/reaction-reports/${encodedReportId}/reactions`),
+      fetchApi<XauRiskPlanRowsResponse>(`/xau/reaction-reports/${encodedReportId}/risk-plan`),
+    ]);
+    return { report, reactions, riskPlan };
   },
 };

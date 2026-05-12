@@ -68,7 +68,7 @@ def _plan_for_reaction(
 def _entry_condition_text(reaction: XauReactionRow) -> str:
     label = reaction.reaction_label.value.lower().replace("_", " ")
     return (
-        f"Research annotation: observe the {label} candidate only while invalidation "
+        f"Research annotation: observe the {label} only while invalidation "
         "and cancel conditions remain intact."
     )
 

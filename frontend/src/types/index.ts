@@ -1111,6 +1111,70 @@ export type XauReactionConfidenceLabel = 'high' | 'medium' | 'low' | 'blocked' |
 export type XauReactionReportStatus = 'completed' | 'partial' | 'blocked';
 export type XauReactionReportFormat = 'json' | 'markdown' | 'both';
 export type XauReactionEventRiskState = 'clear' | 'elevated' | 'blocked' | 'unknown';
+export type XauReactionFreshnessState = 'VALID' | 'THIN' | 'STALE' | 'PRIOR_DAY' | 'UNKNOWN';
+export type XauReactionVrpRegime = 'iv_premium' | 'balanced' | 'rv_premium' | 'unknown';
+export type XauReactionIvEdgeState = 'inside' | 'at_edge' | 'beyond_edge' | 'unknown';
+export type XauReactionRvExtensionState =
+  | 'inside'
+  | 'extended'
+  | 'beyond_range'
+  | 'unknown';
+export type XauReactionOpenSide = 'above_open' | 'below_open' | 'at_open' | 'unknown';
+export type XauReactionOpenFlipState =
+  | 'no_flip'
+  | 'crossed_without_acceptance'
+  | 'accepted_flip'
+  | 'unknown';
+export type XauReactionOpenSupportResistance =
+  | 'support_test'
+  | 'resistance_test'
+  | 'boundary'
+  | 'unknown';
+export type XauReactionAcceptanceDirection = 'above' | 'below' | 'unknown';
+export type XauRewardRiskState =
+  | 'meets_minimum'
+  | 'below_minimum'
+  | 'unavailable'
+  | 'not_applicable';
+
+export interface XauFreshnessResult {
+  state: XauReactionFreshnessState;
+  age_minutes: number | null;
+  confidence_label: XauReactionConfidenceLabel;
+  no_trade_reason: string | null;
+  notes: string[];
+}
+
+export interface XauVolRegimeResult {
+  realized_volatility: number | null;
+  vrp: number | null;
+  vrp_regime: XauReactionVrpRegime;
+  iv_edge_state: XauReactionIvEdgeState;
+  rv_extension_state: XauReactionRvExtensionState;
+  confidence_label: XauReactionConfidenceLabel;
+  notes: string[];
+}
+
+export interface XauOpenRegimeResult {
+  open_side: XauReactionOpenSide;
+  open_distance_points: number | null;
+  open_flip_state: XauReactionOpenFlipState;
+  open_as_support_or_resistance: XauReactionOpenSupportResistance;
+  confidence_label: XauReactionConfidenceLabel;
+  notes: string[];
+}
+
+export interface XauAcceptanceResult {
+  wall_id: string | null;
+  zone_id: string | null;
+  accepted_beyond_wall: boolean;
+  wick_rejection: boolean;
+  failed_breakout: boolean;
+  confirmed_breakout: boolean;
+  direction: XauReactionAcceptanceDirection;
+  confidence_label: XauReactionConfidenceLabel;
+  notes: string[];
+}
 
 export interface XauReactionReportRequest {
   source_report_id: string;
@@ -1154,6 +1218,11 @@ export interface XauReactionRow {
   target_level_1: number | null;
   target_level_2: number | null;
   next_wall_reference: string | null;
+  freshness_state: XauFreshnessResult;
+  vol_regime_state: XauVolRegimeResult;
+  open_regime_state: XauOpenRegimeResult;
+  acceptance_state: XauAcceptanceResult | null;
+  event_risk_state: XauReactionEventRiskState;
   research_only_warning: string;
 }
 
@@ -1169,7 +1238,7 @@ export interface XauRiskPlan {
   max_total_risk_per_idea: number | null;
   max_recovery_legs: number;
   minimum_rr: number | null;
-  rr_state: 'meets_minimum' | 'below_minimum' | 'unavailable' | 'not_applicable';
+  rr_state: XauRewardRiskState;
   cancel_conditions: string[];
   risk_notes: string[];
 }
@@ -1180,14 +1249,15 @@ export interface XauReactionReport {
   status: XauReactionReportStatus;
   created_at: string;
   session_date: string | null;
+  request: XauReactionReportRequest;
   source_wall_count: number;
   source_zone_count: number;
   reaction_count: number;
   no_trade_count: number;
   risk_plan_count: number;
-  freshness_state: Record<string, unknown>;
-  vol_regime_state: Record<string, unknown>;
-  open_regime_state: Record<string, unknown>;
+  freshness_state: XauFreshnessResult;
+  vol_regime_state: XauVolRegimeResult;
+  open_regime_state: XauOpenRegimeResult;
   reactions: XauReactionRow[];
   risk_plans: XauRiskPlan[];
   warnings: string[];
@@ -1207,6 +1277,12 @@ export interface XauReactionRowsResponse {
 export interface XauRiskPlanRowsResponse {
   report_id: string;
   data: XauRiskPlan[];
+}
+
+export interface XauReactionDashboardData {
+  report: XauReactionReport;
+  reactions: XauReactionRowsResponse;
+  riskPlan: XauRiskPlanRowsResponse;
 }
 
 export type DataSourceProviderType =

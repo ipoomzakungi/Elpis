@@ -6,7 +6,13 @@ from src.models.xau_reaction import (
     XauReactionReportRequest,
     XauReactionTableResponse,
     XauRiskPlanTableResponse,
+    validate_filesystem_safe_id,
 )
+from src.xau_reaction.orchestration import (
+    XauReactionReportBlockedError,
+    XauReactionReportOrchestrator,
+)
+from src.xau_reaction.report_store import XauReactionReportStore
 
 router = APIRouter()
 
@@ -15,23 +21,42 @@ router = APIRouter()
 async def create_xau_reaction_report(
     request: XauReactionReportRequest,
 ) -> XauReactionReport:
-    """Placeholder for creating research-only XAU reaction reports."""
+    """Create and persist a research-only XAU reaction report."""
 
-    _not_implemented()
+    try:
+        return XauReactionReportOrchestrator().run(request)
+    except FileNotFoundError:
+        _not_found(
+            f"Source XAU Vol-OI report '{request.source_report_id}' was not found",
+        )
+    except XauReactionReportBlockedError as exc:
+        _missing_data(str(exc), exc.details)
+    except ValueError as exc:
+        _validation_error(str(exc))
+
+    raise HTTPException(status_code=500, detail="XAU reaction report creation failed")
 
 
 @router.get("/xau/reaction-reports", response_model=XauReactionReportListResponse)
 async def list_xau_reaction_reports() -> XauReactionReportListResponse:
-    """Placeholder for listing saved XAU reaction reports."""
+    """List saved research-only XAU reaction reports."""
 
-    _not_implemented()
+    return XauReactionReportStore().list_reports()
 
 
 @router.get("/xau/reaction-reports/{report_id}", response_model=XauReactionReport)
 async def get_xau_reaction_report(report_id: str) -> XauReactionReport:
-    """Placeholder for reading one saved XAU reaction report."""
+    """Read one saved research-only XAU reaction report."""
 
-    _not_implemented()
+    try:
+        validate_filesystem_safe_id(report_id)
+        return XauReactionReportStore().read_report(report_id)
+    except ValueError as exc:
+        _validation_error(str(exc))
+    except FileNotFoundError:
+        _not_found(f"XAU reaction report '{report_id}' was not found")
+
+    raise HTTPException(status_code=500, detail="XAU reaction report read failed")
 
 
 @router.get(
@@ -39,9 +64,17 @@ async def get_xau_reaction_report(report_id: str) -> XauReactionReport:
     response_model=XauReactionTableResponse,
 )
 async def get_xau_reaction_rows(report_id: str) -> XauReactionTableResponse:
-    """Placeholder for reading saved XAU reaction rows."""
+    """Read saved XAU reaction rows."""
 
-    _not_implemented()
+    try:
+        validate_filesystem_safe_id(report_id)
+        return XauReactionReportStore().read_reactions(report_id)
+    except ValueError as exc:
+        _validation_error(str(exc))
+    except FileNotFoundError:
+        _not_found(f"XAU reaction report '{report_id}' was not found")
+
+    raise HTTPException(status_code=500, detail="XAU reaction rows read failed")
 
 
 @router.get(
@@ -49,22 +82,35 @@ async def get_xau_reaction_rows(report_id: str) -> XauReactionTableResponse:
     response_model=XauRiskPlanTableResponse,
 )
 async def get_xau_reaction_risk_plan(report_id: str) -> XauRiskPlanTableResponse:
-    """Placeholder for reading saved XAU bounded risk-plan rows."""
+    """Read saved XAU bounded risk-plan rows."""
 
-    _not_implemented()
+    try:
+        validate_filesystem_safe_id(report_id)
+        return XauReactionReportStore().read_risk_plan(report_id)
+    except ValueError as exc:
+        _validation_error(str(exc))
+    except FileNotFoundError:
+        _not_found(f"XAU reaction report '{report_id}' was not found")
+
+    raise HTTPException(status_code=500, detail="XAU risk-plan rows read failed")
 
 
-def _not_implemented() -> None:
+def _not_found(message: str) -> None:
     raise HTTPException(
-        status_code=501,
-        detail={
-            "error": {
-                "code": "NOT_IMPLEMENTED",
-                "message": (
-                    "XAU reaction report endpoints are registered, but report creation and "
-                    "persistence are not implemented in this foundation slice."
-                ),
-                "details": [],
-            }
-        },
+        status_code=404,
+        detail={"error": {"code": "NOT_FOUND", "message": message, "details": []}},
+    )
+
+
+def _validation_error(message: str) -> None:
+    raise HTTPException(
+        status_code=400,
+        detail={"error": {"code": "VALIDATION_ERROR", "message": message, "details": []}},
+    )
+
+
+def _missing_data(message: str, details: list[dict[str, str]]) -> None:
+    raise HTTPException(
+        status_code=400,
+        detail={"error": {"code": "MISSING_DATA", "message": message, "details": details}},
     )

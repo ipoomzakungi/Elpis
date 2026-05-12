@@ -26,7 +26,7 @@ def evaluate_open_regime(input_data: XauOpenRegimeInput) -> XauOpenRegimeResult:
     flip_state = _flip_state(input_data)
     support_resistance = _support_resistance(open_side)
     notes = [
-        "Session open is treated as a research context boundary, not a signal.",
+        "Session open is treated as a research context boundary, not an action instruction.",
         f"Current price is {open_side.value.replace('_', ' ')}.",
     ]
     if flip_state == XauOpenFlipState.CROSSED_WITHOUT_ACCEPTANCE:

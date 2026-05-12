@@ -21,18 +21,23 @@ from src.models.xau import (
 )
 from src.models.xau_reaction import (
     XauAcceptanceDirection,
+    XauAcceptanceInput,
     XauAcceptanceResult,
     XauConfidenceLabel,
     XauEventRiskState,
     XauFreshnessResult,
     XauFreshnessState,
+    XauInitialMoveDirection,
+    XauIntradayFreshnessInput,
     XauIvEdgeState,
     XauOpenFlipState,
+    XauOpenRegimeInput,
     XauOpenRegimeResult,
     XauOpenSide,
     XauOpenSupportResistance,
     XauReactionReportRequest,
     XauRvExtensionState,
+    XauVolRegimeInput,
     XauVolRegimeResult,
     XauVrpRegime,
 )
@@ -47,6 +52,56 @@ def sample_xau_reaction_report_request() -> XauReactionReportRequest:
         max_total_risk_per_idea=0.01,
         max_recovery_legs=1,
         minimum_rr=1.5,
+        wall_buffer_points=2.0,
+        research_only_acknowledged=True,
+    )
+
+
+def sample_xau_reaction_full_context_request() -> XauReactionReportRequest:
+    return XauReactionReportRequest(
+        source_report_id="xau_vol_oi_synthetic_20260512",
+        current_price=2405.0,
+        current_timestamp=datetime(2026, 5, 12, 10, 0, tzinfo=UTC),
+        freshness_input=XauIntradayFreshnessInput(
+            intraday_timestamp=datetime(2026, 5, 12, 9, 55, tzinfo=UTC),
+            current_timestamp=datetime(2026, 5, 12, 10, 0, tzinfo=UTC),
+            total_intraday_contracts=12500.0,
+            min_contract_threshold=1000.0,
+            max_allowed_age_minutes=30,
+            session_flag="regular",
+        ),
+        vol_regime_input=XauVolRegimeInput(
+            implied_volatility=0.16,
+            realized_volatility=0.12,
+            price=2405.0,
+            iv_lower=2378.0,
+            iv_upper=2428.0,
+            rv_lower=2388.0,
+            rv_upper=2420.0,
+        ),
+        open_regime_input=XauOpenRegimeInput(
+            session_open=2398.0,
+            current_price=2405.0,
+            initial_move_direction=XauInitialMoveDirection.UP,
+            crossed_open_after_initial_move=False,
+            acceptance_beyond_open=False,
+        ),
+        acceptance_inputs=[
+            XauAcceptanceInput(
+                wall_id="wall_2400_call",
+                zone_id="zone_2400",
+                wall_level=2393.0,
+                high=2408.0,
+                low=2392.0,
+                close=2405.0,
+                next_bar_open=2406.0,
+                buffer_points=2.0,
+            )
+        ],
+        event_risk_state=XauEventRiskState.UNKNOWN,
+        max_total_risk_per_idea=0.01,
+        max_recovery_legs=1,
+        minimum_rr=1.0,
         wall_buffer_points=2.0,
         research_only_acknowledged=True,
     )

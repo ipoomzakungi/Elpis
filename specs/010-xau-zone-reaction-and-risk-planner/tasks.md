@@ -187,26 +187,26 @@
 
 ### Tests for User Story 5
 
-- [ ] T080 [P] [US5] Add create reaction report API contract tests in `backend/tests/contract/test_xau_reaction_api_contracts.py`
-- [ ] T081 [P] [US5] Add list/detail/reactions/risk-plan API contract tests in `backend/tests/contract/test_xau_reaction_api_contracts.py`
-- [ ] T082 [P] [US5] Add missing source report, invalid request, blocked source report, and missing reaction report contract tests in `backend/tests/contract/test_xau_reaction_api_contracts.py`
-- [ ] T083 [P] [US5] Add end-to-end synthetic reaction report integration test in `backend/tests/integration/test_xau_reaction_flow.py`
-- [ ] T084 [P] [US5] Add report persistence read/write tests for metadata, reactions, risk plans, JSON, and Markdown in `backend/tests/unit/test_xau_reaction_report_store.py`
+- [X] T080 [P] [US5] Add create reaction report API contract tests in `backend/tests/contract/test_xau_reaction_api_contracts.py`
+- [X] T081 [P] [US5] Add list/detail/reactions/risk-plan API contract tests in `backend/tests/contract/test_xau_reaction_api_contracts.py`
+- [X] T082 [P] [US5] Add missing source report, invalid request, blocked source report, and missing reaction report contract tests in `backend/tests/contract/test_xau_reaction_api_contracts.py`
+- [X] T083 [P] [US5] Add end-to-end synthetic reaction report integration test in `backend/tests/integration/test_xau_reaction_flow.py`
+- [X] T084 [P] [US5] Add report persistence read/write tests for metadata, reactions, risk plans, JSON, and Markdown in `backend/tests/unit/test_xau_reaction_report_store.py`
 
 ### Implementation for User Story 5
 
-- [ ] T085 [US5] Implement feature 006 source report loading and validation in `backend/src/xau_reaction/orchestration.py`
-- [ ] T086 [US5] Implement full reaction report assembly with counts, warnings, limitations, artifacts, and research-only text in `backend/src/xau_reaction/orchestration.py`
-- [ ] T087 [US5] Implement metadata, reaction row, risk plan row, JSON report, Markdown report, and optional Parquet persistence in `backend/src/xau_reaction/report_store.py`
-- [ ] T088 [US5] Implement saved reaction report list/detail/reactions/risk-plan reads in `backend/src/xau_reaction/report_store.py`
-- [ ] T089 [US5] Implement XAU reaction JSON and Markdown composition in `backend/src/reports/writer.py`
-- [ ] T090 [US5] Implement `POST /api/v1/xau/reaction-reports` in `backend/src/api/routes/xau_reaction.py`
-- [ ] T091 [US5] Implement `GET /api/v1/xau/reaction-reports` and `GET /api/v1/xau/reaction-reports/{report_id}` in `backend/src/api/routes/xau_reaction.py`
-- [ ] T092 [US5] Implement `GET /api/v1/xau/reaction-reports/{report_id}/reactions` and `/risk-plan` in `backend/src/api/routes/xau_reaction.py`
-- [ ] T093 [US5] Implement XAU reaction request/response types in `frontend/src/types/index.ts`
-- [ ] T094 [US5] Implement `createXauReactionReport`, `listXauReactionReports`, `getXauReactionReport`, `getXauReactionRows`, and `getXauRiskPlanRows` in `frontend/src/services/api.ts`
-- [ ] T095 [US5] Render reaction report selector, source report id, status, freshness badge, IV/RV/VRP panel, and session open panel in `frontend/src/app/xau-vol-oi/page.tsx`
-- [ ] T096 [US5] Render acceptance/rejection state, reaction label table, bounded risk planner table, no-trade reasons, and research-only disclaimer in `frontend/src/app/xau-vol-oi/page.tsx`
+- [X] T085 [US5] Implement feature 006 source report loading and validation in `backend/src/xau_reaction/orchestration.py`
+- [X] T086 [US5] Implement full reaction report assembly with counts, warnings, limitations, artifacts, and research-only text in `backend/src/xau_reaction/orchestration.py`
+- [X] T087 [US5] Implement metadata, reaction row, risk plan row, JSON report, Markdown report, and optional Parquet persistence in `backend/src/xau_reaction/report_store.py`
+- [X] T088 [US5] Implement saved reaction report list/detail/reactions/risk-plan reads in `backend/src/xau_reaction/report_store.py`
+- [X] T089 [US5] Implement XAU reaction JSON and Markdown composition in `backend/src/reports/writer.py`
+- [X] T090 [US5] Implement `POST /api/v1/xau/reaction-reports` in `backend/src/api/routes/xau_reaction.py`
+- [X] T091 [US5] Implement `GET /api/v1/xau/reaction-reports` and `GET /api/v1/xau/reaction-reports/{report_id}` in `backend/src/api/routes/xau_reaction.py`
+- [X] T092 [US5] Implement `GET /api/v1/xau/reaction-reports/{report_id}/reactions` and `/risk-plan` in `backend/src/api/routes/xau_reaction.py`
+- [X] T093 [US5] Implement XAU reaction request/response types in `frontend/src/types/index.ts`
+- [X] T094 [US5] Implement `createXauReactionReport`, `listXauReactionReports`, `getXauReactionReport`, `getXauReactionRows`, and `getXauRiskPlanRows` in `frontend/src/services/api.ts`
+- [X] T095 [US5] Render reaction report selector, source report id, status, freshness badge, IV/RV/VRP panel, and session open panel in `frontend/src/app/xau-vol-oi/page.tsx`
+- [X] T096 [US5] Render acceptance/rejection state, reaction label table, bounded risk planner table, no-trade reasons, and research-only disclaimer in `frontend/src/app/xau-vol-oi/page.tsx`
 
 **Checkpoint**: All user stories are independently functional through backend API and dashboard inspection.
 

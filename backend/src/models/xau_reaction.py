@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 SAFE_REPORT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 XAU_REACTION_RESEARCH_ONLY_WARNING = (
-    "XAU reaction outputs are research annotations only and are not execution instructions."
+    "XAU reaction outputs are research annotations only and are not action instructions."
 )
 
 

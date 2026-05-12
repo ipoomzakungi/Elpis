@@ -1,7 +1,9 @@
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 from src.models.xau_reaction import (
+    XAU_REACTION_RESEARCH_ONLY_WARNING,
     XauAcceptanceInput,
     XauAcceptanceResult,
     XauConfidenceLabel,
@@ -12,24 +14,36 @@ from src.models.xau_reaction import (
     XauOpenRegimeResult,
     XauOpenSide,
     XauOpenSupportResistance,
+    XauReactionLabel,
     XauReactionReport,
     XauReactionReportRequest,
+    XauReactionReportStatus,
     XauReactionRow,
     XauRiskPlan,
     XauRvExtensionState,
     XauVolRegimeResult,
     XauVrpRegime,
 )
+from src.xau.report_store import XauReportStore
 from src.xau_reaction.acceptance import classify_acceptance
 from src.xau_reaction.classifier import classify_reaction_rows
 from src.xau_reaction.freshness import classify_freshness
 from src.xau_reaction.open_regime import evaluate_open_regime
+from src.xau_reaction.report_store import XauReactionReportStore
 from src.xau_reaction.risk_plan import plan_bounded_research_risk
 from src.xau_reaction.vol_regime import evaluate_vol_regime
 
 
 class XauReactionReportNotImplementedError(RuntimeError):
     """Raised until full reaction report loading and persistence are implemented."""
+
+
+class XauReactionReportBlockedError(RuntimeError):
+    """Raised when a source XAU report lacks the rows required for reaction reporting."""
+
+    def __init__(self, message: str, details: list[dict[str, str]]) -> None:
+        super().__init__(message)
+        self.details = details
 
 
 @dataclass(frozen=True)
@@ -46,10 +60,20 @@ class XauReactionContextBundle:
 class XauReactionReportOrchestrator:
     """Orchestration boundary for research-only XAU reaction report slices."""
 
+    def __init__(
+        self,
+        *,
+        source_report_store: XauReportStore | None = None,
+        reaction_report_store: XauReactionReportStore | None = None,
+    ) -> None:
+        self.source_report_store = source_report_store or XauReportStore()
+        self.reaction_report_store = reaction_report_store or XauReactionReportStore()
+
     def run(self, request: XauReactionReportRequest) -> XauReactionReport:
-        raise XauReactionReportNotImplementedError(
-            "XAU reaction report persistence is not implemented in this integration slice."
-        )
+        source_report = self.source_report_store.read_report(request.source_report_id)
+        _validate_source_report(source_report)
+        report = assemble_reaction_report(request=request, source_report=source_report)
+        return self.reaction_report_store.save_report(report)
 
     def classify_source_report(
         self,
@@ -111,6 +135,55 @@ def plan_source_report_risk(
     return plan_bounded_research_risk(
         reactions=reactions,
         risk_config=_risk_config_from_request(request),
+    )
+
+
+def assemble_reaction_report(
+    *,
+    request: XauReactionReportRequest,
+    source_report: Any,
+) -> XauReactionReport:
+    """Assemble one persisted research-only reaction report without writing artifacts."""
+
+    _validate_source_report(source_report)
+    context_bundle = build_reaction_context(request=request, source_report=source_report)
+    walls = list(getattr(source_report, "walls", []) or [])
+    zones = list(getattr(source_report, "zones", []) or [])
+    reactions = classify_reaction_rows(
+        source_report_id=request.source_report_id,
+        walls=walls,
+        zones=zones,
+        context=context_bundle.classifier_context,
+    )
+    risk_plans = plan_bounded_research_risk(
+        reactions=reactions,
+        risk_config=_risk_config_from_request(request),
+    )
+
+    created_at = _created_at(request)
+    no_trade_count = sum(
+        1 for reaction in reactions if reaction.reaction_label == XauReactionLabel.NO_TRADE
+    )
+    return XauReactionReport(
+        report_id=_reaction_report_id(request=request, created_at=created_at),
+        source_report_id=request.source_report_id,
+        status=_report_status(reactions=reactions, no_trade_count=no_trade_count),
+        created_at=created_at,
+        session_date=getattr(source_report, "session_date", None),
+        request=request,
+        source_wall_count=len(walls),
+        source_zone_count=len(zones),
+        reaction_count=len(reactions),
+        no_trade_count=no_trade_count,
+        risk_plan_count=len(risk_plans),
+        freshness_state=context_bundle.freshness_state,
+        vol_regime_state=context_bundle.vol_regime_state,
+        open_regime_state=context_bundle.open_regime_state,
+        reactions=reactions,
+        risk_plans=risk_plans,
+        warnings=_report_warnings(source_report=source_report),
+        limitations=_report_limitations(source_report=source_report),
+        artifacts=[],
     )
 
 
@@ -184,6 +257,100 @@ def _risk_config_from_request(request: XauReactionReportRequest) -> dict[str, An
         "wall_buffer_points": request.wall_buffer_points,
         "absolute_max_recovery_legs": request.max_recovery_legs,
     }
+
+
+def _validate_source_report(source_report: Any) -> None:
+    details: list[dict[str, str]] = []
+    status = str(getattr(source_report, "status", "")).lower()
+    if status.endswith("blocked"):
+        details.append(
+            {
+                "field": "source_report_id",
+                "message": "Source report status is blocked.",
+            }
+        )
+    if not list(getattr(source_report, "walls", []) or []):
+        details.append(
+            {
+                "field": "source_report_id",
+                "message": "Source report has no usable wall rows.",
+            }
+        )
+    if not list(getattr(source_report, "zones", []) or []):
+        details.append(
+            {
+                "field": "source_report_id",
+                "message": "Source report has no usable zone rows.",
+            }
+        )
+    if details:
+        raise XauReactionReportBlockedError(
+            "XAU reaction report cannot be created from the source report.",
+            details,
+        )
+
+
+def _created_at(request: XauReactionReportRequest) -> datetime:
+    if request.current_timestamp is not None:
+        timestamp = request.current_timestamp
+        return timestamp if timestamp.tzinfo is not None else timestamp.replace(tzinfo=UTC)
+    return datetime.now(UTC)
+
+
+def _reaction_report_id(
+    *,
+    request: XauReactionReportRequest,
+    created_at: datetime,
+) -> str:
+    timestamp = created_at.astimezone(UTC).strftime("%Y%m%d_%H%M%S")
+    return f"xau_reaction_{timestamp}_{request.source_report_id}"
+
+
+def _report_status(
+    *,
+    reactions: list[XauReactionRow],
+    no_trade_count: int,
+) -> XauReactionReportStatus:
+    if not reactions:
+        return XauReactionReportStatus.BLOCKED
+    if 0 < no_trade_count < len(reactions):
+        return XauReactionReportStatus.PARTIAL
+    return XauReactionReportStatus.COMPLETED
+
+
+def _report_warnings(*, source_report: Any) -> list[str]:
+    warnings = [
+        XAU_REACTION_RESEARCH_ONLY_WARNING,
+        "OI walls remain research zones; reaction rows require context review.",
+    ]
+    warnings.extend(str(warning) for warning in getattr(source_report, "warnings", []) if warning)
+    return _unique_text(warnings)
+
+
+def _report_limitations(*, source_report: Any) -> list[str]:
+    limitations = [
+        "Feature 010 reuses feature 006 XAU wall and zone rows without recalculating source OI.",
+        "Source XAU Vol-OI report completeness must be reviewed before relying on annotations.",
+    ]
+    limitations.extend(
+        str(limitation) for limitation in getattr(source_report, "limitations", []) if limitation
+    )
+    expected_range = getattr(source_report, "expected_range", None)
+    unavailable_reason = getattr(expected_range, "unavailable_reason", None)
+    if unavailable_reason:
+        limitations.append(str(unavailable_reason))
+    return _unique_text(limitations)
+
+
+def _unique_text(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        normalized = value.strip()
+        if normalized and normalized not in seen:
+            result.append(normalized)
+            seen.add(normalized)
+    return result
 
 
 def _acceptance_states(
