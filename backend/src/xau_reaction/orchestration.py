@@ -15,6 +15,7 @@ from src.models.xau_reaction import (
     XauReactionReport,
     XauReactionReportRequest,
     XauReactionRow,
+    XauRiskPlan,
     XauRvExtensionState,
     XauVolRegimeResult,
     XauVrpRegime,
@@ -23,6 +24,7 @@ from src.xau_reaction.acceptance import classify_acceptance
 from src.xau_reaction.classifier import classify_reaction_rows
 from src.xau_reaction.freshness import classify_freshness
 from src.xau_reaction.open_regime import evaluate_open_regime
+from src.xau_reaction.risk_plan import plan_bounded_research_risk
 from src.xau_reaction.vol_regime import evaluate_vol_regime
 
 
@@ -69,6 +71,16 @@ class XauReactionReportOrchestrator:
 
         return build_reaction_context(request=request, source_report=source_report)
 
+    def plan_source_report_risk(
+        self,
+        *,
+        request: XauReactionReportRequest,
+        source_report: Any,
+    ) -> list[XauRiskPlan]:
+        """Create bounded risk annotations for classified source report rows."""
+
+        return plan_source_report_risk(request=request, source_report=source_report)
+
 
 def classify_source_report_reactions(
     *,
@@ -85,6 +97,20 @@ def classify_source_report_reactions(
         walls=walls,
         zones=zones,
         context=context_bundle.classifier_context,
+    )
+
+
+def plan_source_report_risk(
+    *,
+    request: XauReactionReportRequest,
+    source_report: Any,
+) -> list[XauRiskPlan]:
+    """Classify source report rows and create bounded risk annotations."""
+
+    reactions = classify_source_report_reactions(request=request, source_report=source_report)
+    return plan_bounded_research_risk(
+        reactions=reactions,
+        risk_config=_risk_config_from_request(request),
     )
 
 
@@ -146,6 +172,18 @@ def build_reaction_context(
         acceptance_states=acceptance_states,
         classifier_context=classifier_context,
     )
+
+
+def _risk_config_from_request(request: XauReactionReportRequest) -> dict[str, Any]:
+    return {
+        "reference_price": request.current_price,
+        "max_total_risk_per_idea": request.max_total_risk_per_idea,
+        "max_recovery_legs": request.max_recovery_legs,
+        "minimum_rr": request.minimum_rr,
+        "stop_buffer_points": request.wall_buffer_points,
+        "wall_buffer_points": request.wall_buffer_points,
+        "absolute_max_recovery_legs": request.max_recovery_legs,
+    }
 
 
 def _acceptance_states(

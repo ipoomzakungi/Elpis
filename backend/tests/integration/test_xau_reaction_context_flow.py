@@ -12,6 +12,7 @@ from src.models.xau_reaction import (
     XauOpenSide,
     XauReactionLabel,
     XauReactionReportRequest,
+    XauRewardRiskState,
     XauVolRegimeInput,
     XauVrpRegime,
 )
@@ -48,6 +49,14 @@ def test_orchestration_computes_context_states_and_feeds_classifier():
     assert row.freshness_state.state == XauFreshnessState.VALID
     assert row.acceptance_state is not None
     assert row.acceptance_state.confirmed_breakout is True
+
+    risk_plans = orchestrator.plan_source_report_risk(
+        request=request,
+        source_report=source_report,
+    )
+    assert len(risk_plans) == 1
+    assert risk_plans[0].reaction_id == row.reaction_id
+    assert risk_plans[0].rr_state == XauRewardRiskState.BELOW_MINIMUM
 
 
 def test_orchestration_missing_context_inputs_return_safe_no_trade_rows():
@@ -128,6 +137,9 @@ def _full_context_request() -> XauReactionReportRequest:
                 buffer_points=2.0,
             )
         ],
+        max_total_risk_per_idea=0.01,
+        max_recovery_legs=1,
+        minimum_rr=1.0,
         wall_buffer_points=2.0,
         research_only_acknowledged=True,
     )

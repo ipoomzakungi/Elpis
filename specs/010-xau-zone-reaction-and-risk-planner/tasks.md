@@ -160,20 +160,20 @@
 
 ### Tests for User Story 4
 
-- [ ] T069 [P] [US4] Add risk planner tests for non-`NO_TRADE` reaction annotations in `backend/tests/unit/test_xau_reaction_risk_plan.py`
-- [ ] T070 [P] [US4] Add risk planner tests for no entry plan on `NO_TRADE` in `backend/tests/unit/test_xau_reaction_risk_plan.py`
-- [ ] T071 [P] [US4] Add risk planner tests for capped recovery legs, max total risk notes, and minimum reward/risk states in `backend/tests/unit/test_xau_reaction_risk_plan.py`
-- [ ] T072 [P] [US4] Add risk planner tests for forbidden martingale, unlimited averaging, execution-ready, and live-readiness wording in `backend/tests/unit/test_xau_reaction_risk_plan.py`
+- [X] T069 [P] [US4] Add risk planner tests for non-`NO_TRADE` reaction annotations in `backend/tests/unit/test_xau_reaction_risk_plan.py`
+- [X] T070 [P] [US4] Add risk planner tests for no entry plan on `NO_TRADE` in `backend/tests/unit/test_xau_reaction_risk_plan.py`
+- [X] T071 [P] [US4] Add risk planner tests for capped recovery legs, max total risk notes, and minimum reward/risk states in `backend/tests/unit/test_xau_reaction_risk_plan.py`
+- [X] T072 [P] [US4] Add risk planner tests for forbidden martingale, unlimited averaging, execution-ready, and live-readiness wording in `backend/tests/unit/test_xau_reaction_risk_plan.py`
 
 ### Implementation for User Story 4
 
-- [ ] T073 [US4] Implement risk plan id creation and reaction-to-plan linking in `backend/src/xau_reaction/risk_plan.py`
-- [ ] T074 [US4] Implement entry condition text, invalidation level, stop buffer, target 1, and target 2 annotations for non-`NO_TRADE` reactions in `backend/src/xau_reaction/risk_plan.py`
-- [ ] T075 [US4] Implement no-plan behavior for `NO_TRADE` reactions in `backend/src/xau_reaction/risk_plan.py`
-- [ ] T076 [US4] Implement max total risk cap notes, bounded recovery legs, and no unlimited averaging behavior in `backend/src/xau_reaction/risk_plan.py`
-- [ ] T077 [US4] Implement minimum reward/risk state calculation and unavailable/below-minimum notes in `backend/src/xau_reaction/risk_plan.py`
-- [ ] T078 [US4] Implement cancel condition generation from freshness, acceptance, volatility, open, and event-risk context in `backend/src/xau_reaction/risk_plan.py`
-- [ ] T079 [US4] Integrate bounded risk planning into `backend/src/xau_reaction/orchestration.py`
+- [X] T073 [US4] Implement risk plan id creation and reaction-to-plan linking in `backend/src/xau_reaction/risk_plan.py`
+- [X] T074 [US4] Implement entry condition text, invalidation level, stop buffer, target 1, and target 2 annotations for non-`NO_TRADE` reactions in `backend/src/xau_reaction/risk_plan.py`
+- [X] T075 [US4] Implement no-plan behavior for `NO_TRADE` reactions in `backend/src/xau_reaction/risk_plan.py`
+- [X] T076 [US4] Implement max total risk cap notes, bounded recovery legs, and no unlimited averaging behavior in `backend/src/xau_reaction/risk_plan.py`
+- [X] T077 [US4] Implement minimum reward/risk state calculation and unavailable/below-minimum notes in `backend/src/xau_reaction/risk_plan.py`
+- [X] T078 [US4] Implement cancel condition generation from freshness, acceptance, volatility, open, and event-risk context in `backend/src/xau_reaction/risk_plan.py`
+- [X] T079 [US4] Integrate bounded risk planning into `backend/src/xau_reaction/orchestration.py`
 
 **Checkpoint**: User Stories 1 through 4 produce reaction rows and bounded research-only risk plans.
 
