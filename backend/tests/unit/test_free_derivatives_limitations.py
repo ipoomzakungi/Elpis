@@ -27,3 +27,11 @@ def test_source_limitations_include_public_and_artifact_scope_labels():
         assert PUBLIC_ONLY_LIMITATION in limitations
         assert ARTIFACT_SCOPE_LIMITATION in limitations
 
+
+def test_cftc_limitations_state_weekly_context_and_no_wall_level_replacement():
+    limitations = source_limitations(FreeDerivativesSource.CFTC_COT)
+    joined = " ".join(limitations).lower()
+
+    assert "weekly broad positioning context" in joined
+    assert "not strike-level options open interest" in joined
+    assert "not intraday wall data" in joined

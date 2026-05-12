@@ -1,8 +1,14 @@
+import csv
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
+
+import polars as pl
 
 from src.config import get_settings
 from src.models.free_derivatives import (
+    CftcCotGoldRecord,
+    CftcGoldPositioningSummary,
     FreeDerivativesArtifact,
     FreeDerivativesArtifactFormat,
     FreeDerivativesArtifactType,
@@ -62,6 +68,72 @@ class FreeDerivativesReportStore:
             raise ValueError("artifact filename must not contain path separators")
         return self.run_dir(run_id) / filename
 
+    def write_cftc_raw_rows(
+        self,
+        run_id: str,
+        rows: list[dict[str, str]],
+    ) -> FreeDerivativesArtifact:
+        self.raw_source_root(FreeDerivativesSource.CFTC_COT).mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        safe_run_id = validate_filesystem_safe_id(run_id, label="run_id")
+        path = self.raw_source_root(FreeDerivativesSource.CFTC_COT) / (
+            f"{safe_run_id}_raw_rows.csv"
+        )
+        self._write_csv(path, rows)
+        return self.artifact(
+            artifact_type=FreeDerivativesArtifactType.RAW_CFTC,
+            source=FreeDerivativesSource.CFTC_COT,
+            path=path,
+            artifact_format=FreeDerivativesArtifactFormat.CSV,
+            rows=len(rows),
+        )
+
+    def write_cftc_processed_records(
+        self,
+        run_id: str,
+        records: list[CftcCotGoldRecord],
+    ) -> FreeDerivativesArtifact:
+        self.processed_source_root(FreeDerivativesSource.CFTC_COT).mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        safe_run_id = validate_filesystem_safe_id(run_id, label="run_id")
+        path = self.processed_source_root(FreeDerivativesSource.CFTC_COT) / (
+            f"{safe_run_id}_gold_positioning.parquet"
+        )
+        self._write_parquet(path, [record.model_dump(mode="json") for record in records])
+        return self.artifact(
+            artifact_type=FreeDerivativesArtifactType.PROCESSED_CFTC,
+            source=FreeDerivativesSource.CFTC_COT,
+            path=path,
+            artifact_format=FreeDerivativesArtifactFormat.PARQUET,
+            rows=len(records),
+        )
+
+    def write_cftc_positioning_summary(
+        self,
+        run_id: str,
+        summaries: list[CftcGoldPositioningSummary],
+    ) -> FreeDerivativesArtifact:
+        self.processed_source_root(FreeDerivativesSource.CFTC_COT).mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        safe_run_id = validate_filesystem_safe_id(run_id, label="run_id")
+        path = self.processed_source_root(FreeDerivativesSource.CFTC_COT) / (
+            f"{safe_run_id}_gold_positioning_summary.parquet"
+        )
+        self._write_parquet(path, [summary.model_dump(mode="json") for summary in summaries])
+        return self.artifact(
+            artifact_type=FreeDerivativesArtifactType.PROCESSED_CFTC,
+            source=FreeDerivativesSource.CFTC_COT,
+            path=path,
+            artifact_format=FreeDerivativesArtifactFormat.PARQUET,
+            rows=len(summaries),
+        )
+
     def artifact(
         self,
         *,
@@ -97,3 +169,15 @@ class FreeDerivativesReportStore:
         if not any(root in (resolved_path, *resolved_path.parents) for root in allowed_roots):
             raise ValueError("free derivatives artifact path must stay under generated roots")
 
+    def _write_csv(self, path: Path, rows: list[dict[str, str]]) -> None:
+        fieldnames = sorted({key for row in rows for key in row})
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+
+    def _write_parquet(self, path: Path, rows: list[dict[str, Any]]) -> None:
+        if rows:
+            pl.DataFrame(rows).write_parquet(path)
+            return
+        pl.DataFrame().write_parquet(path)

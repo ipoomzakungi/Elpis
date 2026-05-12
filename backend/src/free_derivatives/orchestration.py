@@ -1,11 +1,19 @@
 from datetime import UTC, datetime
 
+from src.free_derivatives.cftc import (
+    create_cftc_request_plan,
+    load_cftc_gold_records,
+    read_cftc_fixture_rows,
+)
 from src.free_derivatives.processing import (
+    CFTC_WEEKLY_POSITIONING_LIMITATION,
     FREE_DERIVATIVES_NO_REPLACEMENT_LIMITATION,
     FREE_DERIVATIVES_RESEARCH_ONLY_WARNING,
+    build_cftc_gold_positioning_summary,
     foundational_limitations,
     source_limitations,
 )
+from src.free_derivatives.report_store import FreeDerivativesReportStore
 from src.models.free_derivatives import (
     FreeDerivativesBootstrapRequest,
     FreeDerivativesBootstrapRun,
@@ -19,51 +27,43 @@ from src.models.free_derivatives import (
 
 def assemble_placeholder_bootstrap_run(
     request: FreeDerivativesBootstrapRequest,
+    store: FreeDerivativesReportStore | None = None,
 ) -> FreeDerivativesBootstrapRun:
-    """Build a structured placeholder run without collecting external data."""
+    """Build a structured research run for implemented sources and placeholders."""
 
     created_at = datetime.now(UTC)
-    enabled_sources = _enabled_sources(request)
-    source_results = [
-        FreeDerivativesSourceResult(
-            source=source,
-            status=FreeDerivativesSourceStatus.SKIPPED,
-            requested_items=["foundation_placeholder"],
-            skipped_items=["source-specific implementation is deferred"],
-            warnings=[
-                (
-                    "Placeholder only: source collection and parsing are not implemented "
-                    "in this foundation slice."
-                )
-            ],
-            limitations=source_limitations(source),
-            missing_data_actions=[
-                (
-                    "Continue with the source-specific implementation tasks before "
-                    "running real or fixture collection."
-                )
-            ],
+    run_id = create_free_derivatives_run_id(request.run_label, created_at=created_at)
+    artifact_store = store or FreeDerivativesReportStore()
+    source_results: list[FreeDerivativesSourceResult] = []
+    if request.include_cftc:
+        source_results.append(_run_cftc_source(request, run_id, artifact_store))
+    if request.include_gvz:
+        source_results.append(_placeholder_source_result(FreeDerivativesSource.GVZ))
+    if request.include_deribit:
+        source_results.append(
+            _placeholder_source_result(FreeDerivativesSource.DERIBIT_PUBLIC_OPTIONS)
         )
-        for source in enabled_sources
-    ]
 
     return FreeDerivativesBootstrapRun(
-        run_id=create_free_derivatives_run_id(request.run_label, created_at=created_at),
-        status=FreeDerivativesRunStatus.BLOCKED,
+        run_id=run_id,
+        status=_aggregate_run_status(source_results),
         created_at=created_at,
         completed_at=created_at,
         request=request,
         source_results=source_results,
-        artifacts=[],
+        artifacts=[artifact for result in source_results for artifact in result.artifacts],
         warnings=[FREE_DERIVATIVES_RESEARCH_ONLY_WARNING],
         limitations=foundational_limitations(),
-        missing_data_actions=[
-            (
-                "CFTC, GVZ, and Deribit source-specific parsers are not implemented "
-                "in this foundation slice."
-            ),
-            FREE_DERIVATIVES_NO_REPLACEMENT_LIMITATION,
-        ],
+        missing_data_actions=list(
+            dict.fromkeys(
+                [
+                    action
+                    for result in source_results
+                    for action in result.missing_data_actions
+                ]
+                + [FREE_DERIVATIVES_NO_REPLACEMENT_LIMITATION]
+            )
+        ),
         research_only_warnings=[
             (
                 "No live trading, paper trading, broker integration, wallet handling, "
@@ -73,13 +73,129 @@ def assemble_placeholder_bootstrap_run(
     )
 
 
-def _enabled_sources(request: FreeDerivativesBootstrapRequest) -> list[FreeDerivativesSource]:
-    sources: list[FreeDerivativesSource] = []
-    if request.include_cftc:
-        sources.append(FreeDerivativesSource.CFTC_COT)
-    if request.include_gvz:
-        sources.append(FreeDerivativesSource.GVZ)
-    if request.include_deribit:
-        sources.append(FreeDerivativesSource.DERIBIT_PUBLIC_OPTIONS)
-    return sources
+def _run_cftc_source(
+    request: FreeDerivativesBootstrapRequest,
+    run_id: str,
+    store: FreeDerivativesReportStore,
+) -> FreeDerivativesSourceResult:
+    plan = create_cftc_request_plan(request.cftc)
+    requested_items = [item.requested_item for item in plan]
+    limitations = source_limitations(FreeDerivativesSource.CFTC_COT)
+    if not request.cftc.local_fixture_paths:
+        return FreeDerivativesSourceResult(
+            source=FreeDerivativesSource.CFTC_COT,
+            status=FreeDerivativesSourceStatus.SKIPPED,
+            requested_items=requested_items,
+            skipped_items=requested_items or ["cftc_fixture_or_public_source"],
+            warnings=[
+                "CFTC source execution needs a local fixture/import file in this slice."
+            ],
+            limitations=limitations,
+            missing_data_actions=[
+                (
+                    "Provide a public CFTC historical file as a local CSV/ZIP fixture "
+                    "before running CFTC processing."
+                )
+            ],
+        )
 
+    try:
+        raw_rows = read_cftc_fixture_rows(request.cftc.local_fixture_paths)
+        records = load_cftc_gold_records(request.cftc)
+        if not records:
+            return FreeDerivativesSourceResult(
+                source=FreeDerivativesSource.CFTC_COT,
+                status=FreeDerivativesSourceStatus.PARTIAL,
+                requested_items=requested_items,
+                completed_items=[],
+                skipped_items=requested_items,
+                row_count=0,
+                artifacts=[
+                    store.write_cftc_raw_rows(run_id, raw_rows),
+                ],
+                warnings=[
+                    "CFTC fixtures were readable but no gold/COMEX rows matched the filters."
+                ],
+                limitations=limitations,
+                missing_data_actions=[
+                    "Check the CFTC fixture for gold/COMEX rows and report category labels."
+                ],
+            )
+
+        summaries = build_cftc_gold_positioning_summary(records)
+        artifacts = [
+            store.write_cftc_raw_rows(run_id, raw_rows),
+            store.write_cftc_processed_records(run_id, records),
+            store.write_cftc_positioning_summary(run_id, summaries),
+        ]
+        return FreeDerivativesSourceResult(
+            source=FreeDerivativesSource.CFTC_COT,
+            status=FreeDerivativesSourceStatus.COMPLETED,
+            requested_items=requested_items,
+            completed_items=sorted(
+                {
+                    f"{record.report_date.isoformat()}:{record.report_category.value}"
+                    for record in records
+                }
+            ),
+            row_count=len(records),
+            coverage_start=min(record.report_date for record in records),
+            coverage_end=max(record.report_date for record in records),
+            artifacts=artifacts,
+            warnings=[],
+            limitations=[CFTC_WEEKLY_POSITIONING_LIMITATION, *limitations],
+            missing_data_actions=[],
+        )
+    except Exception as exc:
+        return FreeDerivativesSourceResult(
+            source=FreeDerivativesSource.CFTC_COT,
+            status=FreeDerivativesSourceStatus.FAILED,
+            requested_items=requested_items,
+            failed_items=requested_items or ["cftc_fixture"],
+            warnings=[f"CFTC fixture processing failed: {exc}"],
+            limitations=limitations,
+            missing_data_actions=[
+                "Use a readable CFTC CSV or ZIP fixture with report date and positioning columns."
+            ],
+        )
+
+
+def _placeholder_source_result(source: FreeDerivativesSource) -> FreeDerivativesSourceResult:
+    return FreeDerivativesSourceResult(
+        source=source,
+        status=FreeDerivativesSourceStatus.SKIPPED,
+        requested_items=["foundation_placeholder"],
+        skipped_items=["source-specific implementation is deferred"],
+        warnings=[
+            (
+                "Placeholder only: source collection and parsing are not implemented "
+                "in this slice."
+            )
+        ],
+        limitations=source_limitations(source),
+        missing_data_actions=[
+            (
+                "Continue with the source-specific implementation tasks before "
+                "running real or fixture collection."
+            )
+        ],
+    )
+
+
+def _aggregate_run_status(
+    source_results: list[FreeDerivativesSourceResult],
+) -> FreeDerivativesRunStatus:
+    if not source_results:
+        return FreeDerivativesRunStatus.BLOCKED
+    completed = [
+        result
+        for result in source_results
+        if result.status == FreeDerivativesSourceStatus.COMPLETED
+    ]
+    if len(completed) == len(source_results):
+        return FreeDerivativesRunStatus.COMPLETED
+    if completed:
+        return FreeDerivativesRunStatus.PARTIAL
+    if any(result.status == FreeDerivativesSourceStatus.FAILED for result in source_results):
+        return FreeDerivativesRunStatus.FAILED
+    return FreeDerivativesRunStatus.BLOCKED

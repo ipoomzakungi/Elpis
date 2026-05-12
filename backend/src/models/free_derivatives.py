@@ -109,6 +109,70 @@ class DeribitOptionType(StrEnum):
     UNKNOWN = "unknown"
 
 
+class CftcCotGoldRecord(FreeDerivativesBaseModel):
+    report_date: date
+    report_category: CftcCotReportCategory
+    market_name: str
+    exchange_name: str
+    cftc_contract_market_code: str | None = None
+    commodity_name: str | None = None
+    noncommercial_long: float | None = None
+    noncommercial_short: float | None = None
+    noncommercial_spread: float | None = None
+    commercial_long: float | None = None
+    commercial_short: float | None = None
+    total_reportable_long: float | None = None
+    total_reportable_short: float | None = None
+    nonreportable_long: float | None = None
+    nonreportable_short: float | None = None
+    open_interest: float | None = None
+    source_file: str
+    source_row_number: int = Field(ge=1)
+    matched_filters: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+    @field_validator("market_name", "exchange_name", "source_file")
+    @classmethod
+    def normalize_required_strings(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("CFTC record text fields must not be blank")
+        return normalized
+
+    @field_validator("matched_filters", "limitations")
+    @classmethod
+    def normalize_cftc_record_lists(cls, values: list[str]) -> list[str]:
+        return _dedupe_nonblank_strings(values)
+
+
+class CftcGoldPositioningSummary(FreeDerivativesBaseModel):
+    report_date: date
+    report_category: CftcCotReportCategory
+    market_name: str
+    exchange_name: str
+    open_interest: float | None = None
+    noncommercial_net: float | None = None
+    commercial_net: float | None = None
+    total_reportable_net: float | None = None
+    nonreportable_net: float | None = None
+    week_over_week_noncommercial_net_change: float | None = None
+    week_over_week_open_interest_change: float | None = None
+    limitations: list[str] = Field(default_factory=list)
+
+    @field_validator("market_name", "exchange_name")
+    @classmethod
+    def normalize_required_strings(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("CFTC summary text fields must not be blank")
+        return normalized
+
+    @field_validator("limitations")
+    @classmethod
+    def normalize_cftc_summary_lists(cls, values: list[str]) -> list[str]:
+        return _dedupe_nonblank_strings(values)
+
+
 class CftcCotRequest(FreeDerivativesBaseModel):
     years: list[int] = Field(default_factory=list)
     categories: list[CftcCotReportCategory] = Field(
@@ -413,3 +477,11 @@ def _forbidden_request_paths(value: Any, prefix: str = "") -> list[str]:
         return matches
     return []
 
+
+def _dedupe_nonblank_strings(values: list[str]) -> list[str]:
+    normalized: list[str] = []
+    for value in values:
+        item = value.strip()
+        if item and item not in normalized:
+            normalized.append(item)
+    return normalized

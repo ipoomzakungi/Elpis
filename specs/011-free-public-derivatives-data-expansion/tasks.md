@@ -70,23 +70,23 @@
 
 ### Tests for User Story 1
 
-- [ ] T030 [P] [US1] Add CFTC request planner tests for years, categories, public URLs, and fixture paths in `backend/tests/unit/test_free_derivatives_cftc.py`
-- [ ] T031 [P] [US1] Add CFTC fixture parser tests for CSV and compressed-file style rows in `backend/tests/unit/test_free_derivatives_cftc.py`
-- [ ] T032 [P] [US1] Add CFTC gold/COMEX filter tests including non-gold exclusion in `backend/tests/unit/test_free_derivatives_cftc.py`
-- [ ] T033 [P] [US1] Add CFTC futures-only versus futures-and-options category separation tests in `backend/tests/unit/test_free_derivatives_cftc.py`
-- [ ] T034 [P] [US1] Add CFTC positioning summary tests for net and week-over-week fields in `backend/tests/unit/test_free_derivatives_cftc.py`
-- [ ] T035 [P] [US1] Add CFTC source limitation and no strike-level OI wording tests in `backend/tests/unit/test_free_derivatives_limitations.py`
+- [X] T030 [P] [US1] Add CFTC request planner tests for years, categories, public URLs, and fixture paths in `backend/tests/unit/test_free_derivatives_cftc.py`
+- [X] T031 [P] [US1] Add CFTC fixture parser tests for CSV and compressed-file style rows in `backend/tests/unit/test_free_derivatives_cftc.py`
+- [X] T032 [P] [US1] Add CFTC gold/COMEX filter tests including non-gold exclusion in `backend/tests/unit/test_free_derivatives_cftc.py`
+- [X] T033 [P] [US1] Add CFTC futures-only versus futures-and-options category separation tests in `backend/tests/unit/test_free_derivatives_cftc.py`
+- [X] T034 [P] [US1] Add CFTC positioning summary tests for net and week-over-week fields in `backend/tests/unit/test_free_derivatives_cftc.py`
+- [X] T035 [P] [US1] Add CFTC source limitation and no strike-level OI wording tests in `backend/tests/unit/test_free_derivatives_limitations.py`
 
 ### Implementation for User Story 1
 
-- [ ] T036 [US1] Implement CFTC request plan creation in `backend/src/free_derivatives/cftc.py`
-- [ ] T037 [US1] Implement CFTC local fixture and compressed CSV reading in `backend/src/free_derivatives/cftc.py`
-- [ ] T038 [US1] Implement CFTC row normalization for date, market, exchange, category, positioning, and open-interest fields in `backend/src/free_derivatives/cftc.py`
-- [ ] T039 [US1] Implement gold/COMEX row filtering with visible filter metadata in `backend/src/free_derivatives/cftc.py`
-- [ ] T040 [US1] Implement CFTC futures-only and futures-and-options combined category preservation in `backend/src/free_derivatives/cftc.py`
-- [ ] T041 [US1] Implement broad weekly gold positioning summary generation in `backend/src/free_derivatives/processing.py`
-- [ ] T042 [US1] Implement raw CFTC and processed CFTC artifact writers in `backend/src/free_derivatives/report_store.py`
-- [ ] T043 [US1] Connect CFTC source execution into bootstrap orchestration without enabling other sources in `backend/src/free_derivatives/orchestration.py`
+- [X] T036 [US1] Implement CFTC request plan creation in `backend/src/free_derivatives/cftc.py`
+- [X] T037 [US1] Implement CFTC local fixture and compressed CSV reading in `backend/src/free_derivatives/cftc.py`
+- [X] T038 [US1] Implement CFTC row normalization for date, market, exchange, category, positioning, and open-interest fields in `backend/src/free_derivatives/cftc.py`
+- [X] T039 [US1] Implement gold/COMEX row filtering with visible filter metadata in `backend/src/free_derivatives/cftc.py`
+- [X] T040 [US1] Implement CFTC futures-only and futures-and-options combined category preservation in `backend/src/free_derivatives/cftc.py`
+- [X] T041 [US1] Implement broad weekly gold positioning summary generation in `backend/src/free_derivatives/processing.py`
+- [X] T042 [US1] Implement raw CFTC and processed CFTC artifact writers in `backend/src/free_derivatives/report_store.py`
+- [X] T043 [US1] Connect CFTC source execution into bootstrap orchestration without enabling other sources in `backend/src/free_derivatives/orchestration.py`
 
 **Checkpoint**: User Story 1 is independently functional with fixture CFTC gold positioning outputs and research-only limitations.
 
