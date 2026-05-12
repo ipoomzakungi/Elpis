@@ -54,6 +54,11 @@ import {
   ValidationWalkForwardResponse,
   XauVolOiReport,
   XauDashboardData,
+  XauReactionReport,
+  XauReactionReportListResponse,
+  XauReactionReportRequest,
+  XauReactionRowsResponse,
+  XauRiskPlanRowsResponse,
   XauVolOiReportListResponse,
   XauVolOiReportRequest,
   XauWallTableResponse,
@@ -442,5 +447,31 @@ export const api = {
       fetchApi<XauZoneTableResponse>(`/xau/vol-oi/reports/${encodedReportId}/zones`),
     ]);
     return { report, walls, zones };
+  },
+
+  // XAU reaction report placeholders
+  createXauReactionReport: async (
+    request: XauReactionReportRequest,
+  ): Promise<XauReactionReport> => {
+    return fetchApi('/xau/reaction-reports', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  listXauReactionReports: async (): Promise<XauReactionReportListResponse> => {
+    return fetchApi('/xau/reaction-reports');
+  },
+
+  getXauReactionReport: async (reportId: string): Promise<XauReactionReport> => {
+    return fetchApi(`/xau/reaction-reports/${encodeURIComponent(reportId)}`);
+  },
+
+  getXauReactionRows: async (reportId: string): Promise<XauReactionRowsResponse> => {
+    return fetchApi(`/xau/reaction-reports/${encodeURIComponent(reportId)}/reactions`);
+  },
+
+  getXauRiskPlanRows: async (reportId: string): Promise<XauRiskPlanRowsResponse> => {
+    return fetchApi(`/xau/reaction-reports/${encodeURIComponent(reportId)}/risk-plan`);
   },
 };

@@ -795,3 +795,78 @@ def compose_xau_report_markdown(
     lines.extend(["", "## Notes", ""])
     lines.extend(f"- {note}" for note in report["notes"])
     return "\n".join(lines) + "\n"
+
+
+def compose_xau_reaction_report_json(
+    reaction_report: BaseModel | dict[str, Any],
+    extra_notes: list[str] | None = None,
+) -> dict[str, Any]:
+    """Compose a research-only XAU reaction report payload placeholder."""
+
+    notes = [RESEARCH_ONLY_WARNING]
+    if extra_notes:
+        notes.extend(extra_notes)
+
+    report_payload = _to_jsonable(reaction_report)
+    return {
+        "report": report_payload,
+        "research_disclaimer": (
+            "XAU reaction reports are research annotations only and are not execution "
+            "instructions."
+        ),
+        "freshness_state": report_payload.get("freshness_state"),
+        "vol_regime_state": report_payload.get("vol_regime_state"),
+        "open_regime_state": report_payload.get("open_regime_state"),
+        "reactions": report_payload.get("reactions", []),
+        "risk_plans": report_payload.get("risk_plans", []),
+        "warnings": report_payload.get("warnings", []),
+        "limitations": report_payload.get("limitations", []),
+        "notes": notes,
+    }
+
+
+def compose_xau_reaction_report_markdown(
+    reaction_report: BaseModel | dict[str, Any],
+    extra_notes: list[str] | None = None,
+) -> str:
+    report = compose_xau_reaction_report_json(reaction_report, extra_notes=extra_notes)
+    report_payload = report["report"]
+    lines = [
+        "# XAU Reaction Report",
+        "",
+        f"Report ID: {report_payload.get('report_id', 'unknown')}",
+        f"Source report ID: {report_payload.get('source_report_id', 'unknown')}",
+        f"Status: {report_payload.get('status', 'unknown')}",
+        "",
+        "## Research-Only Disclaimer",
+        "",
+        report["research_disclaimer"],
+        "",
+        "## Context",
+        "",
+        f"Freshness: {report.get('freshness_state')}",
+        f"Volatility: {report.get('vol_regime_state')}",
+        f"Open regime: {report.get('open_regime_state')}",
+        "",
+        "## Reaction Rows",
+        "",
+    ]
+    if not report["reactions"]:
+        lines.append("- No reaction rows were generated.")
+    for reaction in report["reactions"]:
+        lines.append(
+            f"- {reaction.get('reaction_id')}: {reaction.get('reaction_label')} "
+            f"/ {reaction.get('confidence_label')}"
+        )
+    lines.extend(["", "## Bounded Risk Plan Rows", ""])
+    if not report["risk_plans"]:
+        lines.append("- No bounded risk-plan rows were generated.")
+    for plan in report["risk_plans"]:
+        lines.append(f"- {plan.get('plan_id')}: {plan.get('rr_state')}")
+    lines.extend(["", "## Warnings", ""])
+    lines.extend(f"- {warning}" for warning in report["warnings"])
+    lines.extend(["", "## Limitations", ""])
+    lines.extend(f"- {limitation}" for limitation in report["limitations"])
+    lines.extend(["", "## Notes", ""])
+    lines.extend(f"- {note}" for note in report["notes"])
+    return "\n".join(lines) + "\n"

@@ -1100,6 +1100,115 @@ export interface XauDashboardData {
   zones: XauZoneTableResponse;
 }
 
+export type XauReactionLabel =
+  | 'REVERSAL_CANDIDATE'
+  | 'BREAKOUT_CANDIDATE'
+  | 'PIN_MAGNET'
+  | 'SQUEEZE_RISK'
+  | 'VACUUM_TO_NEXT_WALL'
+  | 'NO_TRADE';
+export type XauReactionConfidenceLabel = 'high' | 'medium' | 'low' | 'blocked' | 'unknown';
+export type XauReactionReportStatus = 'completed' | 'partial' | 'blocked';
+export type XauReactionReportFormat = 'json' | 'markdown' | 'both';
+export type XauReactionEventRiskState = 'clear' | 'elevated' | 'blocked' | 'unknown';
+
+export interface XauReactionReportRequest {
+  source_report_id: string;
+  current_price?: number | null;
+  current_timestamp?: string | null;
+  freshness_input?: Record<string, unknown> | null;
+  vol_regime_input?: Record<string, unknown> | null;
+  open_regime_input?: Record<string, unknown> | null;
+  acceptance_inputs?: Array<Record<string, unknown>>;
+  event_risk_state?: XauReactionEventRiskState;
+  max_total_risk_per_idea?: number | null;
+  max_recovery_legs?: number;
+  minimum_rr?: number | null;
+  wall_buffer_points?: number;
+  report_format?: XauReactionReportFormat;
+  research_only_acknowledged: boolean;
+}
+
+export interface XauReactionReportSummary {
+  report_id: string;
+  source_report_id: string;
+  status: XauReactionReportStatus;
+  created_at: string;
+  session_date: string | null;
+  reaction_count: number;
+  no_trade_count: number;
+  risk_plan_count: number;
+  warning_count: number;
+}
+
+export interface XauReactionRow {
+  reaction_id: string;
+  source_report_id: string;
+  wall_id: string | null;
+  zone_id: string | null;
+  reaction_label: XauReactionLabel;
+  confidence_label: XauReactionConfidenceLabel;
+  explanation_notes: string[];
+  no_trade_reasons: string[];
+  invalidation_level: number | null;
+  target_level_1: number | null;
+  target_level_2: number | null;
+  next_wall_reference: string | null;
+  research_only_warning: string;
+}
+
+export interface XauRiskPlan {
+  plan_id: string;
+  reaction_id: string;
+  reaction_label: XauReactionLabel;
+  entry_condition_text: string | null;
+  invalidation_level: number | null;
+  stop_buffer_points: number | null;
+  target_1: number | null;
+  target_2: number | null;
+  max_total_risk_per_idea: number | null;
+  max_recovery_legs: number;
+  minimum_rr: number | null;
+  rr_state: 'meets_minimum' | 'below_minimum' | 'unavailable' | 'not_applicable';
+  cancel_conditions: string[];
+  risk_notes: string[];
+}
+
+export interface XauReactionReport {
+  report_id: string;
+  source_report_id: string;
+  status: XauReactionReportStatus;
+  created_at: string;
+  session_date: string | null;
+  source_wall_count: number;
+  source_zone_count: number;
+  reaction_count: number;
+  no_trade_count: number;
+  risk_plan_count: number;
+  freshness_state: Record<string, unknown>;
+  vol_regime_state: Record<string, unknown>;
+  open_regime_state: Record<string, unknown>;
+  reactions: XauReactionRow[];
+  risk_plans: XauRiskPlan[];
+  warnings: string[];
+  limitations: string[];
+  artifacts: XauReportArtifact[];
+}
+
+export interface XauReactionReportListResponse {
+  reports: XauReactionReportSummary[];
+}
+
+export interface XauReactionRowsResponse {
+  report_id: string;
+  data: XauReactionRow[];
+}
+
+export interface XauRiskPlanRowsResponse {
+  report_id: string;
+  data: XauRiskPlan[];
+}
+
 export type DataSourceProviderType =
   | 'binance_public'
   | 'yahoo_finance'

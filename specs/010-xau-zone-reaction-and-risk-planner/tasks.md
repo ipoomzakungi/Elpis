@@ -22,16 +22,16 @@
 - [X] T003 Create `backend/src/xau_reaction/vol_regime.py` with module skeleton and public function placeholders
 - [X] T004 Create `backend/src/xau_reaction/open_regime.py` with module skeleton and public function placeholders
 - [X] T005 Create `backend/src/xau_reaction/acceptance.py` with module skeleton and public function placeholders
-- [ ] T006 Create `backend/src/xau_reaction/classifier.py` with module skeleton and public function placeholders
-- [ ] T007 Create `backend/src/xau_reaction/risk_plan.py` with module skeleton and public function placeholders
-- [ ] T008 Create `backend/src/xau_reaction/report_store.py` with report persistence skeleton
-- [ ] T009 Create `backend/src/xau_reaction/orchestration.py` with reaction report orchestration skeleton
+- [X] T006 Create `backend/src/xau_reaction/classifier.py` with module skeleton and public function placeholders
+- [X] T007 Create `backend/src/xau_reaction/risk_plan.py` with module skeleton and public function placeholders
+- [X] T008 Create `backend/src/xau_reaction/report_store.py` with report persistence skeleton
+- [X] T009 Create `backend/src/xau_reaction/orchestration.py` with reaction report orchestration skeleton
 - [X] T010 Create `backend/src/models/xau_reaction.py` with schema placeholders from `specs/010-xau-zone-reaction-and-risk-planner/data-model.md`
-- [ ] T011 Create `backend/src/api/routes/xau_reaction.py` with route placeholders from `specs/010-xau-zone-reaction-and-risk-planner/contracts/api.md`
-- [ ] T012 [P] Add XAU reaction frontend type placeholders in `frontend/src/types/index.ts`
-- [ ] T013 [P] Add XAU reaction frontend API client placeholders in `frontend/src/services/api.ts`
-- [ ] T014 [P] Add placeholder reaction-report section in `frontend/src/app/xau-vol-oi/page.tsx`
-- [ ] T015 Verify generated `data/reports/xau_reaction/` paths are covered by `.gitignore` and `scripts/check_generated_artifacts.ps1`
+- [X] T011 Create `backend/src/api/routes/xau_reaction.py` with route placeholders from `specs/010-xau-zone-reaction-and-risk-planner/contracts/api.md`
+- [X] T012 [P] Add XAU reaction frontend type placeholders in `frontend/src/types/index.ts`
+- [X] T013 [P] Add XAU reaction frontend API client placeholders in `frontend/src/services/api.ts`
+- [X] T014 [P] Add placeholder reaction-report section in `frontend/src/app/xau-vol-oi/page.tsx`
+- [X] T015 Verify generated `data/reports/xau_reaction/` paths are covered by `.gitignore` and `scripts/check_generated_artifacts.ps1`
 
 ---
 
@@ -43,22 +43,22 @@
 
 ### Tests for Foundation
 
-- [ ] T016 [P] Add XAU reaction schema validation tests in `backend/tests/unit/test_xau_reaction_models.py`
-- [ ] T017 [P] Add XAU reaction report-store path safety tests in `backend/tests/unit/test_xau_reaction_report_store.py`
-- [ ] T018 [P] Add shared synthetic feature 006 report fixture helpers in `backend/tests/helpers/test_xau_reaction_data.py`
-- [ ] T019 [P] Add route registration smoke tests in `backend/tests/contract/test_xau_reaction_api_contracts.py`
+- [X] T016 [P] Add XAU reaction schema validation tests in `backend/tests/unit/test_xau_reaction_models.py`
+- [X] T017 [P] Add XAU reaction report-store path safety tests in `backend/tests/unit/test_xau_reaction_report_store.py`
+- [X] T018 [P] Add shared synthetic feature 006 report fixture helpers in `backend/tests/helpers/test_xau_reaction_data.py`
+- [X] T019 [P] Add route registration smoke tests in `backend/tests/contract/test_xau_reaction_api_contracts.py`
 
 ### Implementation for Foundation
 
-- [ ] T020 Implement shared enums `XauReactionLabel`, freshness/open/volatility/acceptance states, report status, artifact type, artifact format, and event-risk state in `backend/src/models/xau_reaction.py`
-- [ ] T021 Implement input schemas `XauReactionReportRequest`, `XauIntradayFreshnessInput`, `XauVolRegimeInput`, `XauOpenRegimeInput`, and `XauAcceptanceInput` in `backend/src/models/xau_reaction.py`
-- [ ] T022 Implement output schemas `XauFreshnessState`, `XauVolRegimeState`, `XauOpenRegimeState`, `XauAcceptanceState`, `XauReactionRow`, `XauRiskPlan`, `XauReactionReport`, and `XauReactionReportSummary` in `backend/src/models/xau_reaction.py`
-- [ ] T023 Implement response wrapper schemas for report list, reactions table, and risk-plan table in `backend/src/models/xau_reaction.py`
-- [ ] T024 Implement research-only request validation, filesystem-safe report id validation, numeric bounds, and forbidden extra field behavior in `backend/src/models/xau_reaction.py`
-- [ ] T025 Implement XAU reaction API error helpers or route-local structured errors in `backend/src/api/routes/xau_reaction.py`
-- [ ] T026 Register `backend/src/api/routes/xau_reaction.py` under `/api/v1/xau` in `backend/src/main.py`
-- [ ] T027 Implement report root and safe report directory helpers for `data/reports/xau_reaction/` in `backend/src/xau_reaction/report_store.py`
-- [ ] T028 Add XAU reaction JSON and Markdown writer placeholders in `backend/src/reports/writer.py`
+- [X] T020 Implement shared enums `XauReactionLabel`, freshness/open/volatility/acceptance states, report status, artifact type, artifact format, and event-risk state in `backend/src/models/xau_reaction.py`
+- [X] T021 Implement input schemas `XauReactionReportRequest`, `XauIntradayFreshnessInput`, `XauVolRegimeInput`, `XauOpenRegimeInput`, and `XauAcceptanceInput` in `backend/src/models/xau_reaction.py`
+- [X] T022 Implement output schemas `XauFreshnessState`, `XauVolRegimeState`, `XauOpenRegimeState`, `XauAcceptanceState`, `XauReactionRow`, `XauRiskPlan`, `XauReactionReport`, and `XauReactionReportSummary` in `backend/src/models/xau_reaction.py`
+- [X] T023 Implement response wrapper schemas for report list, reactions table, and risk-plan table in `backend/src/models/xau_reaction.py`
+- [X] T024 Implement research-only request validation, filesystem-safe report id validation, numeric bounds, and forbidden extra field behavior in `backend/src/models/xau_reaction.py`
+- [X] T025 Implement XAU reaction API error helpers or route-local structured errors in `backend/src/api/routes/xau_reaction.py`
+- [X] T026 Register `backend/src/api/routes/xau_reaction.py` under `/api/v1/xau` in `backend/src/main.py`
+- [X] T027 Implement report root and safe report directory helpers for `data/reports/xau_reaction/` in `backend/src/xau_reaction/report_store.py`
+- [X] T028 Add XAU reaction JSON and Markdown writer placeholders in `backend/src/reports/writer.py`
 
 **Checkpoint**: Shared schemas, route surface, fixtures, and report storage contracts are ready.
 

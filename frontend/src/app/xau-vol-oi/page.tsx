@@ -119,6 +119,7 @@ export default function XauVolOiPage() {
       </div>
 
       <ResearchOnlyNotice />
+      <ReactionReportPlaceholder />
 
       {error && <Notice tone="error">{error}</Notice>}
 
@@ -180,6 +181,23 @@ function ResearchOnlyNotice() {
       signals, profitability evidence, predictive proof, safety evidence, or
       live-readiness evidence.
     </Notice>
+  )
+}
+
+function ReactionReportPlaceholder() {
+  return (
+    <ReportSection title="XAU Reaction Reports">
+      <div className="grid grid-cols-1 gap-3 text-sm lg:grid-cols-4">
+        <Metric label="Freshness" value="pending" />
+        <Metric label="IV/RV/VRP" value="pending" />
+        <Metric label="Open Regime" value="pending" />
+        <Metric label="Risk Planner" value="pending" />
+      </div>
+      <p className="mt-4 text-sm text-gray-400">
+        Foundation routes and client types are registered. Reaction labels and bounded
+        risk-plan rows will render here after the classifier and planner slices are complete.
+      </p>
+    </ReportSection>
   )
 }
 
