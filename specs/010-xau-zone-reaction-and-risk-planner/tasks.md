@@ -72,22 +72,22 @@
 
 ### Tests for User Story 1
 
-- [ ] T029 [P] [US1] Add classifier tests for `REVERSAL_CANDIDATE` and rejection evidence in `backend/tests/unit/test_xau_reaction_classifier.py`
-- [ ] T030 [P] [US1] Add classifier tests for `BREAKOUT_CANDIDATE`, `SQUEEZE_RISK`, and `VACUUM_TO_NEXT_WALL` in `backend/tests/unit/test_xau_reaction_classifier.py`
-- [ ] T031 [P] [US1] Add classifier tests for `PIN_MAGNET` and near-expiry high-OI evidence in `backend/tests/unit/test_xau_reaction_classifier.py`
-- [ ] T032 [P] [US1] Add classifier tests for `NO_TRADE` gates and no buy/sell wording in `backend/tests/unit/test_xau_reaction_classifier.py`
-- [ ] T033 [P] [US1] Add deterministic priority and tie-break tests in `backend/tests/unit/test_xau_reaction_classifier.py`
+- [X] T029 [P] [US1] Add classifier tests for `REVERSAL_CANDIDATE` and rejection evidence in `backend/tests/unit/test_xau_reaction_classifier.py`
+- [X] T030 [P] [US1] Add classifier tests for `BREAKOUT_CANDIDATE`, `SQUEEZE_RISK`, and `VACUUM_TO_NEXT_WALL` in `backend/tests/unit/test_xau_reaction_classifier.py`
+- [X] T031 [P] [US1] Add classifier tests for `PIN_MAGNET` and near-expiry high-OI evidence in `backend/tests/unit/test_xau_reaction_classifier.py`
+- [X] T032 [P] [US1] Add classifier tests for `NO_TRADE` gates and no buy/sell wording in `backend/tests/unit/test_xau_reaction_classifier.py`
+- [X] T033 [P] [US1] Add deterministic priority and tie-break tests in `backend/tests/unit/test_xau_reaction_classifier.py`
 
 ### Implementation for User Story 1
 
-- [ ] T034 [US1] Implement reaction row id creation and source wall/zone traceability helpers in `backend/src/xau_reaction/classifier.py`
-- [ ] T035 [US1] Implement hard no-trade gate evaluation for missing source context, unavailable basis, stale/prior-day/unknown freshness, thin hard blocks, conflicting evidence, and event-risk blocks in `backend/src/xau_reaction/classifier.py`
-- [ ] T036 [US1] Implement `PIN_MAGNET` classification from near-expiry large OI near spot inside 1SD range in `backend/src/xau_reaction/classifier.py`
-- [ ] T037 [US1] Implement `SQUEEZE_RISK` classification from accepted wall break with IV edge stress or flow expansion evidence in `backend/src/xau_reaction/classifier.py`
-- [ ] T038 [US1] Implement `VACUUM_TO_NEXT_WALL` classification from low-OI gap and distant next-wall evidence in `backend/src/xau_reaction/classifier.py`
-- [ ] T039 [US1] Implement `BREAKOUT_CANDIDATE` classification from close plus next-bar hold beyond wall buffer in `backend/src/xau_reaction/classifier.py`
-- [ ] T040 [US1] Implement `REVERSAL_CANDIDATE` classification from high-score wall, rejection, stretched sigma, and fresh data in `backend/src/xau_reaction/classifier.py`
-- [ ] T041 [US1] Implement fallback `NO_TRADE`, confidence labels, explanation notes, no-trade reasons, invalidation levels, target references, and next-wall references in `backend/src/xau_reaction/classifier.py`
+- [X] T034 [US1] Implement reaction row id creation and source wall/zone traceability helpers in `backend/src/xau_reaction/classifier.py`
+- [X] T035 [US1] Implement hard no-trade gate evaluation for missing source context, unavailable basis, stale/prior-day/unknown freshness, thin hard blocks, conflicting evidence, and event-risk blocks in `backend/src/xau_reaction/classifier.py`
+- [X] T036 [US1] Implement `PIN_MAGNET` classification from near-expiry large OI near spot inside 1SD range in `backend/src/xau_reaction/classifier.py`
+- [X] T037 [US1] Implement `SQUEEZE_RISK` classification from accepted wall break with IV edge stress or flow expansion evidence in `backend/src/xau_reaction/classifier.py`
+- [X] T038 [US1] Implement `VACUUM_TO_NEXT_WALL` classification from low-OI gap and distant next-wall evidence in `backend/src/xau_reaction/classifier.py`
+- [X] T039 [US1] Implement `BREAKOUT_CANDIDATE` classification from close plus next-bar hold beyond wall buffer in `backend/src/xau_reaction/classifier.py`
+- [X] T040 [US1] Implement `REVERSAL_CANDIDATE` classification from high-score wall, rejection, stretched sigma, and fresh data in `backend/src/xau_reaction/classifier.py`
+- [X] T041 [US1] Implement fallback `NO_TRADE`, confidence labels, explanation notes, no-trade reasons, invalidation levels, target references, and next-wall references in `backend/src/xau_reaction/classifier.py`
 
 **Checkpoint**: User Story 1 is independently testable with synthetic state fixtures and produces all six labels.
 
