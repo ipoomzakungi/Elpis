@@ -216,16 +216,27 @@
 
 **Purpose**: Final validation, documentation alignment, artifact guard, and forbidden-scope review.
 
-- [ ] T097 [P] Update `specs/010-xau-zone-reaction-and-risk-planner/quickstart.md` if implemented request or response examples changed
-- [ ] T098 Run backend import check from `backend/src/main.py`
-- [ ] T099 Run focused backend tests for XAU reaction unit, integration, and contract coverage from `backend/tests/`
-- [ ] T100 Run full backend pytest suite from `backend/tests/`
-- [ ] T101 Run frontend production build from `frontend/package.json`
-- [ ] T102 Run generated artifact guard from `scripts/check_generated_artifacts.ps1`
-- [ ] T103 Run API smoke flow documented in `specs/010-xau-zone-reaction-and-risk-planner/quickstart.md` without committing generated reports
-- [ ] T104 Run dashboard smoke flow for `/xau-vol-oi` documented in `specs/010-xau-zone-reaction-and-risk-planner/quickstart.md`
-- [ ] T105 Review forbidden v0 scope in `backend/pyproject.toml`, `frontend/package.json`, `.github/workflows/validation.yml`, `backend/src/`, and `frontend/src/`
-- [ ] T106 Update final validation notes and task completion status in `specs/010-xau-zone-reaction-and-risk-planner/tasks.md`
+- [X] T097 [P] Update `specs/010-xau-zone-reaction-and-risk-planner/quickstart.md` if implemented request or response examples changed
+- [X] T098 Run backend import check from `backend/src/main.py`
+- [X] T099 Run focused backend tests for XAU reaction unit, integration, and contract coverage from `backend/tests/`
+- [X] T100 Run full backend pytest suite from `backend/tests/`
+- [X] T101 Run frontend production build from `frontend/package.json`
+- [X] T102 Run generated artifact guard from `scripts/check_generated_artifacts.ps1`
+- [X] T103 Run API smoke flow documented in `specs/010-xau-zone-reaction-and-risk-planner/quickstart.md` without committing generated reports
+- [X] T104 Run dashboard smoke flow for `/xau-vol-oi` documented in `specs/010-xau-zone-reaction-and-risk-planner/quickstart.md`
+- [X] T105 Review forbidden v0 scope in `backend/pyproject.toml`, `frontend/package.json`, `.github/workflows/validation.yml`, `backend/src/`, and `frontend/src/`
+- [X] T106 Update final validation notes and task completion status in `specs/010-xau-zone-reaction-and-risk-planner/tasks.md`
+
+### Final Validation Notes
+
+- Backend import check passed with `backend import ok`.
+- Focused XAU reaction coverage passed after expanding PowerShell globs explicitly: 48 unit tests, 4 integration tests, and 7 API contract tests.
+- Full backend suite passed: 356 tests.
+- Frontend dependency install completed and production build passed.
+- Generated artifact guard passed before and after API/dashboard smoke; smoke-generated reports stayed under ignored report paths.
+- API smoke created a synthetic feature 010 reaction report from ignored feature 006 fixture `xau_vol_oi_synthetic_20260512`, verified list/detail/reactions/risk-plan reads, verified structured `NOT_FOUND`, and found no forbidden response wording.
+- Dashboard smoke for `/xau-vol-oi` verified reaction report selector, source report id, freshness badge, IV/RV/VRP panel, session open panel, acceptance/rejection state, reaction label table, bounded risk planner table, no-trade area, research-only disclaimer, and no browser console errors.
+- Forbidden-scope review found guardrail/disclaimer text and optional public data-source readiness names only; no v0-forbidden execution stack or strategy-execution behavior was introduced.
 
 ---
 

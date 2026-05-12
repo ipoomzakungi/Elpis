@@ -124,12 +124,14 @@ Invoke-RestMethod `
 
 Expected behavior:
 
-- The response includes `report_id`, `source_report_id`, report-level freshness, volatility, and open context.
+- The response includes `report_id`, `source_report_id`, `reaction_count`, `risk_plan_count`, warnings, limitations, report-level freshness, volatility, and open context.
+- The persisted `report_id` may include the source report id suffix, for example `xau_reaction_20260512_100000_xau_vol_oi_synthetic_20260512`.
 - Reaction rows are classified only as `REVERSAL_CANDIDATE`, `BREAKOUT_CANDIDATE`, `PIN_MAGNET`, `SQUEEZE_RISK`, `VACUUM_TO_NEXT_WALL`, or `NO_TRADE`.
 - Stale, thin, prior-day, unknown-basis, or conflicting scenarios produce `NO_TRADE` or explicit confidence reduction notes.
 - `NO_TRADE` rows have no entry plan.
 - Risk plans are capped and research-only.
 - Responses do not contain buy/sell execution signals or live-readiness claims.
+- Missing reaction report ids return a structured `NOT_FOUND` error payload.
 
 ## 5. Inspect Saved Reaction Reports
 
@@ -176,6 +178,8 @@ http://localhost:3000/xau-vol-oi
 
 Verify the page shows reaction-report inspection:
 
+- reaction report selector
+- source report id
 - freshness badge
 - IV/RV/VRP panel
 - session open panel
