@@ -17,16 +17,16 @@
 
 **Purpose**: Add the focused 010 package, model/API placeholders, report-store surface, and frontend placeholders without changing existing XAU wall generation.
 
-- [ ] T001 Create `backend/src/xau_reaction/__init__.py` for the XAU reaction package
-- [ ] T002 Create `backend/src/xau_reaction/freshness.py` with module skeleton and public function placeholders
-- [ ] T003 Create `backend/src/xau_reaction/vol_regime.py` with module skeleton and public function placeholders
-- [ ] T004 Create `backend/src/xau_reaction/open_regime.py` with module skeleton and public function placeholders
-- [ ] T005 Create `backend/src/xau_reaction/acceptance.py` with module skeleton and public function placeholders
+- [X] T001 Create `backend/src/xau_reaction/__init__.py` for the XAU reaction package
+- [X] T002 Create `backend/src/xau_reaction/freshness.py` with module skeleton and public function placeholders
+- [X] T003 Create `backend/src/xau_reaction/vol_regime.py` with module skeleton and public function placeholders
+- [X] T004 Create `backend/src/xau_reaction/open_regime.py` with module skeleton and public function placeholders
+- [X] T005 Create `backend/src/xau_reaction/acceptance.py` with module skeleton and public function placeholders
 - [ ] T006 Create `backend/src/xau_reaction/classifier.py` with module skeleton and public function placeholders
 - [ ] T007 Create `backend/src/xau_reaction/risk_plan.py` with module skeleton and public function placeholders
 - [ ] T008 Create `backend/src/xau_reaction/report_store.py` with report persistence skeleton
 - [ ] T009 Create `backend/src/xau_reaction/orchestration.py` with reaction report orchestration skeleton
-- [ ] T010 Create `backend/src/models/xau_reaction.py` with schema placeholders from `specs/010-xau-zone-reaction-and-risk-planner/data-model.md`
+- [X] T010 Create `backend/src/models/xau_reaction.py` with schema placeholders from `specs/010-xau-zone-reaction-and-risk-planner/data-model.md`
 - [ ] T011 Create `backend/src/api/routes/xau_reaction.py` with route placeholders from `specs/010-xau-zone-reaction-and-risk-planner/contracts/api.md`
 - [ ] T012 [P] Add XAU reaction frontend type placeholders in `frontend/src/types/index.ts`
 - [ ] T013 [P] Add XAU reaction frontend API client placeholders in `frontend/src/services/api.ts`
@@ -101,21 +101,21 @@
 
 ### Tests for User Story 2
 
-- [ ] T042 [P] [US2] Add freshness tests for `VALID`, `THIN`, `STALE`, `PRIOR_DAY`, and `UNKNOWN` in `backend/tests/unit/test_xau_reaction_freshness.py`
-- [ ] T043 [P] [US2] Add freshness tests for missing timestamps, future timestamps, zero contracts, and confidence/no-trade impact in `backend/tests/unit/test_xau_reaction_freshness.py`
-- [ ] T044 [P] [US2] Add realized volatility calculation tests in `backend/tests/unit/test_xau_reaction_vol_regime.py`
-- [ ] T045 [P] [US2] Add IV/RV/VRP regime tests for IV premium, balanced, RV premium, and unknown states in `backend/tests/unit/test_xau_reaction_vol_regime.py`
-- [ ] T046 [P] [US2] Add IV edge stress and RV-only extension tests in `backend/tests/unit/test_xau_reaction_vol_regime.py`
+- [X] T042 [P] [US2] Add freshness tests for `VALID`, `THIN`, `STALE`, `PRIOR_DAY`, and `UNKNOWN` in `backend/tests/unit/test_xau_reaction_freshness.py`
+- [X] T043 [P] [US2] Add freshness tests for missing timestamps, future timestamps, zero contracts, and confidence/no-trade impact in `backend/tests/unit/test_xau_reaction_freshness.py`
+- [X] T044 [P] [US2] Add realized volatility calculation tests in `backend/tests/unit/test_xau_reaction_vol_regime.py`
+- [X] T045 [P] [US2] Add IV/RV/VRP regime tests for IV premium, balanced, RV premium, and unknown states in `backend/tests/unit/test_xau_reaction_vol_regime.py`
+- [X] T046 [P] [US2] Add IV edge stress and RV-only extension tests in `backend/tests/unit/test_xau_reaction_vol_regime.py`
 
 ### Implementation for User Story 2
 
-- [ ] T047 [US2] Implement timezone-safe intraday timestamp age calculation in `backend/src/xau_reaction/freshness.py`
-- [ ] T048 [US2] Implement freshness precedence for `UNKNOWN`, `PRIOR_DAY`, `STALE`, `THIN`, and `VALID` in `backend/src/xau_reaction/freshness.py`
-- [ ] T049 [US2] Implement freshness confidence impact and no-trade reason generation in `backend/src/xau_reaction/freshness.py`
-- [ ] T050 [US2] Implement realized volatility calculation from price series and supplied RV passthrough in `backend/src/xau_reaction/vol_regime.py`
-- [ ] T051 [US2] Implement `vrp = implied_volatility - realized_volatility` and VRP regime classification in `backend/src/xau_reaction/vol_regime.py`
-- [ ] T052 [US2] Implement IV expected-range edge state classification in `backend/src/xau_reaction/vol_regime.py`
-- [ ] T053 [US2] Implement RV extension state classification and volatility confidence impact notes in `backend/src/xau_reaction/vol_regime.py`
+- [X] T047 [US2] Implement timezone-safe intraday timestamp age calculation in `backend/src/xau_reaction/freshness.py`
+- [X] T048 [US2] Implement freshness precedence for `UNKNOWN`, `PRIOR_DAY`, `STALE`, `THIN`, and `VALID` in `backend/src/xau_reaction/freshness.py`
+- [X] T049 [US2] Implement freshness confidence impact and no-trade reason generation in `backend/src/xau_reaction/freshness.py`
+- [X] T050 [US2] Implement realized volatility calculation from price series and supplied RV passthrough in `backend/src/xau_reaction/vol_regime.py`
+- [X] T051 [US2] Implement `vrp = implied_volatility - realized_volatility` and VRP regime classification in `backend/src/xau_reaction/vol_regime.py`
+- [X] T052 [US2] Implement IV expected-range edge state classification in `backend/src/xau_reaction/vol_regime.py`
+- [X] T053 [US2] Implement RV extension state classification and volatility confidence impact notes in `backend/src/xau_reaction/vol_regime.py`
 - [ ] T054 [US2] Integrate freshness and volatility state generation into `backend/src/xau_reaction/orchestration.py`
 
 **Checkpoint**: User Stories 1 and 2 can classify using computed freshness and volatility context.
@@ -130,21 +130,21 @@
 
 ### Tests for User Story 3
 
-- [ ] T055 [P] [US3] Add opening regime tests for open side and open distance in `backend/tests/unit/test_xau_reaction_open_regime.py`
-- [ ] T056 [P] [US3] Add opening regime tests for crossed-open-without-acceptance and accepted flip in `backend/tests/unit/test_xau_reaction_open_regime.py`
-- [ ] T057 [P] [US3] Add opening regime tests for support/resistance boundary context in `backend/tests/unit/test_xau_reaction_open_regime.py`
-- [ ] T058 [P] [US3] Add acceptance tests for wick rejection and failed breakout in `backend/tests/unit/test_xau_reaction_acceptance.py`
-- [ ] T059 [P] [US3] Add acceptance tests for accepted beyond wall and confirmed breakout in `backend/tests/unit/test_xau_reaction_acceptance.py`
-- [ ] T060 [P] [US3] Add acceptance edge-case tests for missing next-bar open, zero buffer, and invalid OHLC order in `backend/tests/unit/test_xau_reaction_acceptance.py`
+- [X] T055 [P] [US3] Add opening regime tests for open side and open distance in `backend/tests/unit/test_xau_reaction_open_regime.py`
+- [X] T056 [P] [US3] Add opening regime tests for crossed-open-without-acceptance and accepted flip in `backend/tests/unit/test_xau_reaction_open_regime.py`
+- [X] T057 [P] [US3] Add opening regime tests for support/resistance boundary context in `backend/tests/unit/test_xau_reaction_open_regime.py`
+- [X] T058 [P] [US3] Add acceptance tests for wick rejection and failed breakout in `backend/tests/unit/test_xau_reaction_acceptance.py`
+- [X] T059 [P] [US3] Add acceptance tests for accepted beyond wall and confirmed breakout in `backend/tests/unit/test_xau_reaction_acceptance.py`
+- [X] T060 [P] [US3] Add acceptance edge-case tests for missing next-bar open, zero buffer, and invalid OHLC order in `backend/tests/unit/test_xau_reaction_acceptance.py`
 
 ### Implementation for User Story 3
 
-- [ ] T061 [US3] Implement open side and open distance classification in `backend/src/xau_reaction/open_regime.py`
-- [ ] T062 [US3] Implement open flip state without assuming full flip before acceptance in `backend/src/xau_reaction/open_regime.py`
-- [ ] T063 [US3] Implement open as support/resistance/boundary context in `backend/src/xau_reaction/open_regime.py`
-- [ ] T064 [US3] Implement OHLC and buffer validation helpers in `backend/src/xau_reaction/acceptance.py`
-- [ ] T065 [US3] Implement wick rejection and failed breakout classification in `backend/src/xau_reaction/acceptance.py`
-- [ ] T066 [US3] Implement accepted beyond wall and confirmed breakout classification using close plus next-bar hold in `backend/src/xau_reaction/acceptance.py`
+- [X] T061 [US3] Implement open side and open distance classification in `backend/src/xau_reaction/open_regime.py`
+- [X] T062 [US3] Implement open flip state without assuming full flip before acceptance in `backend/src/xau_reaction/open_regime.py`
+- [X] T063 [US3] Implement open as support/resistance/boundary context in `backend/src/xau_reaction/open_regime.py`
+- [X] T064 [US3] Implement OHLC and buffer validation helpers in `backend/src/xau_reaction/acceptance.py`
+- [X] T065 [US3] Implement wick rejection and failed breakout classification in `backend/src/xau_reaction/acceptance.py`
+- [X] T066 [US3] Implement accepted beyond wall and confirmed breakout classification using close plus next-bar hold in `backend/src/xau_reaction/acceptance.py`
 - [ ] T067 [US3] Integrate open-regime and acceptance-state generation into `backend/src/xau_reaction/orchestration.py`
 - [ ] T068 [US3] Connect computed open and acceptance states to classifier calls in `backend/src/xau_reaction/orchestration.py`
 
