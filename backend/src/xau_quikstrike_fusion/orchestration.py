@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 
 from src.models.xau_quikstrike_fusion import (
     XauFusionContextStatus,
-    XauFusionContextSummary,
     XauFusionCoverageSummary,
     XauFusionMissingContextItem,
     XauFusionReportStatus,
@@ -16,7 +15,15 @@ from src.models.xau_quikstrike_fusion import (
 )
 from src.quikstrike.report_store import QuikStrikeReportStore
 from src.quikstrike_matrix.report_store import QuikStrikeMatrixReportStore
-from src.xau_quikstrike_fusion.fusion import build_fusion_rows
+from src.xau_quikstrike_fusion.basis import calculate_basis_state
+from src.xau_quikstrike_fusion.fusion import (
+    attach_context_to_rows,
+    build_conservative_downstream_result,
+    build_context_summary,
+    build_fusion_rows,
+    determine_source_agreement_status,
+    determine_source_quality_status,
+)
 from src.xau_quikstrike_fusion.loaders import (
     LoadedFusionSource,
     load_matrix_source,
@@ -45,6 +52,10 @@ def create_xau_quikstrike_fusion_report(
         loaded_vol2vol.ref,
         loaded_matrix.ref,
     )
+    basis_state = calculate_basis_state(
+        xauusd_spot_reference=request.xauusd_spot_reference,
+        gc_futures_reference=request.gc_futures_reference,
+    )
 
     if missing_context:
         coverage = _empty_coverage()
@@ -69,6 +80,28 @@ def create_xau_quikstrike_fusion_report(
                     source_refs=[request.vol2vol_report_id, request.matrix_report_id],
                 )
             )
+    source_quality_status = determine_source_quality_status(
+        loaded_vol2vol.ref,
+        loaded_matrix.ref,
+    )
+    source_agreement_status = determine_source_agreement_status(fused_rows)
+    context_summary = build_context_summary(
+        rows=fused_rows,
+        basis_state=basis_state,
+        request=request,
+        source_quality_status=source_quality_status,
+        source_agreement_status=source_agreement_status,
+        source_refs=[request.vol2vol_report_id, request.matrix_report_id],
+        source_issues=missing_context,
+    )
+    fused_rows = attach_context_to_rows(
+        fused_rows,
+        basis_state=basis_state,
+        missing_context=context_summary.missing_context,
+    )
+    downstream_result = build_conservative_downstream_result(
+        context_summary.missing_context,
+    )
 
     warnings = _dedupe([*loaded_vol2vol.ref.warnings, *loaded_matrix.ref.warnings])
     warnings.extend(reason for reason in blocked_reasons if reason not in warnings)
@@ -89,9 +122,11 @@ def create_xau_quikstrike_fusion_report(
         vol2vol_source=loaded_vol2vol.ref,
         matrix_source=loaded_matrix.ref,
         coverage=coverage,
-        context_summary=_context_summary(fused_rows, missing_context),
+        context_summary=context_summary,
+        basis_state=basis_state,
         fused_row_count=len(fused_rows),
         fused_rows=fused_rows,
+        downstream_result=downstream_result,
         warnings=_dedupe(warnings),
         limitations=limitations,
     )
@@ -160,31 +195,6 @@ def _empty_coverage() -> XauFusionCoverageSummary:
         expiration_count=0,
         option_type_count=0,
         value_type_count=0,
-    )
-
-
-def _context_summary(
-    fused_rows: list,
-    missing_context: list[XauFusionMissingContextItem],
-) -> XauFusionContextSummary:
-    if any(item.blocks_fusion for item in missing_context):
-        source_status = XauFusionContextStatus.BLOCKED
-    elif any(row.match_status.value == "conflict" for row in fused_rows):
-        source_status = XauFusionContextStatus.CONFLICT
-    elif any(row.agreement_status.value == "disagreement" for row in fused_rows):
-        source_status = XauFusionContextStatus.CONFLICT
-    elif any(row.source_type == XauFusionSourceType.FUSED for row in fused_rows):
-        source_status = XauFusionContextStatus.AVAILABLE
-    else:
-        source_status = XauFusionContextStatus.PARTIAL
-    return XauFusionContextSummary(
-        basis_status=XauFusionContextStatus.UNAVAILABLE,
-        iv_range_status=XauFusionContextStatus.UNAVAILABLE,
-        open_regime_status=XauFusionContextStatus.UNAVAILABLE,
-        candle_acceptance_status=XauFusionContextStatus.UNAVAILABLE,
-        realized_volatility_status=XauFusionContextStatus.UNAVAILABLE,
-        source_agreement_status=source_status,
-        missing_context=missing_context,
     )
 
 

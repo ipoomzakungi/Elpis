@@ -198,6 +198,13 @@ def _metadata_payload(report: XauQuikStrikeFusionReport) -> dict[str, Any]:
         "matrix_report_id": report.matrix_source.report_id,
         "fused_row_count": report.fused_row_count,
         "coverage": report.coverage.model_dump(mode="json") if report.coverage else None,
+        "basis_state": report.basis_state.model_dump(mode="json") if report.basis_state else None,
+        "context_summary": (
+            report.context_summary.model_dump(mode="json") if report.context_summary else None
+        ),
+        "missing_context_count": (
+            len(report.context_summary.missing_context) if report.context_summary else 0
+        ),
         "warnings": report.warnings,
         "limitations": report.limitations,
         "research_only_warnings": report.research_only_warnings,
@@ -226,6 +233,40 @@ def _report_markdown(report: XauQuikStrikeFusionReport) -> str:
                 f"- Conflicting keys: `{report.coverage.conflict_key_count}`",
                 f"- Blocked keys: `{report.coverage.blocked_key_count}`",
             ]
+        )
+    if report.basis_state is not None:
+        lines.extend(
+            [
+                "",
+                "## Basis Context",
+                f"- Status: `{report.basis_state.status.value}`",
+                f"- Basis points: `{report.basis_state.basis_points}`",
+                f"- Note: {report.basis_state.calculation_note}",
+            ]
+        )
+    if report.context_summary is not None:
+        lines.extend(
+            [
+                "",
+                "## Context Status",
+                f"- IV/range: `{report.context_summary.iv_range_status.value}`",
+                f"- Open regime: `{report.context_summary.open_regime_status.value}`",
+                (
+                    "- Candle acceptance: "
+                    f"`{report.context_summary.candle_acceptance_status.value}`"
+                ),
+                (
+                    "- Realized volatility: "
+                    f"`{report.context_summary.realized_volatility_status.value}`"
+                ),
+                f"- Source agreement: `{report.context_summary.source_agreement_status.value}`",
+                "",
+                "## Missing Context Checklist",
+            ]
+        )
+        lines.extend(
+            f"- {item.context_key}: `{item.status.value}` - {item.message}"
+            for item in report.context_summary.missing_context
         )
     lines.extend(["", "## Warnings"])
     lines.extend(f"- {warning}" for warning in report.warnings)

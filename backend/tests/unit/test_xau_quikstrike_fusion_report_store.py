@@ -11,6 +11,7 @@ from src.models.xau_quikstrike_fusion import (
     XauQuikStrikeFusionReport,
     XauQuikStrikeFusionSummary,
 )
+from src.xau_quikstrike_fusion.basis import calculate_basis_state
 from src.xau_quikstrike_fusion.report_store import XauQuikStrikeFusionReportStore
 from tests.helpers.test_xau_quikstrike_fusion_data import (
     sample_coverage_summary,
@@ -102,8 +103,12 @@ def test_report_store_persists_mvp_report_metadata_rows_json_and_markdown(tmp_pa
         vol2vol_source=sample_vol2vol_source_ref(),
         matrix_source=sample_matrix_source_ref(),
         coverage=sample_coverage_summary(),
+        basis_state=calculate_basis_state(
+            xauusd_spot_reference=4692.1,
+            gc_futures_reference=4696.7,
+        ),
         context_summary=XauFusionContextSummary(
-            basis_status=XauFusionContextStatus.UNAVAILABLE,
+            basis_status=XauFusionContextStatus.AVAILABLE,
             iv_range_status=XauFusionContextStatus.UNAVAILABLE,
             open_regime_status=XauFusionContextStatus.UNAVAILABLE,
             candle_acceptance_status=XauFusionContextStatus.UNAVAILABLE,
@@ -129,7 +134,12 @@ def test_report_store_persists_mvp_report_metadata_rows_json_and_markdown(tmp_pa
     report_json = (store.report_dir("fusion_report") / "report.json").read_text(
         encoding="utf-8"
     )
+    metadata_json = (store.report_dir("fusion_report") / "metadata.json").read_text(
+        encoding="utf-8"
+    )
     assert '"fused_row_count": 1' in report_json
+    assert '"basis_state"' in metadata_json
+    assert '"missing_context_count": 0' in metadata_json
     assert "local-only research report" in (
         store.report_dir("fusion_report") / "report.md"
     ).read_text(encoding="utf-8").lower()

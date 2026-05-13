@@ -104,22 +104,22 @@
 
 ### Tests for User Story 2
 
-- [ ] T048 [P] [US2] Add basis status tests for available, unavailable, invalid, and conflicting references in `backend/tests/unit/test_xau_quikstrike_fusion_basis.py`
-- [ ] T049 [P] [US2] Add spot-equivalent level calculation tests in `backend/tests/unit/test_xau_quikstrike_fusion_basis.py`
-- [ ] T050 [P] [US2] Add missing context checklist tests for basis, IV/range, open, candle, RV, source quality, and source agreement in `backend/tests/unit/test_xau_quikstrike_fusion_fusion.py`
-- [ ] T051 [P] [US2] Add no-fabricated-context regression tests in `backend/tests/unit/test_xau_quikstrike_fusion_fusion.py`
-- [ ] T052 [P] [US2] Add integration test proving missing open/candle context keeps downstream notes conservative in `backend/tests/integration/test_xau_quikstrike_fusion_flow.py`
+- [X] T048 [P] [US2] Add basis status tests for available, unavailable, invalid, and conflicting references in `backend/tests/unit/test_xau_quikstrike_fusion_basis.py`
+- [X] T049 [P] [US2] Add spot-equivalent level calculation tests in `backend/tests/unit/test_xau_quikstrike_fusion_basis.py`
+- [X] T050 [P] [US2] Add missing context checklist tests for basis, IV/range, open, candle, RV, source quality, and source agreement in `backend/tests/unit/test_xau_quikstrike_fusion_fusion.py`
+- [X] T051 [P] [US2] Add no-fabricated-context regression tests in `backend/tests/unit/test_xau_quikstrike_fusion_fusion.py`
+- [X] T052 [P] [US2] Add integration test proving missing open/candle context keeps downstream notes conservative in `backend/tests/integration/test_xau_quikstrike_fusion_flow.py`
 
 ### Implementation for User Story 2
 
-- [ ] T053 [US2] Implement optional futures/spot basis state calculation in `backend/src/xau_quikstrike_fusion/basis.py`
-- [ ] T054 [US2] Implement spot-equivalent level calculation and unavailable-basis behavior in `backend/src/xau_quikstrike_fusion/basis.py`
-- [ ] T055 [US2] Implement IV/range status detection from Vol2Vol range and volatility-style context in `backend/src/xau_quikstrike_fusion/fusion.py`
-- [ ] T056 [US2] Implement realized-volatility, session-open, and candle-acceptance context status generation from optional request inputs in `backend/src/xau_quikstrike_fusion/fusion.py`
-- [ ] T057 [US2] Implement structured missing-context checklist generation in `backend/src/xau_quikstrike_fusion/fusion.py`
-- [ ] T058 [US2] Attach missing-context notes to fusion rows and report context summary in `backend/src/xau_quikstrike_fusion/fusion.py`
-- [ ] T059 [US2] Integrate basis state and missing context into fusion orchestration in `backend/src/xau_quikstrike_fusion/orchestration.py`
-- [ ] T060 [US2] Persist basis state and missing-context checklist in JSON/Markdown fusion reports in `backend/src/xau_quikstrike_fusion/report_store.py`
+- [X] T053 [US2] Implement optional futures/spot basis state calculation in `backend/src/xau_quikstrike_fusion/basis.py`
+- [X] T054 [US2] Implement spot-equivalent level calculation and unavailable-basis behavior in `backend/src/xau_quikstrike_fusion/basis.py`
+- [X] T055 [US2] Implement IV/range status detection from Vol2Vol range and volatility-style context in `backend/src/xau_quikstrike_fusion/fusion.py`
+- [X] T056 [US2] Implement realized-volatility, session-open, and candle-acceptance context status generation from optional request inputs in `backend/src/xau_quikstrike_fusion/fusion.py`
+- [X] T057 [US2] Implement structured missing-context checklist generation in `backend/src/xau_quikstrike_fusion/fusion.py`
+- [X] T058 [US2] Attach missing-context notes to fusion rows and report context summary in `backend/src/xau_quikstrike_fusion/fusion.py`
+- [X] T059 [US2] Integrate basis state and missing context into fusion orchestration in `backend/src/xau_quikstrike_fusion/orchestration.py`
+- [X] T060 [US2] Persist basis state and missing-context checklist in JSON/Markdown fusion reports in `backend/src/xau_quikstrike_fusion/report_store.py`
 
 **Checkpoint**: US2 explains why downstream reaction output may remain NO_TRADE or low confidence.
 
