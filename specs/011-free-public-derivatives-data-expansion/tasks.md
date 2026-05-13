@@ -193,18 +193,32 @@
 
 **Purpose**: Final validation, quickstart alignment, artifact guard, and forbidden-scope review.
 
-- [ ] T093 [P] Update `specs/011-free-public-derivatives-data-expansion/quickstart.md` if implemented request or response examples changed
-- [ ] T094 Run backend import check from `backend/src/main.py`
-- [ ] T095 Run focused free derivatives unit tests from `backend/tests/unit/test_free_derivatives_*.py`
-- [ ] T096 Run focused free derivatives integration tests from `backend/tests/integration/test_free_derivatives_*.py`
-- [ ] T097 Run free derivatives API contract tests from `backend/tests/contract/test_free_derivatives_api_contracts.py`
-- [ ] T098 Run full backend pytest suite from `backend/tests/`
-- [ ] T099 Run frontend dependency install and production build from `frontend/package.json`
-- [ ] T100 Run generated artifact guard from `scripts/check_generated_artifacts.ps1`
-- [ ] T101 Run fixture API smoke flow from `specs/011-free-public-derivatives-data-expansion/quickstart.md` without committing generated artifacts
-- [ ] T102 Run dashboard smoke flow for `/data-sources` from `specs/011-free-public-derivatives-data-expansion/quickstart.md`
-- [ ] T103 Review forbidden v0 scope in `backend/pyproject.toml`, `frontend/package.json`, `.github/workflows/validation.yml`, `backend/src/`, and `frontend/src/`
-- [ ] T104 Update final validation notes and task completion status in `specs/011-free-public-derivatives-data-expansion/tasks.md`
+- [X] T093 [P] Update `specs/011-free-public-derivatives-data-expansion/quickstart.md` if implemented request or response examples changed
+- [X] T094 Run backend import check from `backend/src/main.py`
+- [X] T095 Run focused free derivatives unit tests from `backend/tests/unit/test_free_derivatives_*.py`
+- [X] T096 Run focused free derivatives integration tests from `backend/tests/integration/test_free_derivatives_*.py`
+- [X] T097 Run free derivatives API contract tests from `backend/tests/contract/test_free_derivatives_api_contracts.py`
+- [X] T098 Run full backend pytest suite from `backend/tests/`
+- [X] T099 Run frontend dependency install and production build from `frontend/package.json`
+- [X] T100 Run generated artifact guard from `scripts/check_generated_artifacts.ps1`
+- [X] T101 Run fixture API smoke flow from `specs/011-free-public-derivatives-data-expansion/quickstart.md` without committing generated artifacts
+- [X] T102 Run dashboard smoke flow for `/data-sources` from `specs/011-free-public-derivatives-data-expansion/quickstart.md`
+- [X] T103 Review forbidden v0 scope in `backend/pyproject.toml`, `frontend/package.json`, `.github/workflows/validation.yml`, `backend/src/`, and `frontend/src/`
+- [X] T104 Update final validation notes and task completion status in `specs/011-free-public-derivatives-data-expansion/tasks.md`
+
+### Final Validation Notes
+
+- Backend import check passed with `backend import ok`.
+- Focused free-derivatives unit tests passed: 38 tests.
+- Focused free-derivatives integration tests passed: 2 tests.
+- Free-derivatives API contract tests passed: 5 tests.
+- Full backend test suite passed: 401 tests.
+- Frontend `npm install` completed; npm reported existing audit findings.
+- Frontend production build passed.
+- Generated artifact guard passed after fixture API and dashboard smoke validation.
+- Fixture API smoke created a completed run from temp CFTC, GVZ, and Deribit fixtures, confirmed list/detail reads, structured 404 and 400 errors, artifact paths, limitations, missing-data actions, and research-only warnings.
+- Dashboard smoke used headless Edge CDP on `/data-sources`; CFTC, GVZ, Deribit readiness, run selector, source status, output paths, missing-data actions, limitation/disclaimer text rendered with no captured console errors or runtime exceptions.
+- Forbidden-scope review found only guardrail/disclaimer text and false positives; no forbidden v0 technology, private endpoints, paid credentials, execution behavior, or prohibited claims were introduced.
 
 ---
 

@@ -89,9 +89,67 @@ Confirm:
 
 ## 5. Run A Fixture Free Derivatives Bootstrap
 
-Use local fixture paths or mocked responses in development validation:
+Use temporary local fixture paths or mocked responses in development validation. The
+following fixture files are created under the OS temp directory so no generated fixture
+data is committed:
 
 ```powershell
+$fixtureRoot = Join-Path $env:TEMP "elpis-free-derivatives-smoke"
+New-Item -ItemType Directory -Force -Path $fixtureRoot | Out-Null
+
+$cftcPath = Join-Path $fixtureRoot "cftc_gold.csv"
+@"
+report_category,As_of_Date_In_Form_YYMMDD,Market_and_Exchange_Names,Open_Interest_All,Noncommercial_Long_All,Noncommercial_Short_All,Commercial_Long_All,Commercial_Short_All
+futures_only,250107,GOLD - COMMODITY EXCHANGE INC.,1000,130,70,200,210
+futures_and_options_combined,250107,GOLD - COMMODITY EXCHANGE INC.,2000,230,120,400,420
+"@ | Set-Content -Encoding UTF8 $cftcPath
+
+$gvzPath = Join-Path $fixtureRoot "gvzcls.csv"
+@"
+DATE,GVZCLS
+2025-01-01,17.5
+2025-01-02,.
+2025-01-04,18.25
+"@ | Set-Content -Encoding UTF8 $gvzPath
+
+$instrumentsPath = Join-Path $fixtureRoot "deribit_instruments.json"
+@(
+  @{ instrument_name = "BTC-27JUN25-100000-C"; is_active = $true },
+  @{ instrument_name = "BTC-27JUN25-90000-P"; is_active = $true },
+  @{ instrument_name = "ETH-28MAR25-3500-P"; is_active = $true }
+) | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 $instrumentsPath
+
+$summaryPath = Join-Path $fixtureRoot "deribit_summary.json"
+@(
+  @{
+    instrument_name = "BTC-27JUN25-100000-C"
+    open_interest = 12.5
+    mark_iv = 62.1
+    bid_iv = 61.8
+    ask_iv = 62.4
+    underlying_price = 100500
+    volume = 42
+  },
+  @{
+    instrument_name = "BTC-27JUN25-90000-P"
+    open_interest = 7.0
+    mark_iv = 70.1
+    bid_iv = 69.8
+    ask_iv = 70.4
+    underlying_price = 100500
+    volume = 11
+  },
+  @{
+    instrument_name = "ETH-28MAR25-3500-P"
+    open_interest = 25
+    mark_iv = 55.0
+    bid_iv = 54.6
+    ask_iv = 55.4
+    underlying_price = 3400
+    volume = 9
+  }
+) | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 $summaryPath
+
 $body = @{
   include_cftc = $true
   include_gvz = $true
@@ -101,19 +159,20 @@ $body = @{
     categories = @("futures_only", "futures_and_options_combined")
     market_filters = @("gold", "comex")
     source_urls = @()
-    local_fixture_paths = @("backend/tests/fixtures/free_derivatives/cftc_gold.csv")
+    local_fixture_paths = @($cftcPath)
   }
   gvz = @{
     series_id = "GVZCLS"
     start_date = "2025-01-01"
-    end_date = "2026-05-12"
-    local_fixture_path = "backend/tests/fixtures/free_derivatives/gvzcls.csv"
+    end_date = "2025-01-04"
+    local_fixture_path = $gvzPath
   }
   deribit = @{
     underlyings = @("BTC", "ETH")
     include_expired = $false
-    fixture_instruments_path = "backend/tests/fixtures/free_derivatives/deribit_instruments.json"
-    fixture_summary_path = "backend/tests/fixtures/free_derivatives/deribit_summary.json"
+    snapshot_timestamp = "2026-05-12T10:00:00Z"
+    fixture_instruments_path = $instrumentsPath
+    fixture_summary_path = $summaryPath
   }
   run_label = "fixture-smoke"
   report_format = "both"
