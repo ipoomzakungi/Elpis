@@ -1,3 +1,5 @@
+from datetime import date
+
 from scripts.quikstrike_playwright_extract import _load_env_file
 from src.models.quikstrike import QuikStrikeViewType
 from src.quikstrike.playwright_local import (
@@ -20,6 +22,9 @@ def test_build_request_from_browser_payloads_creates_strict_fixture_request():
         QuikStrikeViewType.OPEN_INTEREST,
     ]
     assert request.dom_metadata_by_view[QuikStrikeViewType.INTRADAY_VOLUME].product == "Gold"
+    assert request.dom_metadata_by_view[QuikStrikeViewType.INTRADAY_VOLUME].expiration == date(
+        2026, 5, 14
+    )
     assert (
         request.highcharts_by_view[QuikStrikeViewType.OPEN_INTEREST].series[0].points[0].x
         == 4700

@@ -79,6 +79,22 @@ HIGHCHARTS_SANITIZER_SCRIPT = """
   const expirationText = texts("a,button,span,div").find(
     (text) => /Expiration\\s*:/i.test(text)
   ) || "";
+  const selectedExpirationText = Array.from(
+    document.querySelectorAll(
+      "#ctl00_ucSelector_pnlExpirations a.selected, " +
+      "#ctl00_ucSelector_pnlExpirations .selected"
+    )
+  ).map((node) => {
+    const title = node.getAttribute("title") || "";
+    return [cleanText(node.innerText || node.textContent), cleanText(title)]
+      .filter(Boolean)
+      .join(" ");
+  }).find(
+    (text) => (
+      /[A-Z0-9]+\\s+\\d{1,2}\\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*/i.test(text)
+      && /\\d{4}/.test(text)
+    ) || /Option Expiration:\\s*\\d{1,2}\\/\\d{1,2}\\/\\d{4}/i.test(text)
+  ) || "";
   const charts = ((window.Highcharts && window.Highcharts.charts) || [])
     .filter(Boolean)
     .map((chart) => ({
@@ -100,7 +116,9 @@ HIGHCHARTS_SANITIZER_SCRIPT = """
   }));
   return {
     header_text: headerText,
-    selector_text: [productText, expirationText].filter(Boolean).join(" "),
+    selector_text: [productText, expirationText, selectedExpirationText]
+      .filter(Boolean)
+      .join(" "),
     charts,
   };
 }
