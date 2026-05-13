@@ -1438,6 +1438,166 @@ export interface QuikStrikeDashboardData {
   conversion: QuikStrikeConversionRowsResponse;
 }
 
+export type QuikStrikeMatrixViewType =
+  | 'open_interest_matrix'
+  | 'oi_change_matrix'
+  | 'volume_matrix';
+export type QuikStrikeMatrixStatus = 'completed' | 'partial' | 'blocked' | 'failed';
+export type QuikStrikeMatrixConversionStatus = 'completed' | 'blocked' | 'failed';
+export type QuikStrikeMatrixMappingStatus = 'valid' | 'partial' | 'blocked';
+export type QuikStrikeMatrixCellState = 'available' | 'unavailable' | 'blank' | 'invalid';
+export type QuikStrikeMatrixOptionType = 'call' | 'put' | 'combined';
+
+export interface QuikStrikeMatrixArtifact {
+  artifact_type: string;
+  path: string;
+  format: string;
+  rows: number | null;
+  created_at: string;
+  limitations: string[];
+}
+
+export interface QuikStrikeMatrixMapping {
+  status: QuikStrikeMatrixMappingStatus;
+  table_present: boolean;
+  strike_rows_found: number;
+  expiration_columns_found: number;
+  option_side_mapping: string;
+  numeric_cell_count: number;
+  unavailable_cell_count: number;
+  duplicate_row_count: number;
+  blocked_reasons: string[];
+  warnings: string[];
+  limitations: string[];
+}
+
+export interface QuikStrikeMatrixExtractionSummary {
+  extraction_id: string;
+  status: QuikStrikeMatrixStatus;
+  created_at: string;
+  completed_at: string | null;
+  requested_view_count: number;
+  completed_view_count: number;
+  missing_view_count: number;
+  row_count: number;
+  strike_count: number;
+  expiration_count: number;
+  unavailable_cell_count: number;
+  conversion_eligible: boolean;
+  conversion_status: QuikStrikeMatrixConversionStatus | null;
+  artifact_count: number;
+  warning_count: number;
+  limitation_count: number;
+}
+
+export interface QuikStrikeMatrixExtractionListResponse {
+  extractions: QuikStrikeMatrixExtractionSummary[];
+}
+
+export interface QuikStrikeMatrixViewSummary {
+  view_type: QuikStrikeMatrixViewType;
+  row_count: number;
+  strike_count: number;
+  expiration_count: number;
+  unavailable_cell_count: number;
+}
+
+export interface QuikStrikeMatrixConversionResult {
+  conversion_id: string;
+  extraction_id: string;
+  status: QuikStrikeMatrixConversionStatus;
+  row_count: number;
+  output_artifacts: QuikStrikeMatrixArtifact[];
+  blocked_reasons: string[];
+  warnings: string[];
+  limitations: string[];
+}
+
+export interface QuikStrikeMatrixExtractionReport {
+  extraction_id: string;
+  status: QuikStrikeMatrixStatus;
+  created_at: string;
+  completed_at: string | null;
+  request_summary: {
+    requested_views?: QuikStrikeMatrixViewType[];
+    completed_views?: QuikStrikeMatrixViewType[];
+    partial_views?: QuikStrikeMatrixViewType[];
+    missing_views?: QuikStrikeMatrixViewType[];
+    conversion_eligible?: boolean;
+  };
+  view_summaries: QuikStrikeMatrixViewSummary[];
+  row_count: number;
+  strike_count: number;
+  expiration_count: number;
+  unavailable_cell_count: number;
+  mapping: QuikStrikeMatrixMapping;
+  conversion_result: QuikStrikeMatrixConversionResult | null;
+  artifacts: QuikStrikeMatrixArtifact[];
+  warnings: string[];
+  limitations: string[];
+  research_only_warnings: string[];
+}
+
+export interface QuikStrikeMatrixNormalizedRow {
+  row_id: string;
+  extraction_id: string;
+  capture_timestamp: string;
+  product: string;
+  option_product_code: string;
+  futures_symbol: string | null;
+  source_menu: string;
+  view_type: QuikStrikeMatrixViewType;
+  strike: number | null;
+  expiration: string | null;
+  dte: number | null;
+  future_reference_price: number | null;
+  option_type: QuikStrikeMatrixOptionType | null;
+  value: number | null;
+  value_type: string;
+  cell_state: QuikStrikeMatrixCellState;
+  table_row_label: string;
+  table_column_label: string;
+  extraction_warnings: string[];
+  extraction_limitations: string[];
+}
+
+export interface QuikStrikeMatrixRowsResponse {
+  extraction_id: string;
+  rows: QuikStrikeMatrixNormalizedRow[];
+}
+
+export interface QuikStrikeMatrixXauVolOiRow {
+  timestamp: string;
+  expiry: string;
+  strike: number;
+  option_type: QuikStrikeMatrixOptionType;
+  open_interest: number | null;
+  oi_change: number | null;
+  volume: number | null;
+  source: string;
+  source_menu: string;
+  source_view: string;
+  source_extraction_id: string;
+  table_row_label: string;
+  table_column_label: string;
+  futures_symbol: string | null;
+  dte: number | null;
+  underlying_futures_price: number | null;
+  limitations: string[];
+}
+
+export interface QuikStrikeMatrixConversionRowsResponse {
+  extraction_id: string;
+  conversion_result: QuikStrikeMatrixConversionResult | null;
+  rows: QuikStrikeMatrixXauVolOiRow[];
+}
+
+export interface QuikStrikeMatrixDashboardData {
+  report: QuikStrikeMatrixExtractionReport;
+  rows: QuikStrikeMatrixRowsResponse;
+  conversion: QuikStrikeMatrixConversionRowsResponse;
+}
+
 export type FreeDerivativesSource =
   | 'cftc_cot'
   | 'gvz'

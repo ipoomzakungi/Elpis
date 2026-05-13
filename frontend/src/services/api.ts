@@ -36,6 +36,11 @@ import {
   QuikStrikeDashboardData,
   QuikStrikeExtractionListResponse,
   QuikStrikeExtractionReport,
+  QuikStrikeMatrixConversionRowsResponse,
+  QuikStrikeMatrixDashboardData,
+  QuikStrikeMatrixExtractionListResponse,
+  QuikStrikeMatrixExtractionReport,
+  QuikStrikeMatrixRowsResponse,
   QuikStrikeRowsResponse,
   ProcessRequest,
   Regime,
@@ -559,6 +564,49 @@ export const api = {
       fetchApi<QuikStrikeRowsResponse>(`/quikstrike/extractions/${encodedExtractionId}/rows`),
       fetchApi<QuikStrikeConversionRowsResponse>(
         `/quikstrike/extractions/${encodedExtractionId}/conversion`,
+      ),
+    ]);
+    return { report, rows, conversion };
+  },
+
+  // QuikStrike Open Interest Matrix extraction reports
+  listQuikStrikeMatrixExtractions: async (): Promise<QuikStrikeMatrixExtractionListResponse> => {
+    return fetchApi('/quikstrike-matrix/extractions');
+  },
+
+  getQuikStrikeMatrixExtraction: async (
+    extractionId: string,
+  ): Promise<QuikStrikeMatrixExtractionReport> => {
+    return fetchApi(`/quikstrike-matrix/extractions/${encodeURIComponent(extractionId)}`);
+  },
+
+  getQuikStrikeMatrixRows: async (
+    extractionId: string,
+  ): Promise<QuikStrikeMatrixRowsResponse> => {
+    return fetchApi(`/quikstrike-matrix/extractions/${encodeURIComponent(extractionId)}/rows`);
+  },
+
+  getQuikStrikeMatrixConversion: async (
+    extractionId: string,
+  ): Promise<QuikStrikeMatrixConversionRowsResponse> => {
+    return fetchApi(
+      `/quikstrike-matrix/extractions/${encodeURIComponent(extractionId)}/conversion`,
+    );
+  },
+
+  getQuikStrikeMatrixDashboardData: async (
+    extractionId: string,
+  ): Promise<QuikStrikeMatrixDashboardData> => {
+    const encodedExtractionId = encodeURIComponent(extractionId);
+    const [report, rows, conversion] = await Promise.all([
+      fetchApi<QuikStrikeMatrixExtractionReport>(
+        `/quikstrike-matrix/extractions/${encodedExtractionId}`,
+      ),
+      fetchApi<QuikStrikeMatrixRowsResponse>(
+        `/quikstrike-matrix/extractions/${encodedExtractionId}/rows`,
+      ),
+      fetchApi<QuikStrikeMatrixConversionRowsResponse>(
+        `/quikstrike-matrix/extractions/${encodedExtractionId}/conversion`,
       ),
     ]);
     return { report, rows, conversion };
