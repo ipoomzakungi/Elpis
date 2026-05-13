@@ -5,6 +5,8 @@ import { api } from '@/services/api'
 import {
   QuikStrikeDashboardData,
   QuikStrikeExtractionSummary,
+  QuikStrikeMatrixDashboardData,
+  QuikStrikeMatrixExtractionSummary,
   XauDashboardData,
   XauAcceptanceResult,
   XauExpectedRange,
@@ -30,15 +32,24 @@ export default function XauVolOiPage() {
   const [quikStrikeReports, setQuikStrikeReports] = useState<QuikStrikeExtractionSummary[]>([])
   const [selectedQuikStrikeId, setSelectedQuikStrikeId] = useState<string | null>(null)
   const [quikStrikeData, setQuikStrikeData] = useState<QuikStrikeDashboardData | null>(null)
+  const [quikStrikeMatrixReports, setQuikStrikeMatrixReports] = useState<
+    QuikStrikeMatrixExtractionSummary[]
+  >([])
+  const [selectedQuikStrikeMatrixId, setSelectedQuikStrikeMatrixId] = useState<string | null>(null)
+  const [quikStrikeMatrixData, setQuikStrikeMatrixData] =
+    useState<QuikStrikeMatrixDashboardData | null>(null)
   const [loadingReports, setLoadingReports] = useState(true)
   const [loadingReport, setLoadingReport] = useState(false)
   const [loadingReactionReports, setLoadingReactionReports] = useState(true)
   const [loadingReactionReport, setLoadingReactionReport] = useState(false)
   const [loadingQuikStrikeReports, setLoadingQuikStrikeReports] = useState(true)
   const [loadingQuikStrikeReport, setLoadingQuikStrikeReport] = useState(false)
+  const [loadingQuikStrikeMatrixReports, setLoadingQuikStrikeMatrixReports] = useState(true)
+  const [loadingQuikStrikeMatrixReport, setLoadingQuikStrikeMatrixReport] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reactionError, setReactionError] = useState<string | null>(null)
   const [quikStrikeError, setQuikStrikeError] = useState<string | null>(null)
+  const [quikStrikeMatrixError, setQuikStrikeMatrixError] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -102,6 +113,34 @@ export default function XauVolOiPage() {
       })
       .finally(() => {
         if (active) setLoadingQuikStrikeReports(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    setLoadingQuikStrikeMatrixReports(true)
+    api.listQuikStrikeMatrixExtractions()
+      .then((response) => {
+        if (!active) return
+        setQuikStrikeMatrixReports(response.extractions)
+        setSelectedQuikStrikeMatrixId(
+          (current) => current ?? response.extractions[0]?.extraction_id ?? null,
+        )
+      })
+      .catch((err) => {
+        if (!active) return
+        setQuikStrikeMatrixError(
+          err instanceof Error
+            ? err.message
+            : 'QuikStrike Matrix extraction reports could not be loaded',
+        )
+      })
+      .finally(() => {
+        if (active) setLoadingQuikStrikeMatrixReports(false)
       })
 
     return () => {
@@ -217,6 +256,38 @@ export default function XauVolOiPage() {
     }
   }, [selectedQuikStrikeId])
 
+  useEffect(() => {
+    if (!selectedQuikStrikeMatrixId) {
+      setQuikStrikeMatrixData(null)
+      return
+    }
+
+    let active = true
+    setLoadingQuikStrikeMatrixReport(true)
+    setQuikStrikeMatrixError(null)
+    api.getQuikStrikeMatrixDashboardData(selectedQuikStrikeMatrixId)
+      .then((response) => {
+        if (!active) return
+        setQuikStrikeMatrixData(response)
+      })
+      .catch((err) => {
+        if (!active) return
+        setQuikStrikeMatrixData(null)
+        setQuikStrikeMatrixError(
+          err instanceof Error
+            ? err.message
+            : 'QuikStrike Matrix extraction report could not be loaded',
+        )
+      })
+      .finally(() => {
+        if (active) setLoadingQuikStrikeMatrixReport(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [selectedQuikStrikeMatrixId])
+
   const selectedSummary = useMemo(
     () => reports.find((item) => item.report_id === selectedReportId) ?? null,
     [reports, selectedReportId],
@@ -228,6 +299,12 @@ export default function XauVolOiPage() {
   const selectedQuikStrikeSummary = useMemo(
     () => quikStrikeReports.find((item) => item.extraction_id === selectedQuikStrikeId) ?? null,
     [quikStrikeReports, selectedQuikStrikeId],
+  )
+  const selectedQuikStrikeMatrixSummary = useMemo(
+    () =>
+      quikStrikeMatrixReports.find((item) => item.extraction_id === selectedQuikStrikeMatrixId) ??
+      null,
+    [quikStrikeMatrixReports, selectedQuikStrikeMatrixId],
   )
 
   const report = dashboardData?.report ?? null
@@ -285,6 +362,16 @@ export default function XauVolOiPage() {
         loadingReport={loadingQuikStrikeReport}
         error={quikStrikeError}
         onSelect={setSelectedQuikStrikeId}
+      />
+      <QuikStrikeMatrixInspection
+        reports={quikStrikeMatrixReports}
+        selectedExtractionId={selectedQuikStrikeMatrixId}
+        selectedSummary={selectedQuikStrikeMatrixSummary}
+        data={quikStrikeMatrixData}
+        loadingList={loadingQuikStrikeMatrixReports}
+        loadingReport={loadingQuikStrikeMatrixReport}
+        error={quikStrikeMatrixError}
+        onSelect={setSelectedQuikStrikeMatrixId}
       />
       <ReactionReportInspection
         reports={reactionReports}
@@ -507,6 +594,162 @@ function QuikStrikeExtractionInspection({
             application does not perform browser RPA, endpoint replay, OCR, or store
             cookies, tokens, headers, HAR files, screenshots, viewstate values, or
             private full URLs.
+          </Notice>
+        </div>
+      ) : null}
+    </ReportSection>
+  )
+}
+
+function QuikStrikeMatrixInspection({
+  reports,
+  selectedExtractionId,
+  selectedSummary,
+  data,
+  loadingList,
+  loadingReport,
+  error,
+  onSelect,
+}: {
+  reports: QuikStrikeMatrixExtractionSummary[]
+  selectedExtractionId: string | null
+  selectedSummary: QuikStrikeMatrixExtractionSummary | null
+  data: QuikStrikeMatrixDashboardData | null
+  loadingList: boolean
+  loadingReport: boolean
+  error: string | null
+  onSelect: (extractionId: string | null) => void
+}) {
+  const report = data?.report ?? null
+  const conversion = data?.conversion.conversion_result ?? report?.conversion_result ?? null
+  const requestedViews = report?.request_summary.requested_views ?? []
+  const completedViews = report?.request_summary.completed_views ?? []
+  const missingViews = report?.request_summary.missing_views ?? []
+  const warnings = uniqueValues([
+    ...(report?.warnings ?? []),
+    ...(report?.mapping.warnings ?? []),
+    ...(conversion?.warnings ?? []),
+  ])
+  const limitations = uniqueValues([
+    ...(report?.limitations ?? []),
+    ...(report?.mapping.limitations ?? []),
+    ...(conversion?.limitations ?? []),
+    ...(report?.research_only_warnings ?? []),
+  ])
+
+  return (
+    <ReportSection title="QuikStrike OI Matrix Extraction">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-sm text-gray-400">
+            Local sanitized Open Interest Matrix table extraction reports for Gold OI,
+            OI change, and volume research input.
+          </p>
+          {selectedSummary && (
+            <p className="mt-2 text-sm text-gray-300">
+              {selectedSummary.extraction_id} | {selectedSummary.status} |{' '}
+              {formatDate(selectedSummary.created_at)}
+            </p>
+          )}
+        </div>
+        <label className="flex flex-col gap-2 text-sm text-gray-300">
+          Matrix extraction
+          <select
+            value={selectedExtractionId ?? ''}
+            onChange={(event) => onSelect(event.target.value || null)}
+            className="min-w-80 rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+            disabled={loadingList || reports.length === 0}
+          >
+            {reports.length === 0 ? (
+              <option value="">No Matrix extractions</option>
+            ) : (
+              reports.map((item) => (
+                <option key={item.extraction_id} value={item.extraction_id}>
+                  {item.extraction_id}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+      </div>
+
+      {error && <div className="mt-4"><Notice tone="error">{error}</Notice></div>}
+
+      {loadingList ? (
+        <div className="mt-4">
+          <EmptyState>Loading QuikStrike Matrix reports...</EmptyState>
+        </div>
+      ) : reports.length === 0 ? (
+        <div className="mt-4">
+          <EmptyState>No saved QuikStrike Matrix extraction reports are available.</EmptyState>
+        </div>
+      ) : loadingReport ? (
+        <div className="mt-4">
+          <EmptyState>Loading selected QuikStrike Matrix extraction...</EmptyState>
+        </div>
+      ) : report ? (
+        <div className="mt-5 space-y-5">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+            <SummaryCard label="Status" value={report.status} />
+            <SummaryCard label="Rows" value={report.row_count} />
+            <SummaryCard label="Strikes" value={report.strike_count} />
+            <SummaryCard label="Expiries" value={report.expiration_count} />
+            <SummaryCard label="Unavailable" value={report.unavailable_cell_count} />
+            <SummaryCard label="Conversion" value={conversion?.status ?? 'n/a'} />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <ContextPanel title="View Coverage">
+              <dl className="grid grid-cols-1 gap-3 text-sm">
+                <Metric label="Requested" value={requestedViews.join(', ') || 'n/a'} />
+                <Metric label="Completed" value={completedViews.join(', ') || 'n/a'} />
+                <Metric label="Missing" value={missingViews.join(', ') || 'none'} />
+              </dl>
+            </ContextPanel>
+            <ContextPanel title="Mapping Validation">
+              <dl className="grid grid-cols-1 gap-3 text-sm">
+                <Metric label="Status" value={report.mapping.status} />
+                <Metric label="Option Sides" value={report.mapping.option_side_mapping} />
+                <Metric label="Numeric Cells" value={report.mapping.numeric_cell_count} />
+                <Metric label="Duplicates" value={report.mapping.duplicate_row_count} />
+              </dl>
+            </ContextPanel>
+            <ContextPanel title="Conversion Rows">
+              <dl className="grid grid-cols-1 gap-3 text-sm">
+                <Metric label="Status" value={conversion?.status ?? 'n/a'} />
+                <Metric label="Rows" value={data?.conversion.rows.length ?? 0} />
+                <Metric
+                  label="Eligible"
+                  value={formatBoolean(Boolean(report.request_summary.conversion_eligible))}
+                />
+              </dl>
+            </ContextPanel>
+          </div>
+
+          <ContextPanel title="Output Paths">
+            <ArtifactPathList artifacts={report.artifacts} />
+          </ContextPanel>
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <ContextPanel title="Warnings">
+              <NotesList notes={warnings} emptyText="No warnings" />
+            </ContextPanel>
+            <ContextPanel title="Limitations">
+              <NotesList notes={limitations} emptyText="No limitations" />
+            </ContextPanel>
+            <ContextPanel title="Blocked Conversion Reasons">
+              <NotesList
+                notes={[...report.mapping.blocked_reasons, ...(conversion?.blocked_reasons ?? [])]}
+                emptyText="No conversion blockers"
+              />
+            </ContextPanel>
+          </div>
+
+          <Notice tone="warning">
+            QuikStrike Matrix extraction is local-only and fixture/report driven here.
+            The application does not perform endpoint replay, OCR, credential storage,
+            or store cookies, tokens, headers, HAR files, screenshots, viewstate values,
+            or private full URLs.
           </Notice>
         </div>
       ) : null}
