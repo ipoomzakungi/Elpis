@@ -198,7 +198,7 @@ class XauQuikStrikeFusionRequest(XauFusionBaseModel):
     gc_futures_reference: float | None = Field(default=None, gt=0)
     session_open_price: float | None = Field(default=None, gt=0)
     realized_volatility: float | None = Field(default=None, gt=0)
-    candle_context: dict[str, Any] = Field(default_factory=dict)
+    candle_context: list[dict[str, Any]] | dict[str, Any] = Field(default_factory=list)
     create_xau_vol_oi_report: bool = False
     create_xau_reaction_report: bool = False
     run_label: str | None = None
@@ -397,8 +397,8 @@ class XauFusionRow(XauFusionBaseModel):
     @model_validator(mode="after")
     def validate_source_presence(self) -> XauFusionRow:
         if self.source_type == XauFusionSourceType.FUSED:
-            if self.vol2vol_value is None and self.matrix_value is None:
-                raise ValueError("fused row requires at least one source value")
+            if self.vol2vol_value is None or self.matrix_value is None:
+                raise ValueError("fused row requires both Vol2Vol and Matrix source values")
         elif self.source_type == XauFusionSourceType.VOL2VOL and self.vol2vol_value is None:
             raise ValueError("vol2vol row requires vol2vol_value")
         elif self.source_type == XauFusionSourceType.MATRIX and self.matrix_value is None:
@@ -652,8 +652,13 @@ class XauQuikStrikeFusionReport(XauFusionBaseModel):
     def validate_report_state(self) -> XauQuikStrikeFusionReport:
         if self.status == XauFusionReportStatus.COMPLETED and self.fused_row_count == 0:
             raise ValueError("completed fusion report requires fused rows")
-        if self.status == XauFusionReportStatus.BLOCKED and not self.warnings:
-            raise ValueError("blocked fusion report requires a warning")
+        missing_context = self.context_summary.missing_context if self.context_summary else []
+        if (
+            self.status == XauFusionReportStatus.BLOCKED
+            and not self.warnings
+            and not missing_context
+        ):
+            raise ValueError("blocked fusion report requires a warning or missing-context reason")
         return self
 
 

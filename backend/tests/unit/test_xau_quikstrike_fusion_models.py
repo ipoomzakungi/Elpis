@@ -105,11 +105,22 @@ def test_request_requires_safe_source_ids_and_research_acknowledgement():
         matrix_report_id="matrix_report",
         xauusd_spot_reference=4715.25,
         gc_futures_reference=4722.5,
+        candle_context=[{"open": 4710.0, "close": 4720.0}],
         research_only_acknowledged=True,
     )
 
     assert request.persist_report is True
     assert request.create_xau_vol_oi_report is False
+    assert request.candle_context == [{"open": 4710.0, "close": 4720.0}]
+
+    object_context_request = XauQuikStrikeFusionRequest(
+        vol2vol_report_id="vol2vol_report",
+        matrix_report_id="matrix_report",
+        candle_context={"open": 4710.0, "close": 4720.0},
+        research_only_acknowledged=True,
+    )
+
+    assert object_context_request.candle_context == {"open": 4710.0, "close": 4720.0}
 
     with pytest.raises(ValidationError, match="research_only_acknowledged"):
         XauQuikStrikeFusionRequest(
@@ -206,12 +217,21 @@ def test_fusion_row_preserves_both_source_values_and_agreement_notes():
     assert row.matrix_value is not None
     assert row.source_agreement_notes == ["vol2vol and matrix OI differ"]
 
-    with pytest.raises(ValidationError, match="at least one source"):
+    with pytest.raises(ValidationError, match="both Vol2Vol and Matrix"):
         XauFusionRow(
             fusion_row_id="fusion_row_2",
             fusion_report_id="fusion_report",
             match_key=_match_key(),
             match_status=XauFusionMatchStatus.MATCHED,
+        )
+
+    with pytest.raises(ValidationError, match="both Vol2Vol and Matrix"):
+        XauFusionRow(
+            fusion_row_id="fusion_row_3",
+            fusion_report_id="fusion_report",
+            match_key=_match_key(),
+            match_status=XauFusionMatchStatus.MATCHED,
+            vol2vol_value=_vol2vol_value(),
         )
 
 
@@ -223,6 +243,7 @@ def test_blocked_fusion_row_requires_visible_reason():
             match_key=_match_key(),
             match_status=XauFusionMatchStatus.BLOCKED,
             vol2vol_value=_vol2vol_value(),
+            matrix_value=_matrix_value(),
         )
 
     row = XauFusionRow(
@@ -231,6 +252,7 @@ def test_blocked_fusion_row_requires_visible_reason():
         match_key=_match_key(),
         match_status=XauFusionMatchStatus.BLOCKED,
         vol2vol_value=_vol2vol_value(),
+        matrix_value=_matrix_value(),
         missing_context_notes=["matrix expiration mapping unavailable"],
     )
     assert row.match_status == XauFusionMatchStatus.BLOCKED
@@ -339,6 +361,57 @@ def test_report_defaults_to_research_only_limitation():
     )
 
     assert XAU_FUSION_RESEARCH_ONLY_WARNING in report.limitations
+
+
+def test_blocked_report_can_be_explained_by_structured_missing_context():
+    missing_context = XauFusionMissingContextItem(
+        context_key="source_compatibility",
+        status=XauFusionContextStatus.BLOCKED,
+        blocks_fusion=True,
+        message="Matrix source report was unavailable.",
+    )
+    context_summary = XauFusionContextSummary(
+        basis_status=XauFusionContextStatus.UNAVAILABLE,
+        iv_range_status=XauFusionContextStatus.UNAVAILABLE,
+        open_regime_status=XauFusionContextStatus.UNAVAILABLE,
+        candle_acceptance_status=XauFusionContextStatus.UNAVAILABLE,
+        realized_volatility_status=XauFusionContextStatus.UNAVAILABLE,
+        source_agreement_status=XauFusionContextStatus.BLOCKED,
+        missing_context=[missing_context],
+    )
+
+    report = XauQuikStrikeFusionReport(
+        report_id="fusion_report_blocked",
+        status=XauFusionReportStatus.BLOCKED,
+        vol2vol_source=XauQuikStrikeSourceRef(
+            source_type=XauFusionSourceType.VOL2VOL,
+            report_id="vol2vol_report",
+        ),
+        matrix_source=XauQuikStrikeSourceRef(
+            source_type=XauFusionSourceType.MATRIX,
+            report_id="matrix_report",
+        ),
+        context_summary=context_summary,
+        fused_row_count=0,
+    )
+
+    assert report.context_summary is not None
+    assert report.context_summary.missing_context[0].blocks_fusion is True
+
+    with pytest.raises(ValidationError, match="missing-context reason"):
+        XauQuikStrikeFusionReport(
+            report_id="fusion_report_blocked",
+            status=XauFusionReportStatus.BLOCKED,
+            vol2vol_source=XauQuikStrikeSourceRef(
+                source_type=XauFusionSourceType.VOL2VOL,
+                report_id="vol2vol_report",
+            ),
+            matrix_source=XauQuikStrikeSourceRef(
+                source_type=XauFusionSourceType.MATRIX,
+                report_id="matrix_report",
+            ),
+            fused_row_count=0,
+        )
 
 
 def test_artifact_paths_are_limited_to_ignored_fusion_report_scope():
