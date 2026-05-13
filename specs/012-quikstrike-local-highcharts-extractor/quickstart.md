@@ -63,6 +63,13 @@ Expected behavior:
 
 Only run this manually with a user-controlled authenticated browser session.
 
+Install the optional local browser dependency when using the Playwright/CDP adapter:
+
+```powershell
+cd backend
+pip install -e ".[browser]"
+```
+
 Manual steps:
 
 1. Open QuikStrike locally.
@@ -76,6 +83,55 @@ Manual steps:
    - `Open Interest -> OI Change`
    - `Open Interest -> Churn`
 6. Run only the local shape validation/extraction command provided by the implementation.
+
+For a repeatable local run, start Chrome or Edge yourself with a local debugging
+port, log in manually in that browser, and then run the adapter. Do not put
+QuikStrike usernames, passwords, cookies, headers, HAR files, viewstate values,
+or private URLs in `.env` or any repository file.
+
+Example:
+
+```powershell
+& "C:\Program Files\Google\Chrome\Application\chrome.exe" `
+  --remote-debugging-port=9222 `
+  --user-data-dir="$env:LOCALAPPDATA\Elpis\quikstrike-browser-profile" `
+  "https://cmegroup-sso.quikstrike.net//User/QuikStrikeView.aspx?mode="
+
+# After manual login and manual Gold Vol2Vol navigation:
+cd backend
+python scripts/quikstrike_playwright_extract.py --cdp-url http://127.0.0.1:9222 --drive-views
+```
+
+If you do not want to manage a browser profile, use launch mode. The browser is
+opened by Playwright, but login and product navigation are still manual:
+
+```powershell
+cd backend
+python scripts/quikstrike_playwright_extract.py --mode launch --drive-views --wait-seconds 600 --poll-seconds 5
+```
+
+If QuikStrike's menus do not expose stable controls, use Playwright-managed
+manual view capture. The browser is still owned by Python, but you click each
+view yourself; the script captures each view when it appears:
+
+```powershell
+cd backend
+python scripts/quikstrike_playwright_extract.py --mode launch --manual-views --wait-seconds 900 --poll-seconds 5
+```
+
+Optional non-secret local settings may live in ignored `.env.quikstrike.local`:
+
+```text
+QUIKSTRIKE_MODE=launch
+QUIKSTRIKE_WAIT_SECONDS=600
+QUIKSTRIKE_POLL_SECONDS=5
+QUIKSTRIKE_DRIVE_VIEWS=true
+QUIKSTRIKE_MANUAL_VIEWS=false
+QUIKSTRIKE_BROWSER_CHANNEL=chrome
+```
+
+Do not add usernames, passwords, cookies, session values, headers, HAR files,
+viewstate values, or private full URLs to any `.env` file.
 
 Expected behavior:
 
