@@ -410,5 +410,5 @@ After smoke test passes:
 - report files changed, commands run, results, commit hash, and remaining risks.
 
 <!-- SPECKIT START -->
-Active Speckit plan: specs/013-quikstrike-open-interest-matrix-extractor/plan.md
+Active Speckit plan: specs/014-xau-quikstrike-context-fusion/plan.md
 <!-- SPECKIT END -->
