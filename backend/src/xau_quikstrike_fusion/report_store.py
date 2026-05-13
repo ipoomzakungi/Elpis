@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any
 
 from src.config import get_settings
 from src.models.xau_quikstrike_fusion import (
     XauFusionArtifact,
     XauFusionArtifactFormat,
     XauFusionArtifactType,
+    XauFusionBaseModel,
     validate_xau_fusion_safe_id,
 )
 
@@ -64,6 +67,44 @@ class XauQuikStrikeFusionReportStore:
             rows=rows,
         )
 
+    def artifact_for_filename(
+        self,
+        report_id: str,
+        filename: str,
+        *,
+        artifact_type: XauFusionArtifactType,
+        artifact_format: XauFusionArtifactFormat,
+        rows: int | None = None,
+    ) -> XauFusionArtifact:
+        return self.artifact(
+            artifact_type=artifact_type,
+            path=self.artifact_path(report_id, filename),
+            artifact_format=artifact_format,
+            rows=rows,
+        )
+
+    def serialize_json(self, payload: Any) -> str:
+        return json.dumps(_jsonable(payload), indent=2, sort_keys=True)
+
+    def write_json_artifact(
+        self,
+        report_id: str,
+        filename: str,
+        payload: Any,
+        *,
+        artifact_type: XauFusionArtifactType,
+        rows: int | None = None,
+    ) -> XauFusionArtifact:
+        path = self.artifact_path(report_id, filename)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(self.serialize_json(payload), encoding="utf-8")
+        return self.artifact(
+            artifact_type=artifact_type,
+            path=path,
+            artifact_format=XauFusionArtifactFormat.JSON,
+            rows=rows,
+        )
+
     def _validate_report_scope(self, path: Path) -> None:
         try:
             path.resolve().relative_to(self._report_root)
@@ -78,3 +119,15 @@ class XauQuikStrikeFusionReportStore:
             except ValueError:
                 continue
         return resolved.as_posix()
+
+
+def _jsonable(payload: Any) -> Any:
+    if isinstance(payload, XauFusionBaseModel):
+        return payload.model_dump(mode="json")
+    if isinstance(payload, dict):
+        return {key: _jsonable(value) for key, value in payload.items()}
+    if isinstance(payload, list):
+        return [_jsonable(value) for value in payload]
+    if isinstance(payload, tuple):
+        return [_jsonable(value) for value in payload]
+    return payload

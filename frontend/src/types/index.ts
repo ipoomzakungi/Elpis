@@ -1598,6 +1598,230 @@ export interface QuikStrikeMatrixDashboardData {
   conversion: QuikStrikeMatrixConversionRowsResponse;
 }
 
+export type XauFusionSourceType = 'vol2vol' | 'matrix' | 'fused';
+export type XauFusionMatchStatus =
+  | 'matched'
+  | 'vol2vol_only'
+  | 'matrix_only'
+  | 'conflict'
+  | 'blocked';
+export type XauFusionAgreementStatus =
+  | 'agreement'
+  | 'disagreement'
+  | 'unavailable'
+  | 'not_comparable';
+export type XauFusionContextStatus =
+  | 'available'
+  | 'partial'
+  | 'unavailable'
+  | 'conflict'
+  | 'blocked';
+export type XauFusionReportStatus = 'completed' | 'partial' | 'blocked' | 'failed';
+export type XauFusionArtifactType =
+  | 'metadata'
+  | 'fused_rows_json'
+  | 'fused_rows_parquet'
+  | 'xau_vol_oi_input_csv'
+  | 'xau_vol_oi_input_parquet'
+  | 'report_json'
+  | 'report_markdown';
+export type XauFusionArtifactFormat = 'json' | 'csv' | 'parquet' | 'markdown';
+
+export interface XauQuikStrikeFusionRequest {
+  vol2vol_report_id: string;
+  matrix_report_id: string;
+  xauusd_spot_reference?: number | null;
+  gc_futures_reference?: number | null;
+  session_open_price?: number | null;
+  realized_volatility?: number | null;
+  candle_context?: Array<Record<string, unknown>> | Record<string, unknown>;
+  create_xau_vol_oi_report?: boolean;
+  create_xau_reaction_report?: boolean;
+  run_label?: string | null;
+  persist_report?: boolean;
+  research_only_acknowledged: boolean;
+}
+
+export interface XauQuikStrikeSourceRef {
+  source_type: Exclude<XauFusionSourceType, 'fused'>;
+  report_id: string;
+  status: string;
+  product: string | null;
+  option_product_code: string | null;
+  row_count: number;
+  conversion_status: string | null;
+  warnings: string[];
+  limitations: string[];
+  artifact_paths: string[];
+}
+
+export interface XauFusionMatchKey {
+  strike: number;
+  expiration: string | null;
+  expiration_code: string | null;
+  expiration_key: string | null;
+  option_type: string;
+  value_type: string;
+}
+
+export interface XauFusionSourceValue {
+  source_type: Exclude<XauFusionSourceType, 'fused'>;
+  source_report_id: string;
+  source_row_id: string | null;
+  value: number | null;
+  value_type: string;
+  source_view: string | null;
+  strike: number | null;
+  expiration: string | null;
+  expiration_code: string | null;
+  option_type: string | null;
+  future_reference_price: number | null;
+  dte: number | null;
+  vol_settle: number | null;
+  range_label: string | null;
+  sigma_label: string | null;
+  warnings: string[];
+  limitations: string[];
+}
+
+export interface XauFusionCoverageSummary {
+  matched_key_count: number;
+  vol2vol_only_key_count: number;
+  matrix_only_key_count: number;
+  conflict_key_count: number;
+  blocked_key_count: number;
+  strike_count: number;
+  expiration_count: number;
+  option_type_count: number;
+  value_type_count: number;
+}
+
+export interface XauFusionRow {
+  fusion_row_id: string;
+  fusion_report_id: string;
+  match_key: XauFusionMatchKey;
+  source_type: XauFusionSourceType;
+  match_status: XauFusionMatchStatus;
+  agreement_status: XauFusionAgreementStatus;
+  vol2vol_value: XauFusionSourceValue | null;
+  matrix_value: XauFusionSourceValue | null;
+  basis_points: number | null;
+  spot_equivalent_level: number | null;
+  source_agreement_notes: string[];
+  missing_context_notes: string[];
+  warnings: string[];
+  limitations: string[];
+}
+
+export interface XauFusionMissingContextItem {
+  context_key: string;
+  status: XauFusionContextStatus;
+  severity: string;
+  blocks_fusion: boolean;
+  blocks_reaction_confidence: boolean;
+  message: string;
+  source_refs: string[];
+}
+
+export interface XauFusionBasisState {
+  status: XauFusionContextStatus;
+  xauusd_spot_reference: number | null;
+  gc_futures_reference: number | null;
+  basis_points: number | null;
+  calculation_note: string | null;
+  warnings: string[];
+}
+
+export interface XauFusionContextSummary {
+  basis_status: XauFusionContextStatus;
+  iv_range_status: XauFusionContextStatus;
+  open_regime_status: XauFusionContextStatus;
+  candle_acceptance_status: XauFusionContextStatus;
+  realized_volatility_status: XauFusionContextStatus;
+  source_agreement_status: XauFusionContextStatus;
+  missing_context: XauFusionMissingContextItem[];
+}
+
+export interface XauFusionDownstreamResult {
+  xau_vol_oi_report_id: string | null;
+  xau_reaction_report_id: string | null;
+  xau_report_status: string | null;
+  reaction_report_status: string | null;
+  reaction_row_count: number | null;
+  no_trade_count: number | null;
+  all_reactions_no_trade: boolean | null;
+  notes: string[];
+}
+
+export interface XauFusionArtifact {
+  artifact_type: XauFusionArtifactType;
+  path: string;
+  format: XauFusionArtifactFormat;
+  rows: number | null;
+  created_at: string;
+  limitations: string[];
+}
+
+export interface XauQuikStrikeFusionSummary {
+  report_id: string;
+  status: XauFusionReportStatus;
+  created_at: string;
+  vol2vol_report_id: string;
+  matrix_report_id: string;
+  fused_row_count: number;
+  strike_count: number;
+  expiration_count: number;
+  basis_status: XauFusionContextStatus;
+  iv_range_status: XauFusionContextStatus;
+  open_regime_status: XauFusionContextStatus;
+  candle_acceptance_status: XauFusionContextStatus;
+  xau_vol_oi_report_id: string | null;
+  xau_reaction_report_id: string | null;
+  all_reactions_no_trade: boolean | null;
+  warning_count: number;
+}
+
+export interface XauQuikStrikeFusionReport {
+  report_id: string;
+  status: XauFusionReportStatus;
+  created_at: string;
+  completed_at: string | null;
+  request: XauQuikStrikeFusionRequest | null;
+  vol2vol_source: XauQuikStrikeSourceRef;
+  matrix_source: XauQuikStrikeSourceRef;
+  coverage: XauFusionCoverageSummary | null;
+  context_summary: XauFusionContextSummary | null;
+  basis_state: XauFusionBasisState | null;
+  fused_row_count: number;
+  xau_vol_oi_input_row_count: number;
+  fused_rows: XauFusionRow[];
+  downstream_result: XauFusionDownstreamResult | null;
+  artifacts: XauFusionArtifact[];
+  warnings: string[];
+  limitations: string[];
+  research_only_warnings: string[];
+}
+
+export interface XauQuikStrikeFusionListResponse {
+  reports: XauQuikStrikeFusionSummary[];
+}
+
+export interface XauFusionRowsResponse {
+  report_id: string;
+  rows: XauFusionRow[];
+}
+
+export interface XauFusionMissingContextResponse {
+  report_id: string;
+  missing_context: XauFusionMissingContextItem[];
+}
+
+export interface XauQuikStrikeFusionDashboardData {
+  report: XauQuikStrikeFusionReport;
+  rows: XauFusionRowsResponse;
+  missingContext: XauFusionMissingContextResponse;
+}
+
 export type FreeDerivativesSource =
   | 'cftc_cot'
   | 'gvz'

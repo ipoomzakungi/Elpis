@@ -73,6 +73,12 @@ import {
   XauReactionReportRequest,
   XauReactionRowsResponse,
   XauRiskPlanRowsResponse,
+  XauFusionMissingContextResponse,
+  XauFusionRowsResponse,
+  XauQuikStrikeFusionDashboardData,
+  XauQuikStrikeFusionListResponse,
+  XauQuikStrikeFusionReport,
+  XauQuikStrikeFusionRequest,
   XauVolOiReportListResponse,
   XauVolOiReportRequest,
   XauWallTableResponse,
@@ -610,5 +616,51 @@ export const api = {
       ),
     ]);
     return { report, rows, conversion };
+  },
+
+  // XAU QuikStrike fusion reports
+  createXauQuikStrikeFusionReport: async (
+    request: XauQuikStrikeFusionRequest,
+  ): Promise<XauQuikStrikeFusionReport> => {
+    return fetchApi('/xau/quikstrike-fusion/reports', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  listXauQuikStrikeFusionReports: async (): Promise<XauQuikStrikeFusionListResponse> => {
+    return fetchApi('/xau/quikstrike-fusion/reports');
+  },
+
+  getXauQuikStrikeFusionReport: async (
+    reportId: string,
+  ): Promise<XauQuikStrikeFusionReport> => {
+    return fetchApi(`/xau/quikstrike-fusion/reports/${encodeURIComponent(reportId)}`);
+  },
+
+  getXauQuikStrikeFusionRows: async (reportId: string): Promise<XauFusionRowsResponse> => {
+    return fetchApi(`/xau/quikstrike-fusion/reports/${encodeURIComponent(reportId)}/rows`);
+  },
+
+  getXauQuikStrikeFusionMissingContext: async (
+    reportId: string,
+  ): Promise<XauFusionMissingContextResponse> => {
+    return fetchApi(
+      `/xau/quikstrike-fusion/reports/${encodeURIComponent(reportId)}/missing-context`,
+    );
+  },
+
+  getXauQuikStrikeFusionDashboardData: async (
+    reportId: string,
+  ): Promise<XauQuikStrikeFusionDashboardData> => {
+    const encodedReportId = encodeURIComponent(reportId);
+    const [report, rows, missingContext] = await Promise.all([
+      fetchApi<XauQuikStrikeFusionReport>(`/xau/quikstrike-fusion/reports/${encodedReportId}`),
+      fetchApi<XauFusionRowsResponse>(`/xau/quikstrike-fusion/reports/${encodedReportId}/rows`),
+      fetchApi<XauFusionMissingContextResponse>(
+        `/xau/quikstrike-fusion/reports/${encodedReportId}/missing-context`,
+      ),
+    ]);
+    return { report, rows, missingContext };
   },
 };

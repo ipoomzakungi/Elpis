@@ -2,7 +2,12 @@ from pathlib import Path
 
 import pytest
 
-from src.models.xau_quikstrike_fusion import XauFusionArtifactFormat, XauFusionArtifactType
+from src.models.xau_quikstrike_fusion import (
+    XauFusionArtifactFormat,
+    XauFusionArtifactType,
+    XauFusionReportStatus,
+    XauQuikStrikeFusionSummary,
+)
 from src.xau_quikstrike_fusion.report_store import XauQuikStrikeFusionReportStore
 
 
@@ -41,6 +46,32 @@ def test_artifact_metadata_helper_uses_ignored_local_report_paths(tmp_path: Path
 
     assert artifact.path == "data/reports/xau_quikstrike_fusion/fusion_report/report.json"
     assert artifact.rows == 3
+
+
+def test_report_store_serializes_models_and_writes_json_artifacts(tmp_path: Path):
+    store = XauQuikStrikeFusionReportStore(reports_dir=tmp_path / "data" / "reports")
+    summary = XauQuikStrikeFusionSummary(
+        report_id="fusion_report",
+        status=XauFusionReportStatus.PARTIAL,
+        vol2vol_report_id="vol2vol_report",
+        matrix_report_id="matrix_report",
+        fused_row_count=0,
+        strike_count=0,
+        expiration_count=0,
+    )
+
+    artifact = store.write_json_artifact(
+        "fusion_report",
+        "metadata.json",
+        {"summary": summary},
+        artifact_type=XauFusionArtifactType.METADATA,
+        rows=1,
+    )
+    saved = store.artifact_path("fusion_report", "metadata.json").read_text(encoding="utf-8")
+
+    assert artifact.path == "data/reports/xau_quikstrike_fusion/fusion_report/metadata.json"
+    assert '"report_id": "fusion_report"' in saved
+    assert '"status": "partial"' in saved
 
 
 def test_report_store_artifact_paths_must_stay_under_report_root(tmp_path: Path):

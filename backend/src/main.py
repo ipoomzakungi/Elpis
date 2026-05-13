@@ -17,6 +17,7 @@ from src.api.routes import (
     research,
     research_execution,
     xau,
+    xau_quikstrike_fusion,
     xau_reaction,
 )
 from src.config import get_settings
@@ -52,6 +53,11 @@ app.include_router(research.router, prefix="/api/v1", tags=["research"])
 app.include_router(research_execution.router, prefix="/api/v1", tags=["research-execution"])
 app.include_router(xau.router, prefix="/api/v1", tags=["xau"])
 app.include_router(xau_reaction.router, prefix="/api/v1", tags=["xau-reaction"])
+app.include_router(
+    xau_quikstrike_fusion.router,
+    prefix="/api/v1",
+    tags=["xau-quikstrike-fusion"],
+)
 
 
 @app.exception_handler(RequestValidationError)
