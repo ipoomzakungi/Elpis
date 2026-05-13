@@ -56,6 +56,35 @@ def test_volume_matrix_parser_distinguishes_blank_from_zero():
     assert parsed.body_cells[1].cell_state == QuikStrikeMatrixCellState.UNAVAILABLE
 
 
+def test_header_rowspans_preserve_expiration_and_call_put_columns():
+    parsed = parse_matrix_table(
+        QuikStrikeMatrixTableSnapshot(
+            view_type=QuikStrikeMatrixViewType.OPEN_INTEREST_MATRIX,
+            html_table=(
+                "<table><thead>"
+                "<tr><th rowspan='2'>Strike</th>"
+                "<th colspan='2'>G2RK6 GC 2 DTE 4722.6</th>"
+                "<th colspan='2'>G2RM6 GC 30 DTE 4740.5</th></tr>"
+                "<tr><th>Call</th><th>Put</th><th>Call</th><th>Put</th></tr>"
+                "</thead><tbody>"
+                "<tr><th>4700</th><td>120</td><td>95</td><td>10</td><td>11</td></tr>"
+                "</tbody></table>"
+            ),
+        )
+    )
+
+    extracted = [
+        (cell.expiration, cell.option_type, cell.numeric_value)
+        for cell in parsed.body_cells
+    ]
+    assert extracted == [
+        ("G2RK6", QuikStrikeMatrixOptionType.CALL, 120),
+        ("G2RK6", QuikStrikeMatrixOptionType.PUT, 95),
+        ("G2RM6", QuikStrikeMatrixOptionType.CALL, 10),
+        ("G2RM6", QuikStrikeMatrixOptionType.PUT, 11),
+    ]
+
+
 def test_non_strike_labels_are_excluded():
     parsed = parse_matrix_table(
         QuikStrikeMatrixTableSnapshot(

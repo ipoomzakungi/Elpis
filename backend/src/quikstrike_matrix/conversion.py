@@ -25,6 +25,11 @@ SOURCE_LIMITATION = (
     "Converted from local QuikStrike Matrix table extraction; source limitations are preserved."
 )
 UNAVAILABLE_CELL_WARNING = "Unavailable cells were omitted and not treated as zero."
+MATRIX_VIEW_ORDER = (
+    "open_interest_matrix",
+    "oi_change_matrix",
+    "volume_matrix",
+)
 
 
 @dataclass(frozen=True)
@@ -151,7 +156,7 @@ def _apply_row_value(
     row: QuikStrikeMatrixNormalizedRow,
 ) -> QuikStrikeMatrixXauVolOiRow:
     update: dict[str, float | str | None] = {
-        "source_view": row.view_type.value,
+        "source_view": _merge_source_views(current.source_view, row.view_type.value),
     }
     if row.value_type == QuikStrikeMatrixValueType.OPEN_INTEREST:
         update["open_interest"] = row.value
@@ -166,6 +171,18 @@ def _conversion_warnings(rows: list[QuikStrikeMatrixNormalizedRow]) -> list[str]
     if any(row.cell_state != QuikStrikeMatrixCellState.AVAILABLE for row in rows):
         return [UNAVAILABLE_CELL_WARNING]
     return []
+
+
+def _merge_source_views(current: str, incoming: str) -> str:
+    values = {
+        value.strip()
+        for value in current.replace("|", ",").split(",")
+        if value.strip()
+    }
+    values.add(incoming)
+    ordered = [value for value in MATRIX_VIEW_ORDER if value in values]
+    ordered.extend(sorted(values.difference(MATRIX_VIEW_ORDER)))
+    return ",".join(ordered)
 
 
 def _row_limitations(row: QuikStrikeMatrixNormalizedRow) -> list[str]:

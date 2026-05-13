@@ -33,9 +33,30 @@ def test_matrix_rows_convert_to_xau_vol_oi_fields():
     assert first.open_interest == 120
     assert first.oi_change == -12
     assert first.volume == 33
+    assert first.source_view == "open_interest_matrix,oi_change_matrix,volume_matrix"
     assert first.expiry == "G2RK6"
     assert first.strike == 4700
     assert first.source == "quikstrike_matrix_local"
+
+
+def test_conversion_source_view_is_stable_when_input_order_changes():
+    extraction = build_extraction_from_request(
+        _request(),
+        extraction_id="matrix_conversion_reordered",
+        capture_timestamp=datetime(2026, 5, 13, tzinfo=UTC),
+    )
+
+    conversion = convert_to_xau_vol_oi_rows(
+        extraction_result=extraction.result,
+        rows=list(reversed(extraction.rows)),
+        conversion_id="matrix_conversion_reordered_xau",
+        created_at=datetime(2026, 5, 13, tzinfo=UTC),
+    )
+
+    assert conversion.result.status == QuikStrikeMatrixConversionStatus.COMPLETED
+    assert conversion.rows[0].source_view == (
+        "open_interest_matrix,oi_change_matrix,volume_matrix"
+    )
 
 
 def test_conversion_blocks_missing_expiration_mapping():

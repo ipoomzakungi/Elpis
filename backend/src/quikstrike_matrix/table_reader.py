@@ -105,7 +105,8 @@ def parse_matrix_table(snapshot: QuikStrikeMatrixTableSnapshot) -> ParsedMatrixT
             limitations=[],
         )
 
-    first_body_index = _first_body_row_index(rows)
+    expanded_rows = _expand_rows(rows)
+    first_body_index = _first_body_row_index(expanded_rows)
     if first_body_index is None:
         return ParsedMatrixTable(
             header_cells=[],
@@ -114,15 +115,14 @@ def parse_matrix_table(snapshot: QuikStrikeMatrixTableSnapshot) -> ParsedMatrixT
             limitations=[],
         )
 
-    header_rows = rows[:first_body_index]
-    body_rows = rows[first_body_index:]
+    header_rows = expanded_rows[:first_body_index]
+    body_rows = expanded_rows[first_body_index:]
     column_contexts = _column_contexts(header_rows)
     header_cells = _header_cells(header_rows, column_contexts)
     body_cells: list[QuikStrikeMatrixBodyCell] = []
     warnings: list[str] = []
 
-    for body_row_index, row in enumerate(body_rows):
-        expanded = _expand_row(row)
+    for body_row_index, expanded in enumerate(body_rows):
         if not expanded:
             continue
         strike = parse_strike(expanded[0].text)
@@ -232,20 +232,18 @@ def _rows_from_snapshot(snapshot: QuikStrikeMatrixTableSnapshot) -> list[list[_R
 
 def _first_body_row_index(rows: list[list[_RawCell]]) -> int | None:
     for index, row in enumerate(rows):
-        expanded = _expand_row(row)
-        if expanded and parse_strike(expanded[0].text) is not None:
+        if row and parse_strike(row[0].text) is not None:
             return index
     return None
 
 
 def _column_contexts(header_rows: list[list[_RawCell]]) -> dict[int, _ColumnContext]:
-    expanded_rows = [_expand_row(row) for row in header_rows]
-    max_columns = max((len(row) for row in expanded_rows), default=0)
+    max_columns = max((len(row) for row in header_rows), default=0)
     contexts: dict[int, _ColumnContext] = {}
     for column_index in range(1, max_columns):
         header_texts = [
             row[column_index].text
-            for row in expanded_rows
+            for row in header_rows
             if column_index < len(row) and row[column_index].text
         ]
         context_texts = [
@@ -314,11 +312,38 @@ def _header_cells(
     return cells
 
 
-def _expand_row(row: list[_RawCell]) -> list[_RawCell]:
-    expanded: list[_RawCell] = []
-    for cell in row:
-        expanded.extend([cell] * cell.colspan)
-    return expanded
+def _expand_rows(rows: list[list[_RawCell]]) -> list[list[_RawCell]]:
+    expanded_rows: list[list[_RawCell]] = []
+    active_rowspans: dict[int, tuple[_RawCell, int]] = {}
+    for row in rows:
+        expanded: list[_RawCell] = []
+        next_rowspans: dict[int, tuple[_RawCell, int]] = {}
+        source_index = 0
+        column_index = 0
+        while source_index < len(row) or column_index <= max(active_rowspans, default=-1):
+            carried = active_rowspans.pop(column_index, None)
+            if carried is not None:
+                cell, remaining_rows = carried
+                expanded.append(cell)
+                if remaining_rows > 1:
+                    next_rowspans[column_index] = (cell, remaining_rows - 1)
+                column_index += 1
+                continue
+
+            if source_index >= len(row):
+                column_index += 1
+                continue
+
+            cell = row[source_index]
+            source_index += 1
+            for _ in range(cell.colspan):
+                expanded.append(cell)
+                if cell.rowspan > 1:
+                    next_rowspans[column_index] = (cell, cell.rowspan - 1)
+                column_index += 1
+        active_rowspans = next_rowspans
+        expanded_rows.append(expanded)
+    return expanded_rows
 
 
 def _option_type_from_text(value: str) -> QuikStrikeMatrixOptionType | None:
