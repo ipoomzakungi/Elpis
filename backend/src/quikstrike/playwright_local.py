@@ -6,9 +6,11 @@ not log in, does not replay endpoints, and does not persist browser/session data
 
 from __future__ import annotations
 
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 from src.models.quikstrike import (
     QuikStrikeExtractionReport,
@@ -24,6 +26,7 @@ from src.quikstrike.report_store import QuikStrikeReportStore
 
 DEFAULT_CDP_URL = "http://127.0.0.1:9222"
 DEFAULT_START_URL = "https://cmegroup-sso.quikstrike.net//User/QuikStrikeView.aspx?mode="
+DEFAULT_TARGET_URL = ""
 SUPPORTED_PAGE_TEXT = "QUIKOPTIONS VOL2VOL"
 
 VIEW_LINK_LABELS = {
@@ -32,6 +35,14 @@ VIEW_LINK_LABELS = {
     QuikStrikeViewType.OPEN_INTEREST: "OI",
     QuikStrikeViewType.OI_CHANGE: "OI Change",
     QuikStrikeViewType.CHURN: "Churn",
+}
+
+VIEW_MENU_PATHS = {
+    QuikStrikeViewType.INTRADAY_VOLUME: ("Volume", "Intraday"),
+    QuikStrikeViewType.EOD_VOLUME: ("Volume", "EOD"),
+    QuikStrikeViewType.OPEN_INTEREST: ("Open Interest", "OI"),
+    QuikStrikeViewType.OI_CHANGE: ("Open Interest", "OI Change"),
+    QuikStrikeViewType.CHURN: ("Open Interest", "Churn"),
 }
 
 HIGHCHARTS_SANITIZER_SCRIPT = """
@@ -158,11 +169,15 @@ def extract_from_cdp(
 def extract_from_launched_browser(
     *,
     start_url: str = DEFAULT_START_URL,
+    target_url: str = DEFAULT_TARGET_URL,
     views: Sequence[QuikStrikeViewType | str] | None = None,
     drive_views: bool = False,
+    manual_views: bool = False,
     wait_seconds: int = 600,
+    poll_seconds: int = 5,
     headless: bool = False,
     channel: str | None = "chrome",
+    debug_page_state: bool = False,
     store: QuikStrikeReportStore | None = None,
 ) -> QuikStrikeBrowserExtraction:
     """Launch a local browser window and wait for manual QuikStrike preparation.
@@ -173,7 +188,6 @@ def extract_from_launched_browser(
     """
 
     try:
-        from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
         from playwright.sync_api import sync_playwright
     except ImportError as exc:  # pragma: no cover - exercised without optional dep
         raise QuikStrikePlaywrightUnavailableError(
@@ -198,27 +212,34 @@ def extract_from_launched_browser(
             ) from exc
         page = browser.new_page()
         page.goto(start_url)
-        try:
-            page.wait_for_function(
-                """
-                () => {
-                  const text = document.body ? document.body.innerText : "";
-                  return /Gold\\s*\\(OG\\|GC\\)/i.test(text)
-                    && /QUIKOPTIONS|VOL2VOL|Intraday|Open Interest|Churn/i.test(text)
-                    && window.Highcharts
-                    && (window.Highcharts.charts || []).filter(Boolean).length > 0;
-                }
-                """,
-                timeout=max(wait_seconds, 1) * 1000,
-            )
-        except PlaywrightTimeoutError as exc:
+        ready_page = _wait_for_gold_vol2vol_page(
+            browser,
+            wait_seconds=wait_seconds,
+            poll_seconds=poll_seconds,
+            target_url=target_url,
+            auto_prepare=not manual_views,
+            debug_page_state=debug_page_state,
+        )
+        if ready_page is None:
             browser.close()
             raise QuikStrikeBrowserPageNotReadyError(
                 "Timed out waiting for manual QuikStrike login and Gold Vol2Vol "
                 "navigation. Keep the launched browser open, sign in manually, select "
                 "QUIKOPTIONS VOL2VOL, select Gold (OG|GC), and retry."
-            ) from exc
-        request = build_request_from_page(page, normalized_views, drive_views=drive_views)
+            )
+        if manual_views:
+            request = build_manual_request_from_page(
+                ready_page,
+                normalized_views,
+                wait_seconds=wait_seconds,
+                poll_seconds=poll_seconds,
+            )
+        else:
+            request = build_request_from_page(
+                ready_page,
+                normalized_views,
+                drive_views=drive_views,
+            )
         browser.close()
 
     extraction = build_extraction_from_request(request)
@@ -249,6 +270,28 @@ def build_request_from_page(
         if drive_views:
             _click_view(page, view)
         payloads[view] = collect_sanitized_page_payload(page)
+    return build_request_from_browser_payloads(payloads)
+
+
+def build_manual_request_from_page(
+    page: Any,
+    views: Sequence[QuikStrikeViewType | str] | None = None,
+    *,
+    wait_seconds: int = 600,
+    poll_seconds: int = 5,
+) -> QuikStrikeExtractionRequest:
+    """Wait for each view to be manually selected, then collect sanitized payloads."""
+
+    normalized_views = _normalize_views(views)
+    payloads: dict[QuikStrikeViewType, Mapping[str, Any]] = {}
+    for view in normalized_views:
+        ready_payload = _wait_for_manual_view(
+            page,
+            view,
+            wait_seconds=wait_seconds,
+            poll_seconds=poll_seconds,
+        )
+        payloads[view] = ready_payload
     return build_request_from_browser_payloads(payloads)
 
 
@@ -284,6 +327,24 @@ def build_request_from_browser_payloads(
     )
 
 
+def _wait_for_manual_view(
+    page: Any,
+    view: QuikStrikeViewType,
+    *,
+    wait_seconds: int,
+    poll_seconds: int,
+) -> Mapping[str, Any]:
+    deadline = time.monotonic() + max(wait_seconds, 1)
+    poll_ms = max(poll_seconds, 1) * 1000
+    while time.monotonic() < deadline:
+        if _page_payload_matches_view(page, view):
+            return collect_sanitized_page_payload(page)
+        page.wait_for_timeout(poll_ms)
+    raise QuikStrikeBrowserPageNotReadyError(
+        f"Timed out waiting for manual selection of QuikStrike view {view.value}."
+    )
+
+
 def collect_sanitized_page_payload(page: Any) -> Mapping[str, Any]:
     """Read only visible text and sanitized Highcharts series from a Playwright page."""
 
@@ -292,6 +353,29 @@ def collect_sanitized_page_payload(page: Any) -> Mapping[str, Any]:
         raise ValueError("QuikStrike page extraction returned an invalid payload shape")
     ensure_no_forbidden_quikstrike_content(dict(payload))
     return payload
+
+
+def page_has_gold_vol2vol_highcharts(page: Any) -> bool:
+    """Return whether a page is the manually prepared Gold Vol2Vol chart page."""
+
+    try:
+        payload = collect_sanitized_page_payload(page)
+    except Exception:
+        return False
+    page_text = " ".join(
+        [
+            str(payload.get("header_text") or ""),
+            str(payload.get("selector_text") or ""),
+        ]
+    )
+    charts = payload.get("charts")
+    return (
+        "Gold" in page_text
+        and "OG|GC" in page_text
+        and isinstance(charts, Sequence)
+        and not isinstance(charts, (str, bytes, bytearray))
+        and bool(charts)
+    )
 
 
 def select_chart_payload(charts: Any, view: QuikStrikeViewType | str) -> Mapping[str, Any]:
@@ -322,6 +406,413 @@ def select_chart_payload(charts: Any, view: QuikStrikeViewType | str) -> Mapping
     return best
 
 
+def _wait_for_gold_vol2vol_page(
+    browser: Any,
+    *,
+    wait_seconds: int,
+    poll_seconds: int,
+    target_url: str,
+    auto_prepare: bool,
+    debug_page_state: bool,
+) -> Any | None:
+    deadline = time.monotonic() + max(wait_seconds, 1)
+    poll_ms = max(poll_seconds, 1) * 1000
+    last_page = None
+    while time.monotonic() < deadline:
+        for context in browser.contexts:
+            for page in context.pages:
+                last_page = page
+                if debug_page_state:
+                    _print_page_state(page, "poll")
+                if _continue_disclaimer_if_present(page):
+                    if debug_page_state:
+                        _print_page_state(page, "continued_disclaimer")
+                    continue
+                if page_has_gold_vol2vol_highcharts(page):
+                    if debug_page_state:
+                        _print_page_state(page, "ready")
+                    return page
+        if auto_prepare:
+            _prepare_gold_vol2vol_from_mode(
+                browser,
+                target_url,
+                debug_page_state=debug_page_state,
+            )
+        elif debug_page_state and last_page is not None:
+            _print_page_state(last_page, "waiting_manual")
+        if last_page is not None:
+            last_page.wait_for_timeout(poll_ms)
+        else:
+            time.sleep(max(poll_seconds, 1))
+    return None
+
+
+def _prepare_gold_vol2vol_from_mode(
+    browser: Any,
+    target_url: str,
+    *,
+    debug_page_state: bool,
+) -> None:
+    for context in browser.contexts:
+        for page in context.pages:
+            if _continue_disclaimer_if_present(page):
+                if debug_page_state:
+                    _print_page_state(page, "continued_disclaimer")
+                continue
+            try:
+                current_url = page.url
+            except Exception:
+                continue
+            if (
+                target_url
+                and "cmegroup-sso.quikstrike.net" in current_url
+                and "QuikStrikeView.aspx?mode=" in current_url
+            ):
+                try:
+                    page.goto(target_url)
+                except Exception:
+                    continue
+            if (
+                "cmegroup-sso.quikstrike.net" in current_url
+                and "QuikStrikeView.aspx?mode=" in current_url
+            ):
+                if debug_page_state:
+                    _print_page_state(page, "mode_page")
+                if not _page_is_vol2vol_surface(page):
+                    _click_quikoptions_vol2vol(page)
+                    if debug_page_state:
+                        _print_page_state(page, "clicked_vol2vol")
+                page.wait_for_timeout(750)
+                _select_gold_product(page, debug_page_state=debug_page_state)
+                if debug_page_state:
+                    _print_page_state(page, "after_product_attempt")
+
+
+def _print_page_state(page: Any, stage: str) -> None:
+    try:
+        current_url = page.url
+        parsed = urlparse(current_url)
+        query_keys = sorted(parse_qs(parsed.query).keys())
+        title = page.title()
+        labels = _visible_debug_labels(page)
+    except Exception as exc:
+        print(f"[quikstrike:{stage}] page-state unavailable: {exc}", flush=True)
+        return
+    print(
+        {
+            "stage": stage,
+            "host": parsed.netloc,
+            "path": parsed.path,
+            "query_keys": query_keys,
+            "title": title,
+            "labels": labels,
+        },
+        flush=True,
+    )
+
+
+def _visible_debug_labels(page: Any) -> list[str]:
+    try:
+        labels = page.evaluate(
+            """
+            () => {
+              const clean = (value) => String(value || "").replace(/\\s+/g, " ").trim();
+              const visible = (node) => {
+                const style = window.getComputedStyle(node);
+                const rect = node.getBoundingClientRect();
+                return style && style.visibility !== "hidden" && style.display !== "none"
+                  && rect.width > 0 && rect.height > 0;
+              };
+              const pattern = new RegExp(
+                "vol2vol|quik|product|gold|corn|metals|volume|open interest|"
+                + "churn|eod|intraday",
+                "i"
+              );
+              return Array.from(document.querySelectorAll("a,button,span,div,li,select,option"))
+                .filter((node) => visible(node))
+                .map((node) => clean(node.innerText || node.textContent || node.value))
+                .filter((text) => text && text.length <= 100 && pattern.test(text))
+                .slice(0, 40);
+            }
+            """
+        )
+    except Exception:
+        return []
+    return [str(label) for label in labels if label]
+
+
+def _page_is_vol2vol_surface(page: Any) -> bool:
+    return _page_text_matches_any(page, ("QUIKOPTIONS VOL2VOL", "Vol2Vol", "VOL2VOL"))
+
+
+def _click_quikoptions_vol2vol(page: Any) -> None:
+    if _click_exact_selector(page, "#ctl00_ucMenuBar_lvMenuBar_ctrl7_lbMenuItem"):
+        page.wait_for_timeout(1500)
+        return
+    if _click_vol2vol_nav_item(page):
+        page.wait_for_timeout(750)
+        return
+    for label in ("QUIKOPTIONS VOL2VOL", "QuikOptions Vol2Vol", "VOL2VOL", "Vol2Vol"):
+        if _click_visible_text(page, label):
+            page.wait_for_timeout(750)
+            return
+    for opener in ("Options Info", "Options", "QuikStrike"):
+        if _click_visible_text(page, opener):
+            page.wait_for_timeout(500)
+            if _click_vol2vol_nav_item(page):
+                page.wait_for_timeout(750)
+                return
+
+
+def _click_vol2vol_nav_item(page: Any) -> bool:
+    try:
+        return bool(
+            page.evaluate(
+                """
+                () => {
+                  const clean = (value) => String(value || "").replace(/\\s+/g, " ").trim();
+                  const visible = (node) => {
+                    const style = window.getComputedStyle(node);
+                    const rect = node.getBoundingClientRect();
+                    return style && style.visibility !== "hidden" && style.display !== "none"
+                      && rect.width > 0 && rect.height > 0;
+                  };
+                  const nodes = Array.from(document.querySelectorAll("a,button,[role='tab']"));
+                  const match = nodes.find((node) => {
+                    const text = clean(node.innerText || node.textContent).toLowerCase();
+                    return text.includes("vol2vol") && visible(node);
+                  });
+                  if (!match) return false;
+                  match.click();
+                  return true;
+                }
+                """
+            )
+        )
+    except Exception:
+        return False
+
+
+def _select_gold_product(page: Any, *, debug_page_state: bool = False) -> None:
+    if _page_text_contains(page, "Gold (OG|GC)"):
+        return
+    if _select_native_gold_option(page):
+        page.wait_for_timeout(1500)
+        return
+    _open_product_selector(page, debug_page_state=debug_page_state)
+    page.wait_for_timeout(500)
+    _click_product_selector_link(page, ".groups .items a[groupid='6']")
+    page.wait_for_timeout(500)
+    _click_product_selector_link(page, ".families .items a[familyid='6']")
+    page.wait_for_timeout(500)
+    if _click_product_selector_link(page, ".products .items a[title='Gold']"):
+        page.wait_for_load_state("load")
+        page.wait_for_timeout(1500)
+        return
+    if _click_product_selector_link(page, ".products .items a[href*='pid=40'][href*='pf=6']"):
+        page.wait_for_load_state("load")
+        page.wait_for_timeout(1500)
+        return
+    for label in ("Metals", "Precious Metals", "Gold (OG|GC)", "Gold"):
+        if _page_text_contains(page, "Gold (OG|GC)"):
+            return
+        _click_visible_text(page, label)
+        page.wait_for_timeout(500)
+
+
+def _open_product_selector(page: Any, *, debug_page_state: bool = False) -> bool:
+    if _click_exact_selector(page, "#ctl11_hlProductArrow"):
+        if debug_page_state:
+            print({"stage": "product_selector", "result": "clicked_product_arrow"}, flush=True)
+        return True
+    try:
+        result = page.evaluate(
+                """
+                () => {
+                  const clean = (value) => String(value || "").replace(/\\s+/g, " ").trim();
+                  const summary = (node) => ({
+                    tag: node.tagName,
+                    id: node.id || "",
+                    className: String(node.className || "").slice(0, 80),
+                    text: clean(node.innerText || node.textContent).slice(0, 80),
+                    onclick: Boolean(node.onclick || node.getAttribute("onclick")),
+                    role: node.getAttribute("role") || "",
+                  });
+                  const visible = (node) => {
+                    const style = window.getComputedStyle(node);
+                    const rect = node.getBoundingClientRect();
+                    return style && style.visibility !== "hidden" && style.display !== "none"
+                      && rect.width > 0 && rect.height > 0;
+                  };
+                  const nodes = Array.from(document.querySelectorAll("a,button,span,div"));
+                  const candidates = nodes
+                    .filter((node) => visible(node))
+                    .map((node) => ({ node, text: clean(node.innerText || node.textContent) }))
+                    .filter((item) => (
+                      /corn\\s*\\(ozc\\|zc\\)/i.test(item.text)
+                      || /product/i.test(item.text)
+                      || /\\([A-Z0-9|]{3,}\\)/.test(item.text)
+                    ))
+                    .sort((a, b) => {
+                      const score = (item) => /corn\\s*\\(ozc\\|zc\\)/i.test(item.text) ? 0 : 1;
+                      return score(a) - score(b) || a.text.length - b.text.length;
+                    });
+                  const match = candidates[0];
+                  if (!match) return { clicked: false, candidates: [] };
+                  let clickable = match.node.closest("a,button,[role='button']");
+                  let cursor = match.node;
+                  const ancestors = [];
+                  for (let i = 0; !clickable && cursor && i < 8; i += 1) {
+                    ancestors.push(summary(cursor));
+                    const style = window.getComputedStyle(cursor);
+                    if (
+                      cursor.onclick
+                      || cursor.getAttribute("onclick")
+                      || style.cursor === "pointer"
+                      || cursor.getAttribute("role") === "button"
+                    ) {
+                      clickable = cursor;
+                      break;
+                    }
+                    cursor = cursor.parentElement;
+                  }
+                  clickable = clickable || match.node.parentElement || match.node;
+                  clickable.click();
+                  return {
+                    clicked: true,
+                    match: summary(match.node),
+                    clickable: summary(clickable),
+                    ancestors,
+                    candidates: candidates.slice(0, 8).map((item) => summary(item.node)),
+                  };
+                }
+                """
+        )
+        if debug_page_state:
+            print({"stage": "product_selector", "result": result}, flush=True)
+        return bool(result.get("clicked") if isinstance(result, Mapping) else result)
+    except Exception:
+        return False
+
+
+def _click_product_selector_link(page: Any, selector: str) -> bool:
+    try:
+        return bool(
+            page.evaluate(
+                """
+                (selector) => {
+                  const item = document.querySelector(selector);
+                  if (!item) return false;
+                  item.click();
+                  return true;
+                }
+                """,
+                selector,
+            )
+        )
+    except Exception:
+        return False
+
+
+def _click_exact_selector(page: Any, selector: str) -> bool:
+    try:
+        return bool(
+            page.evaluate(
+                """
+                (selector) => {
+                  const item = document.querySelector(selector);
+                  if (!item) return false;
+                  item.click();
+                  return true;
+                }
+                """,
+                selector,
+            )
+        )
+    except Exception:
+        return False
+
+
+def _select_native_gold_option(page: Any) -> bool:
+    try:
+        return bool(
+            page.evaluate(
+                """
+                () => {
+                  for (const select of Array.from(document.querySelectorAll("select"))) {
+                    const option = Array.from(select.options || []).find((item) => (
+                      /Gold\\s*\\(OG\\|GC\\)|\\bGold\\b/i.test(item.text || item.label || "")
+                    ));
+                    if (!option) continue;
+                    select.value = option.value;
+                    select.dispatchEvent(new Event("input", { bubbles: true }));
+                    select.dispatchEvent(new Event("change", { bubbles: true }));
+                    return true;
+                  }
+                  return false;
+                }
+                """
+            )
+        )
+    except Exception:
+        return False
+
+
+def _page_text_contains(page: Any, text: str) -> bool:
+    return _page_text_matches_any(page, (text,))
+
+
+def _page_text_matches_any(page: Any, texts: Sequence[str]) -> bool:
+    try:
+        return bool(
+            page.evaluate(
+                """
+                (texts) => {
+                  const body = document.body ? document.body.innerText : "";
+                  const normalizedBody = body.toLowerCase();
+                  return texts.some((text) => normalizedBody.includes(String(text).toLowerCase()));
+                }
+                """,
+                list(texts),
+            )
+        )
+    except Exception:
+        return False
+
+
+def _continue_disclaimer_if_present(page: Any) -> bool:
+    try:
+        current_url = page.url
+    except Exception:
+        return False
+    if "Disclaimer.aspx" not in current_url:
+        return False
+    try:
+        return bool(
+            page.evaluate(
+                """
+                () => {
+                  const checkbox = document.querySelector(
+                    'input[name="chkAccept"], input[type="checkbox"]'
+                  );
+                  if (checkbox && !checkbox.checked) {
+                    checkbox.checked = true;
+                    checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+                  }
+                  const submit = document.querySelector(
+                    'input[name="btnContinue"], input[type="submit"], button[type="submit"]'
+                  );
+                  if (!submit) return false;
+                  submit.click();
+                  return true;
+                }
+                """
+            )
+        )
+    except Exception:
+        return False
+
+
 def _find_gold_vol2vol_page(browser: Any) -> Any:
     for context in browser.contexts:
         for page in context.pages:
@@ -344,10 +835,73 @@ def _find_gold_vol2vol_page(browser: Any) -> Any:
 
 
 def _click_view(page: Any, view: QuikStrikeViewType) -> None:
-    label = VIEW_LINK_LABELS[view]
-    page.get_by_role("link", name=label, exact=True).click()
-    page.wait_for_load_state("load")
+    if _page_payload_matches_view(page, view):
+        return
+    parent_label, child_label = VIEW_MENU_PATHS[view]
+    _click_visible_text(page, parent_label)
+    page.wait_for_timeout(500)
+    clicked = _click_visible_text(page, child_label)
+    if not clicked and child_label != VIEW_LINK_LABELS[view]:
+        clicked = _click_visible_text(page, VIEW_LINK_LABELS[view])
+    if not clicked:
+        raise QuikStrikeBrowserPageNotReadyError(
+            f"Could not find a visible QuikStrike view control for {view.value}."
+        )
     page.wait_for_timeout(1500)
+
+
+def _click_visible_text(page: Any, label: str) -> bool:
+    return bool(
+        page.evaluate(
+            """
+            (label) => {
+              const clean = (value) => String(value || "").replace(/\\s+/g, " ").trim();
+              const visible = (node) => {
+                const style = window.getComputedStyle(node);
+                const rect = node.getBoundingClientRect();
+                return style && style.visibility !== "hidden" && style.display !== "none"
+                  && rect.width > 0 && rect.height > 0;
+              };
+              const labels = label === "OI" ? ["OI", "Open Interest"] : [label];
+              const target = (value) => clean(value).toLowerCase();
+              const nodes = Array.from(document.querySelectorAll("a,button,span,div,li"));
+              for (const wanted of labels) {
+                const wantedText = target(wanted);
+                const exact = nodes.find((node) => (
+                  target(node.innerText || node.textContent) === wantedText && visible(node)
+                ));
+                if (exact) {
+                  exact.click();
+                  return true;
+                }
+              }
+              for (const wanted of labels) {
+                const wantedText = target(wanted);
+                const partial = nodes.find((node) => {
+                  const text = clean(node.innerText || node.textContent);
+                  return text.length <= 80 && target(text).includes(wantedText) && visible(node);
+                });
+                if (partial) {
+                  partial.click();
+                  return true;
+                }
+              }
+              return false;
+            }
+            """,
+            label,
+        )
+    )
+
+
+def _page_payload_matches_view(page: Any, view: QuikStrikeViewType) -> bool:
+    try:
+        payload = collect_sanitized_page_payload(page)
+        chart = select_chart_payload(payload.get("charts"), view)
+    except Exception:
+        return False
+    title = str(chart.get("chart_title") or "").lower()
+    return _view_title_token(view) in title
 
 
 def _normalize_views(

@@ -107,7 +107,16 @@ opened by Playwright, but login and product navigation are still manual:
 
 ```powershell
 cd backend
-python scripts/quikstrike_playwright_extract.py --mode launch --drive-views --wait-seconds 600
+python scripts/quikstrike_playwright_extract.py --mode launch --drive-views --wait-seconds 600 --poll-seconds 5
+```
+
+If QuikStrike's menus do not expose stable controls, use Playwright-managed
+manual view capture. The browser is still owned by Python, but you click each
+view yourself; the script captures each view when it appears:
+
+```powershell
+cd backend
+python scripts/quikstrike_playwright_extract.py --mode launch --manual-views --wait-seconds 900 --poll-seconds 5
 ```
 
 Optional non-secret local settings may live in ignored `.env.quikstrike.local`:
@@ -115,7 +124,9 @@ Optional non-secret local settings may live in ignored `.env.quikstrike.local`:
 ```text
 QUIKSTRIKE_MODE=launch
 QUIKSTRIKE_WAIT_SECONDS=600
+QUIKSTRIKE_POLL_SECONDS=5
 QUIKSTRIKE_DRIVE_VIEWS=true
+QUIKSTRIKE_MANUAL_VIEWS=false
 QUIKSTRIKE_BROWSER_CHANNEL=chrome
 ```
 

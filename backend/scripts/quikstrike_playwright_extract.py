@@ -10,6 +10,7 @@ from src.models.quikstrike import QuikStrikeViewType
 from src.quikstrike.playwright_local import (
     DEFAULT_CDP_URL,
     DEFAULT_START_URL,
+    DEFAULT_TARGET_URL,
     QuikStrikeBrowserLaunchError,
     QuikStrikeBrowserPageNotReadyError,
     QuikStrikeCdpConnectionError,
@@ -58,6 +59,11 @@ def main() -> int:
         help="Public QuikStrike start URL. Do not include private/session query values.",
     )
     parser.add_argument(
+        "--target-url",
+        default=env.get("QUIKSTRIKE_TARGET_URL", DEFAULT_TARGET_URL),
+        help="Known Gold Vol2Vol browser URL used after manual login reaches the mode page.",
+    )
+    parser.add_argument(
         "--view",
         action="append",
         choices=[view.value for view in QuikStrikeViewType],
@@ -71,10 +77,22 @@ def main() -> int:
         help="Click supported Vol2Vol view tabs after the user has logged in and selected Gold.",
     )
     parser.add_argument(
+        "--manual-views",
+        action="store_true",
+        default=_env_bool(env.get("QUIKSTRIKE_MANUAL_VIEWS")),
+        help="Wait for the user to manually select each requested view before capture.",
+    )
+    parser.add_argument(
         "--wait-seconds",
         type=int,
         default=int(env.get("QUIKSTRIKE_WAIT_SECONDS", "600")),
         help="Launch mode wait time for manual login and Gold Vol2Vol navigation.",
+    )
+    parser.add_argument(
+        "--poll-seconds",
+        type=int,
+        default=int(env.get("QUIKSTRIKE_POLL_SECONDS", "5")),
+        help="Launch mode polling interval while waiting for manual navigation.",
     )
     parser.add_argument(
         "--browser-channel",
@@ -87,17 +105,27 @@ def main() -> int:
         default=_env_bool(env.get("QUIKSTRIKE_HEADLESS")),
         help="For fixture/debug use only. Manual QuikStrike login normally needs headed mode.",
     )
+    parser.add_argument(
+        "--debug-page-state",
+        action="store_true",
+        default=_env_bool(env.get("QUIKSTRIKE_DEBUG_PAGE_STATE")),
+        help="Print sanitized visible QuikStrike page state while polling.",
+    )
     args = parser.parse_args()
 
     try:
         if args.mode == "launch":
             extraction = extract_from_launched_browser(
                 start_url=args.start_url,
+                target_url=args.target_url,
                 views=args.view,
                 drive_views=args.drive_views,
+                manual_views=args.manual_views,
                 wait_seconds=args.wait_seconds,
+                poll_seconds=args.poll_seconds,
                 headless=args.headless,
                 channel=args.browser_channel,
+                debug_page_state=args.debug_page_state,
             )
         else:
             extraction = extract_from_cdp(
