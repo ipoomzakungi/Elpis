@@ -5,6 +5,9 @@ param(
 Set-StrictMode -Version Latest
 
 $GeneratedArtifactDeniedPaths = @(
+    "data/raw/quikstrike/",
+    "data/processed/quikstrike/",
+    "data/reports/quikstrike/",
     "data/raw/",
     "data/processed/",
     "data/reports/",

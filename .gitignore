@@ -30,6 +30,9 @@ ENV/
 .env.*.local
 
 # Data files (large, not for git)
+data/raw/quikstrike/
+data/processed/quikstrike/
+data/reports/quikstrike/
 data/raw/
 data/processed/
 data/reports/
@@ -40,6 +43,7 @@ backend/data/processed/
 backend/data/reports/
 backend/data/*.duckdb
 backend/data/*.duckdb.wal
+docs/research_private/
 
 # Node.js
 node_modules/

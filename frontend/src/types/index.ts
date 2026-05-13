@@ -1285,6 +1285,159 @@ export interface XauReactionDashboardData {
   riskPlan: XauRiskPlanRowsResponse;
 }
 
+export type QuikStrikeViewType =
+  | 'intraday_volume'
+  | 'eod_volume'
+  | 'open_interest'
+  | 'oi_change'
+  | 'churn';
+export type QuikStrikeStatus = 'completed' | 'partial' | 'blocked' | 'failed';
+export type QuikStrikeConversionStatus = 'completed' | 'blocked' | 'failed';
+export type QuikStrikeStrikeMappingConfidence = 'high' | 'partial' | 'conflict' | 'unknown';
+
+export interface QuikStrikeStrikeMapping {
+  confidence: QuikStrikeStrikeMappingConfidence;
+  method: string;
+  matched_point_count: number;
+  unmatched_point_count: number;
+  conflict_count: number;
+  evidence: string[];
+  warnings: string[];
+  limitations: string[];
+}
+
+export interface QuikStrikeArtifact {
+  artifact_type: string;
+  path: string;
+  format: string;
+  rows: number | null;
+  created_at: string;
+  limitations: string[];
+}
+
+export interface QuikStrikeExtractionSummary {
+  extraction_id: string;
+  status: QuikStrikeStatus;
+  created_at: string;
+  completed_at: string | null;
+  requested_view_count: number;
+  completed_view_count: number;
+  missing_view_count: number;
+  row_count: number;
+  strike_mapping_confidence: QuikStrikeStrikeMappingConfidence;
+  conversion_eligible: boolean;
+  conversion_status: QuikStrikeConversionStatus | null;
+  artifact_count: number;
+  warning_count: number;
+  limitation_count: number;
+}
+
+export interface QuikStrikeExtractionListResponse {
+  extractions: QuikStrikeExtractionSummary[];
+}
+
+export interface QuikStrikeViewSummary {
+  view_type: QuikStrikeViewType;
+  row_count: number;
+  put_row_count: number;
+  call_row_count: number;
+}
+
+export interface QuikStrikeConversionResult {
+  conversion_id: string;
+  extraction_id: string;
+  status: QuikStrikeConversionStatus;
+  row_count: number;
+  output_artifacts: QuikStrikeArtifact[];
+  blocked_reasons: string[];
+  warnings: string[];
+  limitations: string[];
+}
+
+export interface QuikStrikeExtractionReport {
+  extraction_id: string;
+  status: QuikStrikeStatus;
+  created_at: string;
+  completed_at: string | null;
+  request_summary: {
+    requested_views?: QuikStrikeViewType[];
+    completed_views?: QuikStrikeViewType[];
+    partial_views?: QuikStrikeViewType[];
+    missing_views?: QuikStrikeViewType[];
+    conversion_eligible?: boolean;
+  };
+  view_summaries: QuikStrikeViewSummary[];
+  row_count: number;
+  strike_mapping: QuikStrikeStrikeMapping;
+  conversion_result: QuikStrikeConversionResult | null;
+  artifacts: QuikStrikeArtifact[];
+  warnings: string[];
+  limitations: string[];
+  research_only_warnings: string[];
+}
+
+export interface QuikStrikeNormalizedRow {
+  row_id: string;
+  extraction_id: string;
+  capture_timestamp: string;
+  product: string;
+  option_product_code: string;
+  futures_symbol: string | null;
+  expiration: string | null;
+  dte: number | null;
+  future_reference_price: number | null;
+  view_type: QuikStrikeViewType;
+  strike: number;
+  strike_id: string | null;
+  option_type: 'put' | 'call';
+  value: number;
+  value_type: string;
+  vol_settle: number | null;
+  range_label: string | null;
+  sigma_label: string | null;
+  source_view: string;
+  strike_mapping_confidence: QuikStrikeStrikeMappingConfidence;
+  extraction_warnings: string[];
+  extraction_limitations: string[];
+}
+
+export interface QuikStrikeRowsResponse {
+  extraction_id: string;
+  rows: QuikStrikeNormalizedRow[];
+}
+
+export interface QuikStrikeXauVolOiRow {
+  timestamp: string;
+  expiry: string;
+  strike: number;
+  option_type: 'put' | 'call';
+  open_interest: number | null;
+  oi_change: number | null;
+  volume: number | null;
+  intraday_volume: number | null;
+  eod_volume: number | null;
+  churn: number | null;
+  implied_volatility: number | null;
+  underlying_futures_price: number | null;
+  dte: number | null;
+  source: string;
+  source_view: string;
+  source_extraction_id: string;
+  limitations: string[];
+}
+
+export interface QuikStrikeConversionRowsResponse {
+  extraction_id: string;
+  conversion_result: QuikStrikeConversionResult | null;
+  rows: QuikStrikeXauVolOiRow[];
+}
+
+export interface QuikStrikeDashboardData {
+  report: QuikStrikeExtractionReport;
+  rows: QuikStrikeRowsResponse;
+  conversion: QuikStrikeConversionRowsResponse;
+}
+
 export type FreeDerivativesSource =
   | 'cftc_cot'
   | 'gvz'

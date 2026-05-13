@@ -410,5 +410,5 @@ After smoke test passes:
 - report files changed, commands run, results, commit hash, and remaining risks.
 
 <!-- SPECKIT START -->
-Active Speckit plan: specs/011-free-public-derivatives-data-expansion/plan.md
+Active Speckit plan: specs/012-quikstrike-local-highcharts-extractor/plan.md
 <!-- SPECKIT END -->
