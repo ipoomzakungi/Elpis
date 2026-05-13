@@ -102,6 +102,26 @@ cd backend
 python scripts/quikstrike_playwright_extract.py --cdp-url http://127.0.0.1:9222 --drive-views
 ```
 
+If you do not want to manage a browser profile, use launch mode. The browser is
+opened by Playwright, but login and product navigation are still manual:
+
+```powershell
+cd backend
+python scripts/quikstrike_playwright_extract.py --mode launch --drive-views --wait-seconds 600
+```
+
+Optional non-secret local settings may live in ignored `.env.quikstrike.local`:
+
+```text
+QUIKSTRIKE_MODE=launch
+QUIKSTRIKE_WAIT_SECONDS=600
+QUIKSTRIKE_DRIVE_VIEWS=true
+QUIKSTRIKE_BROWSER_CHANNEL=chrome
+```
+
+Do not add usernames, passwords, cookies, session values, headers, HAR files,
+viewstate values, or private full URLs to any `.env` file.
+
 Expected behavior:
 
 - The extractor reads sanitized visible DOM metadata.

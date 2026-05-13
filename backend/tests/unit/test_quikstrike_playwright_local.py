@@ -1,3 +1,4 @@
+from scripts.quikstrike_playwright_extract import _load_env_file
 from src.models.quikstrike import QuikStrikeViewType
 from src.quikstrike.playwright_local import (
     QuikStrikeCdpConnectionError,
@@ -54,6 +55,37 @@ def test_cdp_connection_error_has_manual_browser_guidance():
 
     assert "Chrome" in str(error)
     assert "debugging port" in str(error)
+
+
+def test_env_file_loader_accepts_non_secret_local_settings(tmp_path):
+    env_file = tmp_path / ".env.quikstrike.local"
+    env_file.write_text(
+        "\n".join(
+            [
+                "QUIKSTRIKE_MODE=launch",
+                "QUIKSTRIKE_WAIT_SECONDS=30",
+                "QUIKSTRIKE_DRIVE_VIEWS=true",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    loaded = _load_env_file(env_file)
+
+    assert loaded["QUIKSTRIKE_MODE"] == "launch"
+    assert loaded["QUIKSTRIKE_WAIT_SECONDS"] == "30"
+
+
+def test_env_file_loader_rejects_credentials(tmp_path):
+    env_file = tmp_path / ".env.quikstrike.local"
+    env_file.write_text("QUIKSTRIKE_PASSWORD=not-allowed\n", encoding="utf-8")
+
+    try:
+        _load_env_file(env_file)
+    except ValueError as exc:
+        assert "credential/session key" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("credential-bearing env file was accepted")
 
 
 def _payload(view_label: str) -> dict:

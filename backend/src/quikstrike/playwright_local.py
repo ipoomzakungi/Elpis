@@ -23,6 +23,7 @@ from src.quikstrike.highcharts_reader import parse_highcharts_chart
 from src.quikstrike.report_store import QuikStrikeReportStore
 
 DEFAULT_CDP_URL = "http://127.0.0.1:9222"
+DEFAULT_START_URL = "https://cmegroup-sso.quikstrike.net//User/QuikStrikeView.aspx?mode="
 SUPPORTED_PAGE_TEXT = "QUIKOPTIONS VOL2VOL"
 
 VIEW_LINK_LABELS = {
@@ -103,6 +104,10 @@ class QuikStrikeCdpConnectionError(RuntimeError):
     """Raised when the user-controlled browser debugging endpoint is unavailable."""
 
 
+class QuikStrikeBrowserLaunchError(RuntimeError):
+    """Raised when Playwright cannot launch a local visible browser."""
+
+
 def extract_from_cdp(
     *,
     cdp_url: str = DEFAULT_CDP_URL,
@@ -135,6 +140,86 @@ def extract_from_cdp(
             ) from exc
         page = _find_gold_vol2vol_page(browser)
         request = build_request_from_page(page, normalized_views, drive_views=drive_views)
+
+    extraction = build_extraction_from_request(request)
+    conversion = convert_to_xau_vol_oi_rows(
+        extraction_result=extraction.result,
+        rows=extraction.rows,
+    )
+    report = (store or QuikStrikeReportStore()).persist_report(
+        extraction_result=extraction.result,
+        normalized_rows=extraction.rows,
+        conversion_result=conversion.result,
+        conversion_rows=conversion.rows,
+    )
+    return QuikStrikeBrowserExtraction(report=report, request=request)
+
+
+def extract_from_launched_browser(
+    *,
+    start_url: str = DEFAULT_START_URL,
+    views: Sequence[QuikStrikeViewType | str] | None = None,
+    drive_views: bool = False,
+    wait_seconds: int = 600,
+    headless: bool = False,
+    channel: str | None = "chrome",
+    store: QuikStrikeReportStore | None = None,
+) -> QuikStrikeBrowserExtraction:
+    """Launch a local browser window and wait for manual QuikStrike preparation.
+
+    This opens a visible browser, but authentication and product navigation remain
+    user-controlled. The function reads only sanitized DOM and Highcharts memory
+    after the Gold Vol2Vol page is available.
+    """
+
+    try:
+        from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+        from playwright.sync_api import sync_playwright
+    except ImportError as exc:  # pragma: no cover - exercised without optional dep
+        raise QuikStrikePlaywrightUnavailableError(
+            "Install the optional browser dependency with: pip install -e .[browser]"
+        ) from exc
+
+    normalized_views = _normalize_views(views)
+    with sync_playwright() as playwright:
+        try:
+            try:
+                browser = playwright.chromium.launch(
+                    channel=channel,
+                    headless=headless,
+                )
+            except Exception:
+                browser = playwright.chromium.launch(headless=headless)
+        except Exception as exc:
+            raise QuikStrikeBrowserLaunchError(
+                "Could not launch a local Playwright browser. Install a browser with "
+                "`python -m playwright install chromium` or use an installed Chrome "
+                "channel, then retry."
+            ) from exc
+        page = browser.new_page()
+        page.goto(start_url)
+        try:
+            page.wait_for_function(
+                """
+                () => {
+                  const text = document.body ? document.body.innerText : "";
+                  return /Gold\\s*\\(OG\\|GC\\)/i.test(text)
+                    && /QUIKOPTIONS|VOL2VOL|Intraday|Open Interest|Churn/i.test(text)
+                    && window.Highcharts
+                    && (window.Highcharts.charts || []).filter(Boolean).length > 0;
+                }
+                """,
+                timeout=max(wait_seconds, 1) * 1000,
+            )
+        except PlaywrightTimeoutError as exc:
+            browser.close()
+            raise QuikStrikeBrowserPageNotReadyError(
+                "Timed out waiting for manual QuikStrike login and Gold Vol2Vol "
+                "navigation. Keep the launched browser open, sign in manually, select "
+                "QUIKOPTIONS VOL2VOL, select Gold (OG|GC), and retry."
+            ) from exc
+        request = build_request_from_page(page, normalized_views, drive_views=drive_views)
+        browser.close()
 
     extraction = build_extraction_from_request(request)
     conversion = convert_to_xau_vol_oi_rows(
