@@ -75,7 +75,7 @@ class _TableParser(HTMLParser):
         if normalized in {"th", "td"} and self._current_tag is not None:
             colspan = _safe_span(self._current_attrs.get("colspan"))
             rowspan = _safe_span(self._current_attrs.get("rowspan"))
-            text = " ".join("".join(self._current_text).split())
+            text = " ".join(" ".join(self._current_text).split())
             self._current_row.append(
                 _RawCell(
                     text=text,
@@ -129,6 +129,8 @@ def parse_matrix_table(snapshot: QuikStrikeMatrixTableSnapshot) -> ParsedMatrixT
         if strike is None:
             continue
         for column_index, raw_cell in enumerate(expanded[1:], start=1):
+            if raw_cell is expanded[0]:
+                continue
             context = column_contexts.get(column_index)
             if context is None:
                 warnings.append(f"No expiration header mapped for column {column_index}.")
@@ -186,9 +188,10 @@ def parse_numeric_cell(value: str | None) -> tuple[float | None, QuikStrikeMatri
 
 
 def parse_expiration_from_header(value: str) -> str | None:
-    match = EXPIRATION_CODE_PATTERN.search(value)
-    if match:
-        return match.group(0).upper()
+    matches = [match.group(0).upper() for match in EXPIRATION_CODE_PATTERN.finditer(value)]
+    for match in matches:
+        if parse_futures_symbol_from_header(match) != match:
+            return match
     date_match = re.search(r"\b\d{1,2}\s+[A-Z][a-z]{2}\s+\d{4}\b", value)
     if date_match:
         return date_match.group(0)

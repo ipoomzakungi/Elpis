@@ -85,6 +85,42 @@ def test_header_rowspans_preserve_expiration_and_call_put_columns():
     ]
 
 
+def test_live_like_matrix_spans_parse_expiration_dte_and_skip_strike_colspan():
+    parsed = parse_matrix_table(
+        QuikStrikeMatrixTableSnapshot(
+            view_type=QuikStrikeMatrixViewType.OPEN_INTEREST_MATRIX,
+            html_table=(
+                "<table><tbody>"
+                "<tr><th colspan='2'></th>"
+                "<th colspan='2'><span title='DTE 44 (6/26/2026)'>"
+                "GCM6<br><span>4689.2</span></span></th>"
+                "<th colspan='2'><span title='DTE 44 (6/26/2026)'>"
+                "GCM6<br><span>4689.2</span></span></th></tr>"
+                "<tr><th colspan='2'>Strike</th>"
+                "<th colspan='2'><span title='Expires: 5/14/2026'>"
+                "G2RK6<br><span>1</span> DTE</span></th>"
+                "<th colspan='2'><span title='Expires: 5/26/2026'>"
+                "OGM6<br><span>13</span> DTE</span></th></tr>"
+                "<tr><th></th><th></th><th>C</th><th>P</th><th>C</th><th>P</th></tr>"
+                "<tr><td colspan='2'>4610</td><td></td><td>1</td><td>122</td><td>224</td></tr>"
+                "</tbody></table>"
+            ),
+        )
+    )
+
+    assert [(cell.expiration, cell.dte) for cell in parsed.body_cells] == [
+        ("G2RK6", 1),
+        ("G2RK6", 1),
+        ("OGM6", 13),
+        ("OGM6", 13),
+    ]
+    assert {cell.option_type for cell in parsed.body_cells} == {
+        QuikStrikeMatrixOptionType.CALL,
+        QuikStrikeMatrixOptionType.PUT,
+    }
+    assert all(cell.column_label.lower() != "strike" for cell in parsed.body_cells)
+
+
 def test_non_strike_labels_are_excluded():
     parsed = parse_matrix_table(
         QuikStrikeMatrixTableSnapshot(
