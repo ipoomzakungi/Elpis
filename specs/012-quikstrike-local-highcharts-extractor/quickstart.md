@@ -63,6 +63,13 @@ Expected behavior:
 
 Only run this manually with a user-controlled authenticated browser session.
 
+Install the optional local browser dependency when using the Playwright/CDP adapter:
+
+```powershell
+cd backend
+pip install -e ".[browser]"
+```
+
 Manual steps:
 
 1. Open QuikStrike locally.
@@ -76,6 +83,24 @@ Manual steps:
    - `Open Interest -> OI Change`
    - `Open Interest -> Churn`
 6. Run only the local shape validation/extraction command provided by the implementation.
+
+For a repeatable local run, start Chrome or Edge yourself with a local debugging
+port, log in manually in that browser, and then run the adapter. Do not put
+QuikStrike usernames, passwords, cookies, headers, HAR files, viewstate values,
+or private URLs in `.env` or any repository file.
+
+Example:
+
+```powershell
+& "C:\Program Files\Google\Chrome\Application\chrome.exe" `
+  --remote-debugging-port=9222 `
+  --user-data-dir="$env:LOCALAPPDATA\Elpis\quikstrike-browser-profile" `
+  "https://cmegroup-sso.quikstrike.net//User/QuikStrikeView.aspx?mode="
+
+# After manual login and manual Gold Vol2Vol navigation:
+cd backend
+python scripts/quikstrike_playwright_extract.py --cdp-url http://127.0.0.1:9222 --drive-views
+```
 
 Expected behavior:
 
