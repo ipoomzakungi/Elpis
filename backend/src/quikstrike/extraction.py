@@ -1,5 +1,6 @@
 """Build normalized local-only QuikStrike extraction rows from sanitized fixtures."""
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -20,11 +21,21 @@ from src.models.quikstrike import (
     QuikStrikeViewType,
     value_type_for_view,
 )
+from src.quikstrike.dom_metadata import parse_expiration_code
 
 LOCAL_ONLY_LIMITATION = "QuikStrike extraction is local-only and research-only."
 SANITIZED_INPUT_LIMITATION = (
     "Only sanitized visible DOM metadata and Highcharts point fields are processed."
 )
+STRIKE_ID_INTERNAL_NOTE = (
+    "StrikeId is preserved as internal QuikStrike metadata and is not used as the strike."
+)
+GOLD_STRIKE_MIN = 500.0
+GOLD_STRIKE_MAX = 10000.0
+ACCEPTABLE_STRIKE_CONFIDENCE = {
+    QuikStrikeStrikeMappingConfidence.HIGH,
+    QuikStrikeStrikeMappingConfidence.PARTIAL,
+}
 
 
 @dataclass(frozen=True)
@@ -79,8 +90,10 @@ def build_extraction_from_request(
     ]
     status = _extraction_status(rows, missing_views, partial_views, mapping)
     conversion_eligible = (
-        status == QuikStrikeExtractionStatus.COMPLETED
-        and mapping.confidence == QuikStrikeStrikeMappingConfidence.HIGH
+        bool(rows)
+        and not missing_views
+        and not partial_views
+        and mapping.confidence in ACCEPTABLE_STRIKE_CONFIDENCE
     )
     result = QuikStrikeExtractionResult(
         extraction_id=safe_extraction_id,
@@ -119,6 +132,7 @@ def build_normalized_rows_for_view(
     mapping = strike_mapping or validate_strike_mapping(snapshot)
     vol_settle_by_strike = _vol_settle_by_strike(snapshot)
     ranges = _range_points(snapshot)
+    expiration_code = metadata.expiration_code or parse_expiration_code(snapshot.chart_title)
     rows: list[QuikStrikeNormalizedRow] = []
 
     for series in _put_call_series(snapshot):
@@ -148,6 +162,7 @@ def build_normalized_rows_for_view(
                     option_product_code=metadata.option_product_code,
                     futures_symbol=metadata.futures_symbol,
                     expiration=metadata.expiration,
+                    expiration_code=expiration_code,
                     dte=metadata.dte,
                     future_reference_price=metadata.future_reference_price,
                     view_type=snapshot.view_type,
@@ -208,22 +223,26 @@ def validate_strike_mapping(
         else:
             unmatched_count += 1
 
+    has_internal_strike_id = any(point.strike_id is not None for point in points)
     if matched_count:
-        evidence.append("Highcharts x values align with StrikeId or visible point labels.")
+        evidence.append("Highcharts x values align with visible point labels/categories.")
     if unmatched_count:
-        warnings.append("Some strike x values could not be cross-checked.")
+        evidence.append("Highcharts numeric x values are plausible Gold strikes.")
+        warnings.append("Some plausible strike x values could not be cross-checked.")
     if conflict_count:
-        warnings.append("Some StrikeId or label metadata conflicts with x values.")
+        warnings.append("Some visible strike labels conflict with Highcharts x values.")
+    if has_internal_strike_id:
+        warnings.append(STRIKE_ID_INTERNAL_NOTE)
 
     if conflict_count:
         confidence = QuikStrikeStrikeMappingConfidence.CONFLICT
-        method = "strike_metadata_conflict"
+        method = "visible_label_strike_conflict"
     elif unmatched_count == 0 and matched_count > 0:
         confidence = QuikStrikeStrikeMappingConfidence.HIGH
-        method = "x_strike_id_or_label_match"
+        method = "x_visible_label_match"
     else:
         confidence = QuikStrikeStrikeMappingConfidence.PARTIAL
-        method = "x_only_without_cross_check"
+        method = "plausible_x_without_visible_cross_check"
 
     return QuikStrikeStrikeMappingValidation(
         confidence=confidence,
@@ -233,9 +252,9 @@ def validate_strike_mapping(
         conflict_count=conflict_count,
         evidence=evidence,
         warnings=warnings,
-        limitations=[] if confidence == QuikStrikeStrikeMappingConfidence.HIGH else [
-            "XAU Vol-OI conversion requires high strike mapping confidence."
-        ],
+        limitations=[]
+        if confidence in ACCEPTABLE_STRIKE_CONFIDENCE
+        else ["Conversion is blocked until numeric strike coordinates are available."],
     )
 
 
@@ -245,7 +264,10 @@ def _extraction_status(
     partial_views: list[QuikStrikeViewType],
     mapping: QuikStrikeStrikeMappingValidation,
 ) -> QuikStrikeExtractionStatus:
-    if not rows or mapping.confidence == QuikStrikeStrikeMappingConfidence.UNKNOWN:
+    if not rows or mapping.confidence in {
+        QuikStrikeStrikeMappingConfidence.UNKNOWN,
+        QuikStrikeStrikeMappingConfidence.CONFLICT,
+    }:
         return QuikStrikeExtractionStatus.BLOCKED
     if (
         missing_views
@@ -301,32 +323,28 @@ def _matching_range(strike: float, ranges: list[QuikStrikePoint]) -> QuikStrikeP
 def _point_mapping_status(point: QuikStrikePoint) -> str:
     if point.x is None:
         return "unmatched"
+    if not _is_plausible_gold_strike(point.x):
+        return "conflict"
     strike = _strike_label(point.x)
     label_values = [
         _normalize_numeric_label(value)
         for value in (point.name, point.category)
         if value is not None
     ]
-    label_matches = any(label == strike for label in label_values)
-    has_strike_id = point.strike_id is not None
-    strike_id_matches = has_strike_id and strike in _digits(point.strike_id)
-    has_cross_check = point.strike_id is not None or bool(label_values)
-
-    if strike_id_matches:
+    nonblank_labels = [label for label in label_values if label]
+    if not nonblank_labels:
+        return "unmatched"
+    if all(label == strike for label in nonblank_labels):
         return "matched"
-    if has_strike_id:
-        return "conflict"
-    if label_matches:
-        return "matched"
-    if has_cross_check:
-        return "conflict"
-    return "unmatched"
+    return "conflict"
 
 
 def _point_warnings(point: QuikStrikePoint) -> list[str]:
     warnings: list[str] = []
     if point.strike_id is None:
         warnings.append("StrikeId metadata was not available for this point.")
+    else:
+        warnings.append(STRIKE_ID_INTERNAL_NOTE)
     return warnings
 
 
@@ -366,11 +384,18 @@ def _strike_label(value: float) -> str:
     return _digits(_strike_key(value))
 
 
+def _is_plausible_gold_strike(value: float) -> bool:
+    return GOLD_STRIKE_MIN <= value <= GOLD_STRIKE_MAX
+
+
 def _safe_strike(value: float) -> str:
     return _strike_key(value).replace(".", "_").replace("-", "m")
 
 
 def _normalize_numeric_label(value: str) -> str:
+    match = re.search(r"-?\d[\d,]*(?:\.\d+)?", value)
+    if match:
+        return _strike_label(float(match.group(0).replace(",", "")))
     return _digits(value)
 
 

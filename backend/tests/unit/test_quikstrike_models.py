@@ -30,6 +30,7 @@ def _dom_metadata() -> QuikStrikeDomMetadata:
         option_product_code="OG|GC",
         futures_symbol="GC",
         expiration=date(2026, 5, 15),
+        expiration_code="OG3K6",
         dte=2.59,
         future_reference_price=4722.6,
         selected_view_type=QuikStrikeViewType.OPEN_INTEREST,
@@ -133,13 +134,13 @@ def test_extraction_request_requires_ack_and_matching_views():
         )
 
 
-def test_extraction_result_blocks_conversion_without_high_mapping():
+def test_extraction_result_blocks_conversion_without_acceptable_mapping():
     mapping = QuikStrikeStrikeMappingValidation(
-        confidence=QuikStrikeStrikeMappingConfidence.PARTIAL,
-        method="x_only",
-        matched_point_count=1,
-        unmatched_point_count=1,
-        conflict_count=0,
+        confidence=QuikStrikeStrikeMappingConfidence.CONFLICT,
+        method="visible_label_strike_conflict",
+        matched_point_count=0,
+        unmatched_point_count=0,
+        conflict_count=1,
     )
 
     with pytest.raises(ValidationError, match="conversion_eligible"):

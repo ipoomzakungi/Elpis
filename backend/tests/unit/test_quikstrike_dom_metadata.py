@@ -16,6 +16,7 @@ def test_parse_dom_metadata_extracts_gold_header_context():
     assert metadata.option_product_code == "OG|GC"
     assert metadata.futures_symbol == "GC"
     assert metadata.expiration == date(2026, 5, 15)
+    assert metadata.expiration_code == "OG3K6"
     assert metadata.dte == 2.59
     assert metadata.future_reference_price == 4722.6
     assert metadata.selected_view_type == QuikStrikeViewType.OPEN_INTEREST
@@ -46,6 +47,17 @@ def test_parse_dom_metadata_accepts_explicit_view_type():
     )
 
     assert metadata.selected_view_type == QuikStrikeViewType.CHURN
+
+
+def test_parse_dom_metadata_parses_expiration_code_without_calendar_date():
+    metadata = parse_dom_metadata(
+        "Gold (OG|GC) G2RK6 Intraday Volume (1.4 DTE) vs 4710.9",
+        selected_view_type=QuikStrikeViewType.INTRADAY_VOLUME,
+    )
+
+    assert metadata.expiration is None
+    assert metadata.expiration_code == "G2RK6"
+    assert any("Calendar expiration date" in warning for warning in metadata.warnings)
 
 
 def test_parse_dom_metadata_records_warnings_for_missing_optional_context():
