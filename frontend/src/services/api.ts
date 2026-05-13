@@ -32,6 +32,11 @@ import {
   ProviderInfo,
   ProviderSymbolsResponse,
   ProvidersResponse,
+  QuikStrikeConversionRowsResponse,
+  QuikStrikeDashboardData,
+  QuikStrikeExtractionListResponse,
+  QuikStrikeExtractionReport,
+  QuikStrikeRowsResponse,
   ProcessRequest,
   Regime,
   ResearchAssetSummaryResponse,
@@ -524,5 +529,38 @@ export const api = {
       fetchApi<XauRiskPlanRowsResponse>(`/xau/reaction-reports/${encodedReportId}/risk-plan`),
     ]);
     return { report, reactions, riskPlan };
+  },
+
+  // QuikStrike local extraction reports
+  listQuikStrikeExtractions: async (): Promise<QuikStrikeExtractionListResponse> => {
+    return fetchApi('/quikstrike/extractions');
+  },
+
+  getQuikStrikeExtraction: async (extractionId: string): Promise<QuikStrikeExtractionReport> => {
+    return fetchApi(`/quikstrike/extractions/${encodeURIComponent(extractionId)}`);
+  },
+
+  getQuikStrikeRows: async (extractionId: string): Promise<QuikStrikeRowsResponse> => {
+    return fetchApi(`/quikstrike/extractions/${encodeURIComponent(extractionId)}/rows`);
+  },
+
+  getQuikStrikeConversion: async (
+    extractionId: string,
+  ): Promise<QuikStrikeConversionRowsResponse> => {
+    return fetchApi(`/quikstrike/extractions/${encodeURIComponent(extractionId)}/conversion`);
+  },
+
+  getQuikStrikeDashboardData: async (
+    extractionId: string,
+  ): Promise<QuikStrikeDashboardData> => {
+    const encodedExtractionId = encodeURIComponent(extractionId);
+    const [report, rows, conversion] = await Promise.all([
+      fetchApi<QuikStrikeExtractionReport>(`/quikstrike/extractions/${encodedExtractionId}`),
+      fetchApi<QuikStrikeRowsResponse>(`/quikstrike/extractions/${encodedExtractionId}/rows`),
+      fetchApi<QuikStrikeConversionRowsResponse>(
+        `/quikstrike/extractions/${encodedExtractionId}/conversion`,
+      ),
+    ]);
+    return { report, rows, conversion };
   },
 };

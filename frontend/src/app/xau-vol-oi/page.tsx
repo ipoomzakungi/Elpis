@@ -3,6 +3,8 @@
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { api } from '@/services/api'
 import {
+  QuikStrikeDashboardData,
+  QuikStrikeExtractionSummary,
   XauDashboardData,
   XauAcceptanceResult,
   XauExpectedRange,
@@ -25,12 +27,18 @@ export default function XauVolOiPage() {
   const [reactionReports, setReactionReports] = useState<XauReactionReportSummary[]>([])
   const [selectedReactionReportId, setSelectedReactionReportId] = useState<string | null>(null)
   const [reactionData, setReactionData] = useState<XauReactionDashboardData | null>(null)
+  const [quikStrikeReports, setQuikStrikeReports] = useState<QuikStrikeExtractionSummary[]>([])
+  const [selectedQuikStrikeId, setSelectedQuikStrikeId] = useState<string | null>(null)
+  const [quikStrikeData, setQuikStrikeData] = useState<QuikStrikeDashboardData | null>(null)
   const [loadingReports, setLoadingReports] = useState(true)
   const [loadingReport, setLoadingReport] = useState(false)
   const [loadingReactionReports, setLoadingReactionReports] = useState(true)
   const [loadingReactionReport, setLoadingReactionReport] = useState(false)
+  const [loadingQuikStrikeReports, setLoadingQuikStrikeReports] = useState(true)
+  const [loadingQuikStrikeReport, setLoadingQuikStrikeReport] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reactionError, setReactionError] = useState<string | null>(null)
+  const [quikStrikeError, setQuikStrikeError] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -70,6 +78,30 @@ export default function XauVolOiPage() {
       })
       .finally(() => {
         if (active) setLoadingReactionReports(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    setLoadingQuikStrikeReports(true)
+    api.listQuikStrikeExtractions()
+      .then((response) => {
+        if (!active) return
+        setQuikStrikeReports(response.extractions)
+        setSelectedQuikStrikeId((current) => current ?? response.extractions[0]?.extraction_id ?? null)
+      })
+      .catch((err) => {
+        if (!active) return
+        setQuikStrikeError(
+          err instanceof Error ? err.message : 'QuikStrike extraction reports could not be loaded',
+        )
+      })
+      .finally(() => {
+        if (active) setLoadingQuikStrikeReports(false)
       })
 
     return () => {
@@ -155,6 +187,36 @@ export default function XauVolOiPage() {
     }
   }, [selectedReactionReportId])
 
+  useEffect(() => {
+    if (!selectedQuikStrikeId) {
+      setQuikStrikeData(null)
+      return
+    }
+
+    let active = true
+    setLoadingQuikStrikeReport(true)
+    setQuikStrikeError(null)
+    api.getQuikStrikeDashboardData(selectedQuikStrikeId)
+      .then((response) => {
+        if (!active) return
+        setQuikStrikeData(response)
+      })
+      .catch((err) => {
+        if (!active) return
+        setQuikStrikeData(null)
+        setQuikStrikeError(
+          err instanceof Error ? err.message : 'QuikStrike extraction report could not be loaded',
+        )
+      })
+      .finally(() => {
+        if (active) setLoadingQuikStrikeReport(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [selectedQuikStrikeId])
+
   const selectedSummary = useMemo(
     () => reports.find((item) => item.report_id === selectedReportId) ?? null,
     [reports, selectedReportId],
@@ -162,6 +224,10 @@ export default function XauVolOiPage() {
   const selectedReactionSummary = useMemo(
     () => reactionReports.find((item) => item.report_id === selectedReactionReportId) ?? null,
     [reactionReports, selectedReactionReportId],
+  )
+  const selectedQuikStrikeSummary = useMemo(
+    () => quikStrikeReports.find((item) => item.extraction_id === selectedQuikStrikeId) ?? null,
+    [quikStrikeReports, selectedQuikStrikeId],
   )
 
   const report = dashboardData?.report ?? null
@@ -210,6 +276,16 @@ export default function XauVolOiPage() {
       </div>
 
       <ResearchOnlyNotice />
+      <QuikStrikeExtractionInspection
+        reports={quikStrikeReports}
+        selectedExtractionId={selectedQuikStrikeId}
+        selectedSummary={selectedQuikStrikeSummary}
+        data={quikStrikeData}
+        loadingList={loadingQuikStrikeReports}
+        loadingReport={loadingQuikStrikeReport}
+        error={quikStrikeError}
+        onSelect={setSelectedQuikStrikeId}
+      />
       <ReactionReportInspection
         reports={reactionReports}
         selectedReportId={selectedReactionReportId}
@@ -281,6 +357,160 @@ function ResearchOnlyNotice() {
       annotations only. They require source-data review, context review, and manual
       validation before any operational use.
     </Notice>
+  )
+}
+
+function QuikStrikeExtractionInspection({
+  reports,
+  selectedExtractionId,
+  selectedSummary,
+  data,
+  loadingList,
+  loadingReport,
+  error,
+  onSelect,
+}: {
+  reports: QuikStrikeExtractionSummary[]
+  selectedExtractionId: string | null
+  selectedSummary: QuikStrikeExtractionSummary | null
+  data: QuikStrikeDashboardData | null
+  loadingList: boolean
+  loadingReport: boolean
+  error: string | null
+  onSelect: (extractionId: string | null) => void
+}) {
+  const report = data?.report ?? null
+  const conversion = data?.conversion.conversion_result ?? report?.conversion_result ?? null
+  const requestedViews = report?.request_summary.requested_views ?? []
+  const completedViews = report?.request_summary.completed_views ?? []
+  const missingViews = report?.request_summary.missing_views ?? []
+  const warnings = uniqueValues([
+    ...(report?.warnings ?? []),
+    ...(report?.strike_mapping.warnings ?? []),
+    ...(conversion?.warnings ?? []),
+  ])
+  const limitations = uniqueValues([
+    ...(report?.limitations ?? []),
+    ...(report?.strike_mapping.limitations ?? []),
+    ...(conversion?.limitations ?? []),
+    ...(report?.research_only_warnings ?? []),
+  ])
+
+  return (
+    <ReportSection title="QuikStrike Local Extraction">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-sm text-gray-400">
+            Local sanitized Highcharts extraction reports for Gold Vol2Vol research input.
+          </p>
+          {selectedSummary && (
+            <p className="mt-2 text-sm text-gray-300">
+              {selectedSummary.extraction_id} | {selectedSummary.status} |{' '}
+              {formatDate(selectedSummary.created_at)}
+            </p>
+          )}
+        </div>
+        <label className="flex flex-col gap-2 text-sm text-gray-300">
+          QuikStrike extraction
+          <select
+            value={selectedExtractionId ?? ''}
+            onChange={(event) => onSelect(event.target.value || null)}
+            className="min-w-80 rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+            disabled={loadingList || reports.length === 0}
+          >
+            {reports.length === 0 ? (
+              <option value="">No QuikStrike extractions</option>
+            ) : (
+              reports.map((item) => (
+                <option key={item.extraction_id} value={item.extraction_id}>
+                  {item.extraction_id}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+      </div>
+
+      {error && <div className="mt-4"><Notice tone="error">{error}</Notice></div>}
+
+      {loadingList ? (
+        <div className="mt-4">
+          <EmptyState>Loading QuikStrike extraction reports...</EmptyState>
+        </div>
+      ) : reports.length === 0 ? (
+        <div className="mt-4">
+          <EmptyState>No saved QuikStrike extraction reports are available.</EmptyState>
+        </div>
+      ) : loadingReport ? (
+        <div className="mt-4">
+          <EmptyState>Loading selected QuikStrike extraction...</EmptyState>
+        </div>
+      ) : report ? (
+        <div className="mt-5 space-y-5">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+            <SummaryCard label="Status" value={report.status} />
+            <SummaryCard label="Rows" value={report.row_count} />
+            <SummaryCard label="Views" value={`${completedViews.length}/${requestedViews.length}`} />
+            <SummaryCard label="Strike Map" value={report.strike_mapping.confidence} />
+            <SummaryCard label="Conversion" value={conversion?.status ?? 'n/a'} />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <ContextPanel title="View Coverage">
+              <dl className="grid grid-cols-1 gap-3 text-sm">
+                <Metric label="Requested" value={requestedViews.join(', ') || 'n/a'} />
+                <Metric label="Completed" value={completedViews.join(', ') || 'n/a'} />
+                <Metric label="Missing" value={missingViews.join(', ') || 'none'} />
+              </dl>
+            </ContextPanel>
+            <ContextPanel title="Strike Mapping">
+              <dl className="grid grid-cols-1 gap-3 text-sm">
+                <Metric label="Method" value={report.strike_mapping.method} />
+                <Metric label="Matched" value={report.strike_mapping.matched_point_count} />
+                <Metric label="Unmatched" value={report.strike_mapping.unmatched_point_count} />
+                <Metric label="Conflicts" value={report.strike_mapping.conflict_count} />
+              </dl>
+            </ContextPanel>
+            <ContextPanel title="Conversion Rows">
+              <dl className="grid grid-cols-1 gap-3 text-sm">
+                <Metric label="Status" value={conversion?.status ?? 'n/a'} />
+                <Metric label="Rows" value={data?.conversion.rows.length ?? 0} />
+                <Metric
+                  label="Eligible"
+                  value={formatBoolean(Boolean(report.request_summary.conversion_eligible))}
+                />
+              </dl>
+            </ContextPanel>
+          </div>
+
+          <ContextPanel title="Output Paths">
+            <ArtifactPathList artifacts={report.artifacts} />
+          </ContextPanel>
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <ContextPanel title="Warnings">
+              <NotesList notes={warnings} emptyText="No warnings" />
+            </ContextPanel>
+            <ContextPanel title="Limitations">
+              <NotesList notes={limitations} emptyText="No limitations" />
+            </ContextPanel>
+            <ContextPanel title="Blocked Conversion Reasons">
+              <NotesList
+                notes={conversion?.blocked_reasons ?? []}
+                emptyText="No conversion blockers"
+              />
+            </ContextPanel>
+          </div>
+
+          <Notice tone="warning">
+            QuikStrike extraction is local-only and fixture/report driven here. The
+            application does not perform browser RPA, endpoint replay, OCR, or store
+            cookies, tokens, headers, HAR files, screenshots, viewstate values, or
+            private full URLs.
+          </Notice>
+        </div>
+      ) : null}
+    </ReportSection>
   )
 }
 
@@ -581,6 +811,41 @@ function ExpectedRangeCard({ range }: { range: XauExpectedRange | null }) {
         <div className="sm:col-span-2 text-amber-200">{range.unavailable_reason}</div>
       )}
     </dl>
+  )
+}
+
+function ArtifactPathList({
+  artifacts,
+}: {
+  artifacts: Array<{ artifact_type: string; path: string; rows: number | null }>
+}) {
+  if (artifacts.length === 0) {
+    return <p className="text-sm text-gray-400">No local artifact paths were recorded.</p>
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-left text-sm">
+        <thead className="text-xs uppercase text-gray-400">
+          <tr>
+            <th className="px-3 py-2">Artifact</th>
+            <th className="px-3 py-2">Rows</th>
+            <th className="px-3 py-2">Path</th>
+          </tr>
+        </thead>
+        <tbody>
+          {artifacts.map((artifact) => (
+            <tr
+              key={`${artifact.artifact_type}-${artifact.path}`}
+              className="border-t border-gray-700"
+            >
+              <td className="px-3 py-2">{artifact.artifact_type}</td>
+              <td className="px-3 py-2">{artifact.rows ?? 'n/a'}</td>
+              <td className="max-w-xl break-all px-3 py-2 text-gray-300">{artifact.path}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }
 

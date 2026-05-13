@@ -11,9 +11,13 @@ from src.models.quikstrike import (
     QuikStrikeArtifactFormat,
     QuikStrikeArtifactType,
     QuikStrikeConversionResult,
+    QuikStrikeConversionRowsResponse,
+    QuikStrikeExtractionListResponse,
     QuikStrikeExtractionReport,
     QuikStrikeExtractionResult,
+    QuikStrikeExtractionSummary,
     QuikStrikeNormalizedRow,
+    QuikStrikeRowsResponse,
     QuikStrikeXauVolOiRow,
     validate_quikstrike_safe_id,
 )
@@ -144,6 +148,47 @@ class QuikStrikeReportStore:
             raise FileNotFoundError(extraction_id)
         return QuikStrikeExtractionReport.model_validate_json(path.read_text(encoding="utf-8"))
 
+    def list_reports(self) -> QuikStrikeExtractionListResponse:
+        root = self.report_root()
+        if not root.exists():
+            return QuikStrikeExtractionListResponse(extractions=[])
+        summaries: list[QuikStrikeExtractionSummary] = []
+        for report_path in root.glob("*/report.json"):
+            try:
+                summaries.append(self.summarize_report(self.read_report(report_path.parent.name)))
+            except (OSError, ValueError, json.JSONDecodeError):
+                continue
+        return QuikStrikeExtractionListResponse(
+            extractions=sorted(summaries, key=lambda item: item.created_at, reverse=True)
+        )
+
+    def summarize_report(
+        self,
+        report: QuikStrikeExtractionReport,
+    ) -> QuikStrikeExtractionSummary:
+        requested_views = report.request_summary.get("requested_views", [])
+        completed_views = report.request_summary.get("completed_views", [])
+        missing_views = report.request_summary.get("missing_views", [])
+        conversion_eligible = bool(report.request_summary.get("conversion_eligible", False))
+        return QuikStrikeExtractionSummary(
+            extraction_id=report.extraction_id,
+            status=report.status,
+            created_at=report.created_at,
+            completed_at=report.completed_at,
+            requested_view_count=len(requested_views),
+            completed_view_count=len(completed_views),
+            missing_view_count=len(missing_views),
+            row_count=report.row_count,
+            strike_mapping_confidence=report.strike_mapping.confidence,
+            conversion_eligible=conversion_eligible,
+            conversion_status=(
+                report.conversion_result.status if report.conversion_result else None
+            ),
+            artifact_count=len(report.artifacts),
+            warning_count=len(report.warnings) + len(report.strike_mapping.warnings),
+            limitation_count=len(report.limitations) + len(report.strike_mapping.limitations),
+        )
+
     def read_normalized_rows(self, extraction_id: str) -> list[QuikStrikeNormalizedRow]:
         path = self.report_dir(extraction_id) / "normalized_rows.json"
         if not path.exists():
@@ -151,12 +196,33 @@ class QuikStrikeReportStore:
         payload = json.loads(path.read_text(encoding="utf-8"))
         return [QuikStrikeNormalizedRow.model_validate(row) for row in payload]
 
+    def read_rows_response(self, extraction_id: str) -> QuikStrikeRowsResponse:
+        return QuikStrikeRowsResponse(
+            extraction_id=extraction_id,
+            rows=self.read_normalized_rows(extraction_id),
+        )
+
     def read_conversion_rows(self, extraction_id: str) -> list[QuikStrikeXauVolOiRow]:
         path = self.report_dir(extraction_id) / "conversion_rows.json"
         if not path.exists():
             raise FileNotFoundError(extraction_id)
         payload = json.loads(path.read_text(encoding="utf-8"))
         return [QuikStrikeXauVolOiRow.model_validate(row) for row in payload]
+
+    def read_conversion_response(
+        self,
+        extraction_id: str,
+    ) -> QuikStrikeConversionRowsResponse:
+        report = self.read_report(extraction_id)
+        try:
+            rows = self.read_conversion_rows(extraction_id)
+        except FileNotFoundError:
+            rows = []
+        return QuikStrikeConversionRowsResponse(
+            extraction_id=extraction_id,
+            conversion_result=report.conversion_result,
+            rows=rows,
+        )
 
     def artifact(
         self,

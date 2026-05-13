@@ -22,9 +22,9 @@
 - [x] T013 Implement strike mapping confidence validation in `backend/src/quikstrike/extraction.py`
 - [x] T014 Implement XAU Vol-OI compatible conversion in `backend/src/quikstrike/conversion.py`
 - [x] T015 Implement QuikStrike report-store persistence in `backend/src/quikstrike/report_store.py`
-- [ ] T016 Add optional local API routes in `backend/src/api/routes/quikstrike.py`
-- [ ] T017 Add optional dashboard/status panel if needed
-- [ ] T018 Add local browser adapter skeleton without credential/session persistence
-- [ ] T019 Add integration tests with synthetic Highcharts plus DOM fixtures
-- [ ] T020 Add API contract tests if routes are implemented
+- [x] T016 Add optional local API routes in `backend/src/api/routes/quikstrike.py`
+- [x] T017 Add optional dashboard/status panel if needed
+- [x] T018 Add local browser adapter skeleton without credential/session persistence
+- [x] T019 Add integration tests with synthetic Highcharts plus DOM fixtures
+- [x] T020 Add API contract tests if routes are implemented
 - [ ] T021 Run final backend, frontend, artifact guard, smoke, and forbidden-scope validation

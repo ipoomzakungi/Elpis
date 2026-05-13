@@ -562,6 +562,53 @@ class QuikStrikeExtractionReport(QuikStrikeBaseModel):
         return _dedupe_nonblank_strings(values)
 
 
+class QuikStrikeExtractionSummary(QuikStrikeBaseModel):
+    extraction_id: str
+    status: QuikStrikeExtractionStatus
+    created_at: datetime
+    completed_at: datetime | None = None
+    requested_view_count: int = Field(ge=0)
+    completed_view_count: int = Field(ge=0)
+    missing_view_count: int = Field(ge=0)
+    row_count: int = Field(ge=0)
+    strike_mapping_confidence: QuikStrikeStrikeMappingConfidence
+    conversion_eligible: bool
+    conversion_status: QuikStrikeConversionStatus | None = None
+    artifact_count: int = Field(ge=0)
+    warning_count: int = Field(ge=0)
+    limitation_count: int = Field(ge=0)
+
+    @field_validator("extraction_id")
+    @classmethod
+    def validate_summary_extraction_id(cls, value: str) -> str:
+        return validate_quikstrike_safe_id(value)
+
+
+class QuikStrikeExtractionListResponse(QuikStrikeBaseModel):
+    extractions: list[QuikStrikeExtractionSummary] = Field(default_factory=list)
+
+
+class QuikStrikeRowsResponse(QuikStrikeBaseModel):
+    extraction_id: str
+    rows: list[QuikStrikeNormalizedRow] = Field(default_factory=list)
+
+    @field_validator("extraction_id")
+    @classmethod
+    def validate_rows_extraction_id(cls, value: str) -> str:
+        return validate_quikstrike_safe_id(value)
+
+
+class QuikStrikeConversionRowsResponse(QuikStrikeBaseModel):
+    extraction_id: str
+    conversion_result: QuikStrikeConversionResult | None = None
+    rows: list[QuikStrikeXauVolOiRow] = Field(default_factory=list)
+
+    @field_validator("extraction_id")
+    @classmethod
+    def validate_conversion_rows_extraction_id(cls, value: str) -> str:
+        return validate_quikstrike_safe_id(value)
+
+
 def value_type_for_view(view_type: QuikStrikeViewType | str) -> str:
     normalized = QuikStrikeViewType(view_type)
     return normalized.value
