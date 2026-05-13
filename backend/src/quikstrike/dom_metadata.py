@@ -18,6 +18,10 @@ EXPIRATION_PATTERN = re.compile(
     r"(?P<year>\d{4})\b",
     re.IGNORECASE,
 )
+EXPIRATION_CODE_PATTERN = re.compile(
+    r"\b(?P<code>[A-Z][A-Z0-9]{1,7}[FGHJKMNQUVXZ]\d{1,2})\b",
+    re.IGNORECASE,
+)
 MONTHS = {
     "jan": 1,
     "feb": 2,
@@ -62,7 +66,12 @@ def parse_dom_metadata(
     )
     warnings: list[str] = []
     expiration = _parse_expiration(combined)
-    if expiration is None:
+    expiration_code = parse_expiration_code(combined)
+    if expiration is None and expiration_code is not None:
+        warnings.append(
+            "Calendar expiration date was not available; parsed expiration code only."
+        )
+    elif expiration is None:
         warnings.append("Expiration was not available in sanitized DOM text.")
     dte = _parse_dte(normalized_header)
     if dte is None:
@@ -76,6 +85,7 @@ def parse_dom_metadata(
         option_product_code=option_product_code,
         futures_symbol=_futures_symbol_from_code(option_product_code),
         expiration=expiration,
+        expiration_code=expiration_code,
         dte=dte,
         future_reference_price=future_reference_price,
         source_view=source_view,
@@ -101,6 +111,13 @@ def infer_view_type(text: str) -> QuikStrikeViewType:
     if "churn" in normalized:
         return QuikStrikeViewType.CHURN
     raise ValueError("Could not infer supported QuikStrike view type from DOM text")
+
+
+def parse_expiration_code(text: str | None) -> str | None:
+    if text is None:
+        return None
+    match = EXPIRATION_CODE_PATTERN.search(_normalize_optional_text(text))
+    return match.group("code").upper() if match else None
 
 
 def _parse_product_and_code(text: str) -> tuple[str, str]:

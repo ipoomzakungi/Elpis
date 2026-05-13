@@ -24,6 +24,11 @@ CONVERSION_LIMITATION = (
 SOURCE_LIMITATION = (
     "Converted from local QuikStrike chart extraction; source limitations are preserved."
 )
+EXPIRATION_CODE_WARNING = "expiration code parsed, calendar expiry date unavailable"
+ACCEPTABLE_STRIKE_CONFIDENCE = {
+    QuikStrikeStrikeMappingConfidence.HIGH,
+    QuikStrikeStrikeMappingConfidence.PARTIAL,
+}
 
 
 @dataclass(frozen=True)
@@ -58,6 +63,7 @@ def convert_to_xau_vol_oi_rows(
         )
 
     converted_rows = _aggregate_rows(rows)
+    warnings = _conversion_warnings(rows)
     artifact = QuikStrikeArtifact(
         artifact_type=QuikStrikeArtifactType.PROCESSED_XAU_VOL_OI_CSV,
         path=f"data/processed/quikstrike/{safe_conversion_id}_input.csv",
@@ -72,6 +78,7 @@ def convert_to_xau_vol_oi_rows(
         status=QuikStrikeConversionStatus.COMPLETED,
         row_count=len(converted_rows),
         output_artifacts=[artifact],
+        warnings=warnings,
         limitations=[CONVERSION_LIMITATION, SOURCE_LIMITATION],
     )
     return QuikStrikeConversionBundle(result=result, rows=converted_rows)
@@ -84,24 +91,30 @@ def _conversion_blockers(
     blockers: list[str] = []
     if not rows:
         blockers.append("No normalized QuikStrike rows are available for conversion.")
-    if extraction_result.status != QuikStrikeExtractionStatus.COMPLETED:
+    if extraction_result.status in {
+        QuikStrikeExtractionStatus.BLOCKED,
+        QuikStrikeExtractionStatus.FAILED,
+    }:
         blockers.append(f"Extraction status is {extraction_result.status.value}.")
+    if extraction_result.missing_views:
+        blockers.append("One or more requested views produced no rows.")
+    if extraction_result.partial_views:
+        blockers.append("One or more requested views are missing Put/Call separation.")
     if not extraction_result.conversion_eligible:
         blockers.append("Extraction result is not marked conversion eligible.")
-    if (
-        extraction_result.strike_mapping.confidence
-        != QuikStrikeStrikeMappingConfidence.HIGH
-    ):
+    if extraction_result.strike_mapping.confidence not in ACCEPTABLE_STRIKE_CONFIDENCE:
         blockers.append(
             f"Strike mapping confidence is {extraction_result.strike_mapping.confidence.value}."
         )
     if any(
-        row.strike_mapping_confidence != QuikStrikeStrikeMappingConfidence.HIGH
+        row.strike_mapping_confidence not in ACCEPTABLE_STRIKE_CONFIDENCE
         for row in rows
     ):
-        blockers.append("One or more rows do not have high strike mapping confidence.")
-    if any(row.expiration is None for row in rows):
-        blockers.append("One or more rows are missing option expiration.")
+        blockers.append(
+            "One or more rows do not have acceptable strike mapping confidence."
+        )
+    if any(row.expiration is None and row.expiration_code is None for row in rows):
+        blockers.append("One or more rows are missing option expiration reference.")
     if any(row.future_reference_price is None for row in rows):
         blockers.append("One or more rows are missing the future reference price.")
     return _dedupe(blockers)
@@ -110,13 +123,14 @@ def _conversion_blockers(
 def _aggregate_rows(rows: list[QuikStrikeNormalizedRow]) -> list[QuikStrikeXauVolOiRow]:
     grouped: dict[tuple[str, float, QuikStrikeOptionType], QuikStrikeXauVolOiRow] = {}
     for row in rows:
-        assert row.expiration is not None
-        key = (row.expiration.isoformat(), row.strike, row.option_type)
+        expiration_reference = _expiration_reference(row)
+        key = (expiration_reference, row.strike, row.option_type)
         current = grouped.get(key)
         if current is None:
             current = QuikStrikeXauVolOiRow(
                 timestamp=row.capture_timestamp,
                 expiry=row.expiration,
+                expiration_code=row.expiration_code,
                 strike=row.strike,
                 option_type=row.option_type,
                 implied_volatility=row.vol_settle,
@@ -129,7 +143,11 @@ def _aggregate_rows(rows: list[QuikStrikeNormalizedRow]) -> list[QuikStrikeXauVo
         grouped[key] = _apply_view_value(current, row)
     return sorted(
         grouped.values(),
-        key=lambda item: (item.expiry, item.strike, item.option_type.value),
+        key=lambda item: (
+            item.expiry.isoformat() if item.expiry else item.expiration_code or "",
+            item.strike,
+            item.option_type.value,
+        ),
     )
 
 
@@ -159,6 +177,21 @@ def _apply_view_value(
 
 def _row_limitations(row: QuikStrikeNormalizedRow) -> list[str]:
     return _dedupe([SOURCE_LIMITATION, *row.extraction_limitations])
+
+
+def _expiration_reference(row: QuikStrikeNormalizedRow) -> str:
+    if row.expiration is not None:
+        return row.expiration.isoformat()
+    if row.expiration_code is not None:
+        return row.expiration_code
+    raise ValueError("row is missing expiration reference")
+
+
+def _conversion_warnings(rows: list[QuikStrikeNormalizedRow]) -> list[str]:
+    warnings: list[str] = []
+    if any(row.expiration is None and row.expiration_code is not None for row in rows):
+        warnings.append(EXPIRATION_CODE_WARNING)
+    return warnings
 
 
 def _dedupe(values: list[str]) -> list[str]:

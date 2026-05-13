@@ -92,7 +92,7 @@ def test_missing_invalid_and_secret_bearing_requests_are_structured(client_and_s
     assert invalid_ack_response.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
-def test_quikstrike_api_preserves_blocked_conversion_status(client_and_store):
+def test_quikstrike_api_allows_acceptable_partial_x_only_conversion(client_and_store):
     client, _ = client_and_store
     request = _fixture_request()
     for series in request["highcharts_by_view"]["open_interest"]["series"]:
@@ -107,8 +107,8 @@ def test_quikstrike_api_preserves_blocked_conversion_status(client_and_store):
     payload = response.json()
     assert payload["status"] == "partial"
     assert payload["strike_mapping"]["confidence"] == "partial"
-    assert payload["conversion_result"]["status"] == "blocked"
-    assert payload["conversion_result"]["blocked_reasons"]
+    assert payload["conversion_result"]["status"] == "completed"
+    assert payload["conversion_result"]["blocked_reasons"] == []
 
 
 def _fixture_request() -> dict:

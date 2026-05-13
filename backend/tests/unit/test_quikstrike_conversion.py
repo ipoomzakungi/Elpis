@@ -22,6 +22,7 @@ def _chart_fixture(view: QuikStrikeViewType) -> dict:
     }
     put_value, call_value = value_by_view[view]
     return {
+        "title": {"text": "G2RK6 Intraday Volume"},
         "series": [
             {
                 "name": "Put",
@@ -31,7 +32,7 @@ def _chart_fixture(view: QuikStrikeViewType) -> dict:
                         "y": put_value,
                         "name": "4700",
                         "category": "4700",
-                        "Tag": {"StrikeId": "strike-4700"},
+                        "Tag": {"StrikeId": "7240183"},
                     }
                 ],
             },
@@ -43,7 +44,7 @@ def _chart_fixture(view: QuikStrikeViewType) -> dict:
                         "y": call_value,
                         "name": "4700",
                         "category": "4700",
-                        "Tag": {"StrikeId": "strike-4700"},
+                        "Tag": {"StrikeId": "7240184"},
                     }
                 ],
             },
@@ -52,7 +53,7 @@ def _chart_fixture(view: QuikStrikeViewType) -> dict:
     }
 
 
-def _completed_extraction() -> tuple:
+def _completed_extraction(*, code_only_expiration: bool = False) -> tuple:
     views = [
         QuikStrikeViewType.INTRADAY_VOLUME,
         QuikStrikeViewType.EOD_VOLUME,
@@ -63,10 +64,17 @@ def _completed_extraction() -> tuple:
     request = QuikStrikeExtractionRequest(
         requested_views=views,
         dom_metadata_by_view={
-            view: parse_dom_metadata(
-                f"Gold (OG|GC) OG3K6 (2.59 DTE) vs 4722.6 - {view.value}",
-                selector_text="OG3K6 15 May 2026",
-                selected_view_type=view,
+            view: (
+                parse_dom_metadata(
+                    f"Gold (OG|GC) G2RK6 (1.4 DTE) vs 4710.9 - {view.value}",
+                    selected_view_type=view,
+                )
+                if code_only_expiration
+                else parse_dom_metadata(
+                    f"Gold (OG|GC) OG3K6 (2.59 DTE) vs 4722.6 - {view.value}",
+                    selector_text="OG3K6 15 May 2026",
+                    selected_view_type=view,
+                )
             )
             for view in views
         },
@@ -105,6 +113,7 @@ def test_convert_to_xau_vol_oi_rows_aggregates_supported_views():
     assert put_row.churn == 0.25
     assert put_row.implied_volatility == 26.7
     assert put_row.underlying_futures_price == 4722.6
+    assert put_row.expiration_code == "OG3K6"
     assert call_row.open_interest == 95
     assert call_row.oi_change == -2
     assert conversion.result.output_artifacts[0].path.startswith(
@@ -130,14 +139,32 @@ def test_convert_to_xau_vol_oi_blocks_partial_or_uncertain_extractions():
     assert conversion.result.status == QuikStrikeConversionStatus.BLOCKED
     assert conversion.rows == []
     assert any(
-        "Extraction status is partial" in reason
+        "not marked conversion eligible" in reason
         for reason in conversion.result.blocked_reasons
     )
 
 
-def test_convert_to_xau_vol_oi_blocks_missing_required_context():
+def test_convert_to_xau_vol_oi_succeeds_with_expiration_code_without_calendar_date():
+    extraction_result, rows = _completed_extraction(code_only_expiration=True)
+
+    conversion = convert_to_xau_vol_oi_rows(
+        extraction_result=extraction_result,
+        rows=rows,
+        conversion_id="quikstrike_code_only_xau",
+    )
+
+    assert conversion.result.status == QuikStrikeConversionStatus.COMPLETED
+    assert conversion.rows
+    assert all(row.expiry is None for row in conversion.rows)
+    assert {row.expiration_code for row in conversion.rows} == {"G2RK6"}
+    assert "expiration code parsed, calendar expiry date unavailable" in (
+        conversion.result.warnings
+    )
+
+
+def test_convert_to_xau_vol_oi_blocks_missing_required_expiration_reference():
     extraction_result, rows = _completed_extraction()
-    rows[0] = rows[0].model_copy(update={"expiration": None})
+    rows[0] = rows[0].model_copy(update={"expiration": None, "expiration_code": None})
 
     conversion = convert_to_xau_vol_oi_rows(
         extraction_result=extraction_result,
@@ -146,4 +173,6 @@ def test_convert_to_xau_vol_oi_blocks_missing_required_context():
     )
 
     assert conversion.result.status == QuikStrikeConversionStatus.BLOCKED
-    assert any("expiration" in reason for reason in conversion.result.blocked_reasons)
+    assert any(
+        "expiration reference" in reason for reason in conversion.result.blocked_reasons
+    )

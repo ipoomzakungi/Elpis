@@ -192,7 +192,9 @@ Invoke-RestMethod "http://localhost:8000/api/v1/quikstrike/extractions/{extracti
 Invoke-RestMethod "http://localhost:8000/api/v1/quikstrike/extractions/{extraction_id}/conversion"
 ```
 
-Confirm missing extraction ids return structured `NOT_FOUND` errors and uncertain strike mapping returns a blocked conversion status with blocked reasons.
+Confirm missing extraction ids return structured `NOT_FOUND` errors. Strike
+mapping without numeric coordinates must block conversion; plausible x-only Gold
+strike mapping may return a partial extraction with completed conversion.
 
 ## 6. Inspect Generated Artifacts
 

@@ -45,6 +45,16 @@ VIEW_MENU_PATHS = {
     QuikStrikeViewType.CHURN: ("Open Interest", "Churn"),
 }
 
+VIEW_LINK_SELECTORS = {
+    QuikStrikeViewType.INTRADAY_VOLUME: (
+        "#MainContent_ucViewControl_QuikOptionsV2V_lbIntradayVolume"
+    ),
+    QuikStrikeViewType.EOD_VOLUME: "#MainContent_ucViewControl_QuikOptionsV2V_lbEODVolume",
+    QuikStrikeViewType.OPEN_INTEREST: "#MainContent_ucViewControl_QuikOptionsV2V_lbOI",
+    QuikStrikeViewType.OI_CHANGE: "#MainContent_ucViewControl_QuikOptionsV2V_lbOIChg",
+    QuikStrikeViewType.CHURN: "#MainContent_ucViewControl_QuikOptionsV2V_lbChurn",
+}
+
 HIGHCHARTS_SANITIZER_SCRIPT = """
 () => {
   const cleanText = (value) => String(value || "").replace(/\\s+/g, " ").trim();
@@ -837,6 +847,9 @@ def _find_gold_vol2vol_page(browser: Any) -> Any:
 def _click_view(page: Any, view: QuikStrikeViewType) -> None:
     if _page_payload_matches_view(page, view):
         return
+    if _click_exact_selector(page, VIEW_LINK_SELECTORS[view]):
+        if _wait_for_view_match(page, view):
+            return
     parent_label, child_label = VIEW_MENU_PATHS[view]
     _click_visible_text(page, parent_label)
     page.wait_for_timeout(500)
@@ -847,7 +860,10 @@ def _click_view(page: Any, view: QuikStrikeViewType) -> None:
         raise QuikStrikeBrowserPageNotReadyError(
             f"Could not find a visible QuikStrike view control for {view.value}."
         )
-    page.wait_for_timeout(1500)
+    if not _wait_for_view_match(page, view):
+        raise QuikStrikeBrowserPageNotReadyError(
+            f"QuikStrike view control for {view.value} did not finish loading."
+        )
 
 
 def _click_visible_text(page: Any, label: str) -> bool:
@@ -902,6 +918,21 @@ def _page_payload_matches_view(page: Any, view: QuikStrikeViewType) -> bool:
         return False
     title = str(chart.get("chart_title") or "").lower()
     return _view_title_token(view) in title
+
+
+def _wait_for_view_match(
+    page: Any,
+    view: QuikStrikeViewType,
+    *,
+    timeout_ms: int = 10000,
+    poll_ms: int = 500,
+) -> bool:
+    deadline = time.monotonic() + (timeout_ms / 1000)
+    while time.monotonic() < deadline:
+        if _page_payload_matches_view(page, view):
+            return True
+        page.wait_for_timeout(poll_ms)
+    return False
 
 
 def _normalize_views(

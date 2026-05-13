@@ -149,6 +149,7 @@ class QuikStrikeDomMetadata(QuikStrikeBaseModel):
     option_product_code: str
     futures_symbol: str | None = None
     expiration: date | None = None
+    expiration_code: str | None = None
     dte: float | None = Field(default=None, ge=0)
     future_reference_price: float | None = Field(default=None, gt=0)
     source_view: str = "QUIKOPTIONS VOL2VOL"
@@ -163,6 +164,7 @@ class QuikStrikeDomMetadata(QuikStrikeBaseModel):
         "product",
         "option_product_code",
         "futures_symbol",
+        "expiration_code",
         "source_view",
         "surface",
         "raw_header_text",
@@ -371,6 +373,7 @@ class QuikStrikeNormalizedRow(QuikStrikeBaseModel):
     option_product_code: str
     futures_symbol: str | None = None
     expiration: date | None = None
+    expiration_code: str | None = None
     dte: float | None = Field(default=None, ge=0)
     future_reference_price: float | None = Field(default=None, gt=0)
     view_type: QuikStrikeViewType
@@ -396,6 +399,7 @@ class QuikStrikeNormalizedRow(QuikStrikeBaseModel):
         "product",
         "option_product_code",
         "futures_symbol",
+        "expiration_code",
         "strike_id",
         "value_type",
         "range_label",
@@ -428,7 +432,8 @@ class QuikStrikeNormalizedRow(QuikStrikeBaseModel):
 
 class QuikStrikeXauVolOiRow(QuikStrikeBaseModel):
     timestamp: datetime
-    expiry: date
+    expiry: date | None = None
+    expiration_code: str | None = None
     strike: float
     option_type: QuikStrikeOptionType
     open_interest: float | None = None
@@ -445,9 +450,11 @@ class QuikStrikeXauVolOiRow(QuikStrikeBaseModel):
     source_extraction_id: str
     limitations: list[str] = Field(default_factory=list)
 
-    @field_validator("source", "source_view", "source_extraction_id")
+    @field_validator("expiration_code", "source", "source_view", "source_extraction_id")
     @classmethod
-    def normalize_source_strings(cls, value: str) -> str:
+    def normalize_source_strings(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         normalized = " ".join(str(value).split())
         if not normalized:
             raise ValueError("QuikStrike XAU Vol-OI source fields must not be blank")
@@ -462,6 +469,12 @@ class QuikStrikeXauVolOiRow(QuikStrikeBaseModel):
     @classmethod
     def normalize_xau_row_limitations(cls, values: list[str]) -> list[str]:
         return _dedupe_nonblank_strings(values)
+
+    @model_validator(mode="after")
+    def validate_expiration_reference(self) -> "QuikStrikeXauVolOiRow":
+        if self.expiry is None and self.expiration_code is None:
+            raise ValueError("QuikStrike XAU Vol-OI rows require expiry or expiration_code")
+        return self
 
 
 class QuikStrikeExtractionResult(QuikStrikeBaseModel):
@@ -499,9 +512,15 @@ class QuikStrikeExtractionResult(QuikStrikeBaseModel):
     def validate_conversion_eligibility(self) -> "QuikStrikeExtractionResult":
         if (
             self.conversion_eligible
-            and self.strike_mapping.confidence != QuikStrikeStrikeMappingConfidence.HIGH
+            and self.strike_mapping.confidence
+            not in {
+                QuikStrikeStrikeMappingConfidence.HIGH,
+                QuikStrikeStrikeMappingConfidence.PARTIAL,
+            }
         ):
-            raise ValueError("conversion_eligible requires high strike mapping confidence")
+            raise ValueError(
+                "conversion_eligible requires high or acceptable partial strike mapping"
+            )
         return self
 
 
