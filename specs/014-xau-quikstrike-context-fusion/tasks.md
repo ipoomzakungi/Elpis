@@ -71,26 +71,26 @@
 
 ### Tests for User Story 1
 
-- [ ] T031 [P] [US1] Add loader tests for existing Vol2Vol and Matrix source report reads in `backend/tests/unit/test_xau_quikstrike_fusion_loaders.py`
-- [ ] T032 [P] [US1] Add source compatibility tests for Gold/OG/GC and incompatible product blocking in `backend/tests/unit/test_xau_quikstrike_fusion_loaders.py`
-- [ ] T033 [P] [US1] Add match-key normalization tests for strike, expiration, expiration code, option type, and value type in `backend/tests/unit/test_xau_quikstrike_fusion_matching.py`
-- [ ] T034 [P] [US1] Add source agreement and disagreement tests in `backend/tests/unit/test_xau_quikstrike_fusion_matching.py`
-- [ ] T035 [P] [US1] Add fused-row provenance and no-silent-overwrite tests in `backend/tests/unit/test_xau_quikstrike_fusion_fusion.py`
-- [ ] T036 [P] [US1] Add MVP integration test for synthetic Vol2Vol plus Matrix fusion in `backend/tests/integration/test_xau_quikstrike_fusion_flow.py`
+- [X] T031 [P] [US1] Add loader tests for existing Vol2Vol and Matrix source report reads in `backend/tests/unit/test_xau_quikstrike_fusion_loaders.py`
+- [X] T032 [P] [US1] Add source compatibility tests for Gold/OG/GC and incompatible product blocking in `backend/tests/unit/test_xau_quikstrike_fusion_loaders.py`
+- [X] T033 [P] [US1] Add match-key normalization tests for strike, expiration, expiration code, option type, and value type in `backend/tests/unit/test_xau_quikstrike_fusion_matching.py`
+- [X] T034 [P] [US1] Add source agreement and disagreement tests in `backend/tests/unit/test_xau_quikstrike_fusion_matching.py`
+- [X] T035 [P] [US1] Add fused-row provenance and no-silent-overwrite tests in `backend/tests/unit/test_xau_quikstrike_fusion_fusion.py`
+- [X] T036 [P] [US1] Add MVP integration test for synthetic Vol2Vol plus Matrix fusion in `backend/tests/integration/test_xau_quikstrike_fusion_flow.py`
 
 ### Implementation for User Story 1
 
-- [ ] T037 [US1] Implement Vol2Vol report loading through existing feature 012 report store in `backend/src/xau_quikstrike_fusion/loaders.py`
-- [ ] T038 [US1] Implement Matrix report loading through existing feature 013 report store in `backend/src/xau_quikstrike_fusion/loaders.py`
-- [ ] T039 [US1] Implement source report compatibility validation for product, status, row availability, warnings, and limitations in `backend/src/xau_quikstrike_fusion/loaders.py`
-- [ ] T040 [US1] Implement source-row normalization into `XauFusionSourceValue` in `backend/src/xau_quikstrike_fusion/loaders.py`
-- [ ] T041 [US1] Implement fusion match-key creation and value-type mapping in `backend/src/xau_quikstrike_fusion/matching.py`
-- [ ] T042 [US1] Implement matched, Vol2Vol-only, Matrix-only, conflict, and blocked match statuses in `backend/src/xau_quikstrike_fusion/matching.py`
-- [ ] T043 [US1] Implement coverage summary calculation in `backend/src/xau_quikstrike_fusion/matching.py`
-- [ ] T044 [US1] Implement source agreement/disagreement evaluation without overwriting source values in `backend/src/xau_quikstrike_fusion/matching.py`
-- [ ] T045 [US1] Implement fused row creation and stable fusion row ids in `backend/src/xau_quikstrike_fusion/fusion.py`
-- [ ] T046 [US1] Implement MVP fusion orchestration that loads sources, matches rows, builds coverage, and assembles an in-memory report in `backend/src/xau_quikstrike_fusion/orchestration.py`
-- [ ] T047 [US1] Persist MVP metadata and fused rows to JSON/Markdown report artifacts in `backend/src/xau_quikstrike_fusion/report_store.py`
+- [X] T037 [US1] Implement Vol2Vol report loading through existing feature 012 report store in `backend/src/xau_quikstrike_fusion/loaders.py`
+- [X] T038 [US1] Implement Matrix report loading through existing feature 013 report store in `backend/src/xau_quikstrike_fusion/loaders.py`
+- [X] T039 [US1] Implement source report compatibility validation for product, status, row availability, warnings, and limitations in `backend/src/xau_quikstrike_fusion/loaders.py`
+- [X] T040 [US1] Implement source-row normalization into `XauFusionSourceValue` in `backend/src/xau_quikstrike_fusion/loaders.py`
+- [X] T041 [US1] Implement fusion match-key creation and value-type mapping in `backend/src/xau_quikstrike_fusion/matching.py`
+- [X] T042 [US1] Implement matched, Vol2Vol-only, Matrix-only, conflict, and blocked match statuses in `backend/src/xau_quikstrike_fusion/matching.py`
+- [X] T043 [US1] Implement coverage summary calculation in `backend/src/xau_quikstrike_fusion/matching.py`
+- [X] T044 [US1] Implement source agreement/disagreement evaluation without overwriting source values in `backend/src/xau_quikstrike_fusion/matching.py`
+- [X] T045 [US1] Implement fused row creation and stable fusion row ids in `backend/src/xau_quikstrike_fusion/fusion.py`
+- [X] T046 [US1] Implement MVP fusion orchestration that loads sources, matches rows, builds coverage, and assembles an in-memory report in `backend/src/xau_quikstrike_fusion/orchestration.py`
+- [X] T047 [US1] Persist MVP metadata and fused rows to JSON/Markdown report artifacts in `backend/src/xau_quikstrike_fusion/report_store.py`
 
 **Checkpoint**: US1 delivers a testable MVP fusion report from saved source reports.
 

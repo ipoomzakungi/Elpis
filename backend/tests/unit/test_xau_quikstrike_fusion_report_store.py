@@ -5,10 +5,19 @@ import pytest
 from src.models.xau_quikstrike_fusion import (
     XauFusionArtifactFormat,
     XauFusionArtifactType,
+    XauFusionContextStatus,
+    XauFusionContextSummary,
     XauFusionReportStatus,
+    XauQuikStrikeFusionReport,
     XauQuikStrikeFusionSummary,
 )
 from src.xau_quikstrike_fusion.report_store import XauQuikStrikeFusionReportStore
+from tests.helpers.test_xau_quikstrike_fusion_data import (
+    sample_coverage_summary,
+    sample_fused_row,
+    sample_matrix_source_ref,
+    sample_vol2vol_source_ref,
+)
 
 
 def test_report_store_roots_are_path_safe(tmp_path: Path):
@@ -83,3 +92,44 @@ def test_report_store_artifact_paths_must_stay_under_report_root(tmp_path: Path)
             path=tmp_path / "outside.json",
             artifact_format=XauFusionArtifactFormat.JSON,
         )
+
+
+def test_report_store_persists_mvp_report_metadata_rows_json_and_markdown(tmp_path: Path):
+    store = XauQuikStrikeFusionReportStore(reports_dir=tmp_path / "data" / "reports")
+    report = XauQuikStrikeFusionReport(
+        report_id="fusion_report",
+        status=XauFusionReportStatus.PARTIAL,
+        vol2vol_source=sample_vol2vol_source_ref(),
+        matrix_source=sample_matrix_source_ref(),
+        coverage=sample_coverage_summary(),
+        context_summary=XauFusionContextSummary(
+            basis_status=XauFusionContextStatus.UNAVAILABLE,
+            iv_range_status=XauFusionContextStatus.UNAVAILABLE,
+            open_regime_status=XauFusionContextStatus.UNAVAILABLE,
+            candle_acceptance_status=XauFusionContextStatus.UNAVAILABLE,
+            realized_volatility_status=XauFusionContextStatus.UNAVAILABLE,
+            source_agreement_status=XauFusionContextStatus.AVAILABLE,
+        ),
+        fused_row_count=1,
+        fused_rows=[sample_fused_row()],
+    )
+
+    saved = store.persist_report(report)
+
+    assert (store.report_dir("fusion_report") / "metadata.json").exists()
+    assert (store.report_dir("fusion_report") / "fused_rows.json").exists()
+    assert (store.report_dir("fusion_report") / "report.json").exists()
+    assert (store.report_dir("fusion_report") / "report.md").exists()
+    assert {artifact.artifact_type for artifact in saved.artifacts} == {
+        XauFusionArtifactType.METADATA,
+        XauFusionArtifactType.FUSED_ROWS_JSON,
+        XauFusionArtifactType.REPORT_JSON,
+        XauFusionArtifactType.REPORT_MARKDOWN,
+    }
+    report_json = (store.report_dir("fusion_report") / "report.json").read_text(
+        encoding="utf-8"
+    )
+    assert '"fused_row_count": 1' in report_json
+    assert "local-only research report" in (
+        store.report_dir("fusion_report") / "report.md"
+    ).read_text(encoding="utf-8").lower()

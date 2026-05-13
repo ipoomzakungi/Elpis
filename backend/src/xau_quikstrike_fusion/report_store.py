@@ -10,6 +10,7 @@ from src.models.xau_quikstrike_fusion import (
     XauFusionArtifactFormat,
     XauFusionArtifactType,
     XauFusionBaseModel,
+    XauQuikStrikeFusionReport,
     validate_xau_fusion_safe_id,
 )
 
@@ -105,6 +106,60 @@ class XauQuikStrikeFusionReportStore:
             rows=rows,
         )
 
+    def persist_report(
+        self,
+        report: XauQuikStrikeFusionReport,
+    ) -> XauQuikStrikeFusionReport:
+        """Persist MVP fusion metadata, rows, JSON, and Markdown artifacts."""
+
+        report_dir = self.ensure_report_dir(report.report_id)
+        metadata_path = report_dir / "metadata.json"
+        fused_rows_path = report_dir / "fused_rows.json"
+        report_json_path = report_dir / "report.json"
+        report_markdown_path = report_dir / "report.md"
+
+        artifacts = [
+            self.artifact(
+                artifact_type=XauFusionArtifactType.METADATA,
+                path=metadata_path,
+                artifact_format=XauFusionArtifactFormat.JSON,
+                rows=1,
+            ),
+            self.artifact(
+                artifact_type=XauFusionArtifactType.FUSED_ROWS_JSON,
+                path=fused_rows_path,
+                artifact_format=XauFusionArtifactFormat.JSON,
+                rows=len(report.fused_rows),
+            ),
+            self.artifact(
+                artifact_type=XauFusionArtifactType.REPORT_JSON,
+                path=report_json_path,
+                artifact_format=XauFusionArtifactFormat.JSON,
+                rows=1,
+            ),
+            self.artifact(
+                artifact_type=XauFusionArtifactType.REPORT_MARKDOWN,
+                path=report_markdown_path,
+                artifact_format=XauFusionArtifactFormat.MARKDOWN,
+                rows=1,
+            ),
+        ]
+        saved_report = report.model_copy(update={"artifacts": artifacts})
+        metadata_path.write_text(
+            self.serialize_json(_metadata_payload(saved_report)) + "\n",
+            encoding="utf-8",
+        )
+        fused_rows_path.write_text(
+            self.serialize_json(saved_report.fused_rows) + "\n",
+            encoding="utf-8",
+        )
+        report_json_path.write_text(
+            self.serialize_json(saved_report) + "\n",
+            encoding="utf-8",
+        )
+        report_markdown_path.write_text(_report_markdown(saved_report), encoding="utf-8")
+        return saved_report
+
     def _validate_report_scope(self, path: Path) -> None:
         try:
             path.resolve().relative_to(self._report_root)
@@ -131,3 +186,51 @@ def _jsonable(payload: Any) -> Any:
     if isinstance(payload, tuple):
         return [_jsonable(value) for value in payload]
     return payload
+
+
+def _metadata_payload(report: XauQuikStrikeFusionReport) -> dict[str, Any]:
+    return {
+        "report_id": report.report_id,
+        "status": report.status.value,
+        "created_at": report.created_at.isoformat(),
+        "completed_at": report.completed_at.isoformat() if report.completed_at else None,
+        "vol2vol_report_id": report.vol2vol_source.report_id,
+        "matrix_report_id": report.matrix_source.report_id,
+        "fused_row_count": report.fused_row_count,
+        "coverage": report.coverage.model_dump(mode="json") if report.coverage else None,
+        "warnings": report.warnings,
+        "limitations": report.limitations,
+        "research_only_warnings": report.research_only_warnings,
+    }
+
+
+def _report_markdown(report: XauQuikStrikeFusionReport) -> str:
+    lines = [
+        f"# XAU QuikStrike Fusion Report {report.report_id}",
+        "",
+        "Local-only research report. No cookies, tokens, headers, HAR files, screenshots, "
+        "viewstate values, credentials, private URLs, browser sessions, or endpoint replay "
+        "payloads are persisted.",
+        "",
+        f"- Status: `{report.status.value}`",
+        f"- Vol2Vol report: `{report.vol2vol_source.report_id}`",
+        f"- Matrix report: `{report.matrix_source.report_id}`",
+        f"- Fused rows: `{report.fused_row_count}`",
+    ]
+    if report.coverage is not None:
+        lines.extend(
+            [
+                f"- Matched keys: `{report.coverage.matched_key_count}`",
+                f"- Vol2Vol-only keys: `{report.coverage.vol2vol_only_key_count}`",
+                f"- Matrix-only keys: `{report.coverage.matrix_only_key_count}`",
+                f"- Conflicting keys: `{report.coverage.conflict_key_count}`",
+                f"- Blocked keys: `{report.coverage.blocked_key_count}`",
+            ]
+        )
+    lines.extend(["", "## Warnings"])
+    lines.extend(f"- {warning}" for warning in report.warnings)
+    lines.extend(["", "## Limitations"])
+    lines.extend(f"- {limitation}" for limitation in report.limitations)
+    lines.extend(["", "## Artifacts"])
+    lines.extend(f"- `{artifact.path}`" for artifact in report.artifacts)
+    return "\n".join(lines) + "\n"
