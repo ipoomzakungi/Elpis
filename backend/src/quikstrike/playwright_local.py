@@ -370,6 +370,7 @@ def page_has_gold_vol2vol_highcharts(page: Any) -> bool:
 
     try:
         payload = collect_sanitized_page_payload(page)
+        select_chart_payload(payload.get("charts"), QuikStrikeViewType.INTRADAY_VOLUME)
     except Exception:
         return False
     page_text = " ".join(
@@ -494,6 +495,11 @@ def _prepare_gold_vol2vol_from_mode(
                         _print_page_state(page, "clicked_vol2vol")
                 page.wait_for_timeout(750)
                 _select_gold_product(page, debug_page_state=debug_page_state)
+                if (
+                    _page_text_contains(page, "Gold (OG|GC)")
+                    and not page_has_gold_vol2vol_highcharts(page)
+                ):
+                    _click_quikoptions_vol2vol(page)
                 if debug_page_state:
                     _print_page_state(page, "after_product_attempt")
 
