@@ -305,7 +305,7 @@ class XauFusionSourceValue(XauFusionBaseModel):
     expiration_code: str | None = None
     option_type: str | None = None
     future_reference_price: float | None = Field(default=None, gt=0)
-    dte: int | None = Field(default=None, ge=0)
+    dte: float | None = Field(default=None, ge=0)
     vol_settle: float | None = None
     range_label: str | None = None
     sigma_label: str | None = None

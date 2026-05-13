@@ -17,6 +17,7 @@ import {
   XauReactionReportSummary,
   XauReactionRow,
   XauRiskPlan,
+  XauQuikStrikeFusionSummary,
   XauVolRegimeResult,
   XauVolOiReportSummary,
   XauZone,
@@ -38,6 +39,8 @@ export default function XauVolOiPage() {
   const [selectedQuikStrikeMatrixId, setSelectedQuikStrikeMatrixId] = useState<string | null>(null)
   const [quikStrikeMatrixData, setQuikStrikeMatrixData] =
     useState<QuikStrikeMatrixDashboardData | null>(null)
+  const [fusionReports, setFusionReports] = useState<XauQuikStrikeFusionSummary[]>([])
+  const [selectedFusionReportId, setSelectedFusionReportId] = useState<string | null>(null)
   const [loadingReports, setLoadingReports] = useState(true)
   const [loadingReport, setLoadingReport] = useState(false)
   const [loadingReactionReports, setLoadingReactionReports] = useState(true)
@@ -46,10 +49,12 @@ export default function XauVolOiPage() {
   const [loadingQuikStrikeReport, setLoadingQuikStrikeReport] = useState(false)
   const [loadingQuikStrikeMatrixReports, setLoadingQuikStrikeMatrixReports] = useState(true)
   const [loadingQuikStrikeMatrixReport, setLoadingQuikStrikeMatrixReport] = useState(false)
+  const [loadingFusionReports, setLoadingFusionReports] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reactionError, setReactionError] = useState<string | null>(null)
   const [quikStrikeError, setQuikStrikeError] = useState<string | null>(null)
   const [quikStrikeMatrixError, setQuikStrikeMatrixError] = useState<string | null>(null)
+  const [fusionError, setFusionError] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -141,6 +146,30 @@ export default function XauVolOiPage() {
       })
       .finally(() => {
         if (active) setLoadingQuikStrikeMatrixReports(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    setLoadingFusionReports(true)
+    api.listXauQuikStrikeFusionReports()
+      .then((response) => {
+        if (!active) return
+        setFusionReports(response.reports)
+        setSelectedFusionReportId((current) => current ?? response.reports[0]?.report_id ?? null)
+      })
+      .catch((err) => {
+        if (!active) return
+        setFusionError(
+          err instanceof Error ? err.message : 'XAU QuikStrike fusion reports could not be loaded',
+        )
+      })
+      .finally(() => {
+        if (active) setLoadingFusionReports(false)
       })
 
     return () => {
@@ -306,6 +335,10 @@ export default function XauVolOiPage() {
       null,
     [quikStrikeMatrixReports, selectedQuikStrikeMatrixId],
   )
+  const selectedFusionSummary = useMemo(
+    () => fusionReports.find((item) => item.report_id === selectedFusionReportId) ?? null,
+    [fusionReports, selectedFusionReportId],
+  )
 
   const report = dashboardData?.report ?? null
   const warningNotes = uniqueValues([
@@ -372,6 +405,14 @@ export default function XauVolOiPage() {
         loadingReport={loadingQuikStrikeMatrixReport}
         error={quikStrikeMatrixError}
         onSelect={setSelectedQuikStrikeMatrixId}
+      />
+      <QuikStrikeFusionInspection
+        reports={fusionReports}
+        selectedReportId={selectedFusionReportId}
+        selectedSummary={selectedFusionSummary}
+        loadingList={loadingFusionReports}
+        error={fusionError}
+        onSelect={setSelectedFusionReportId}
       />
       <ReactionReportInspection
         reports={reactionReports}
@@ -751,6 +792,123 @@ function QuikStrikeMatrixInspection({
             or store cookies, tokens, headers, HAR files, screenshots, viewstate values,
             or private full URLs.
           </Notice>
+        </div>
+      ) : null}
+    </ReportSection>
+  )
+}
+
+function QuikStrikeFusionInspection({
+  reports,
+  selectedReportId,
+  selectedSummary,
+  loadingList,
+  error,
+  onSelect,
+}: {
+  reports: XauQuikStrikeFusionSummary[]
+  selectedReportId: string | null
+  selectedSummary: XauQuikStrikeFusionSummary | null
+  loadingList: boolean
+  error: string | null
+  onSelect: (reportId: string | null) => void
+}) {
+  return (
+    <ReportSection title="QuikStrike Fusion Context">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-sm text-gray-400">
+            Local-only fusion context for saved Vol2Vol and Matrix reports.
+          </p>
+          {selectedSummary && (
+            <p className="mt-2 text-sm text-gray-300">
+              {selectedSummary.report_id} | {selectedSummary.status} |{' '}
+              {formatDate(selectedSummary.created_at)}
+            </p>
+          )}
+        </div>
+        <label className="flex flex-col gap-2 text-sm text-gray-300">
+          Fusion report
+          <select
+            value={selectedReportId ?? ''}
+            onChange={(event) => onSelect(event.target.value || null)}
+            className="min-w-80 rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+            disabled={loadingList || reports.length === 0}
+          >
+            {reports.length === 0 ? (
+              <option value="">No fusion reports</option>
+            ) : (
+              reports.map((item) => (
+                <option key={item.report_id} value={item.report_id}>
+                  {item.report_id}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+      </div>
+
+      {error && <div className="mt-4"><Notice tone="error">{error}</Notice></div>}
+
+      {loadingList ? (
+        <div className="mt-4">
+          <EmptyState>Loading QuikStrike fusion reports...</EmptyState>
+        </div>
+      ) : reports.length === 0 ? (
+        <div className="mt-4 space-y-4">
+          <EmptyState>No saved QuikStrike fusion reports are available.</EmptyState>
+          <ContextPanel title="Foundation Status">
+            <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+              <Metric label="Route" value="registered" />
+              <Metric label="Source loading" value="pending" />
+              <Metric label="Matching" value="pending" />
+              <Metric label="Downstream reports" value="pending" />
+            </dl>
+            <p className="mt-3 text-sm text-gray-400">
+              Fusion remains a local research inspection surface. This placeholder does not
+              trigger browser extraction or downstream XAU report creation.
+            </p>
+          </ContextPanel>
+        </div>
+      ) : selectedSummary ? (
+        <div className="mt-5 space-y-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+            <SummaryCard label="Status" value={selectedSummary.status} />
+            <SummaryCard label="Fused Rows" value={selectedSummary.fused_row_count} />
+            <SummaryCard label="Strikes" value={selectedSummary.strike_count} />
+            <SummaryCard label="Expiries" value={selectedSummary.expiration_count} />
+            <SummaryCard label="Warnings" value={selectedSummary.warning_count} />
+          </div>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <ContextPanel title="Source Reports">
+              <dl className="grid grid-cols-1 gap-3 text-sm">
+                <Metric label="Vol2Vol" value={selectedSummary.vol2vol_report_id} />
+                <Metric label="Matrix" value={selectedSummary.matrix_report_id} />
+              </dl>
+            </ContextPanel>
+            <ContextPanel title="Context Status">
+              <dl className="grid grid-cols-1 gap-3 text-sm">
+                <Metric label="Basis" value={selectedSummary.basis_status} />
+                <Metric label="IV / Range" value={selectedSummary.iv_range_status} />
+                <Metric label="Open" value={selectedSummary.open_regime_status} />
+                <Metric label="Candle" value={selectedSummary.candle_acceptance_status} />
+              </dl>
+            </ContextPanel>
+            <ContextPanel title="Linked XAU Reports">
+              <dl className="grid grid-cols-1 gap-3 text-sm">
+                <Metric label="Vol-OI" value={selectedSummary.xau_vol_oi_report_id ?? 'n/a'} />
+                <Metric label="Reaction" value={selectedSummary.xau_reaction_report_id ?? 'n/a'} />
+                <Metric
+                  label="All No-Trade"
+                  value={
+                    selectedSummary.all_reactions_no_trade === null
+                      ? 'n/a'
+                      : formatBoolean(selectedSummary.all_reactions_no_trade)
+                  }
+                />
+              </dl>
+            </ContextPanel>
+          </div>
         </div>
       ) : null}
     </ReportSection>
