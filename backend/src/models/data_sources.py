@@ -12,6 +12,9 @@ class DataSourceProviderType(StrEnum):
     BINANCE_PUBLIC = "binance_public"
     YAHOO_FINANCE = "yahoo_finance"
     LOCAL_FILE = "local_file"
+    CFTC_COT = "cftc_cot"
+    GVZ = "gvz"
+    DERIBIT_PUBLIC_OPTIONS = "deribit_public_options"
     KAIKO_OPTIONAL = "kaiko_optional"
     TARDIS_OPTIONAL = "tardis_optional"
     COINGLASS_OPTIONAL = "coinglass_optional"
@@ -40,6 +43,7 @@ class DataSourceWorkflowType(StrEnum):
     CRYPTO_MULTI_ASSET = "crypto_multi_asset"
     PROXY_OHLCV = "proxy_ohlcv"
     XAU_VOL_OI = "xau_vol_oi"
+    FREE_DERIVATIVES = "free_derivatives"
     OPTIONAL_VENDOR = "optional_vendor"
     FIRST_EVIDENCE_RUN = "first_evidence_run"
 

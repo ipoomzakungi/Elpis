@@ -1285,10 +1285,130 @@ export interface XauReactionDashboardData {
   riskPlan: XauRiskPlanRowsResponse;
 }
 
+export type FreeDerivativesSource =
+  | 'cftc_cot'
+  | 'gvz'
+  | 'deribit_public_options';
+export type FreeDerivativesRunStatus = 'completed' | 'partial' | 'blocked' | 'failed';
+export type FreeDerivativesSourceStatus = 'completed' | 'partial' | 'skipped' | 'failed';
+export type FreeDerivativesReportFormat = 'json' | 'markdown' | 'both';
+export type FreeDerivativesArtifactFormat = 'json' | 'csv' | 'parquet' | 'markdown' | 'zip';
+export type FreeDerivativesArtifactType =
+  | 'raw_cftc'
+  | 'processed_cftc'
+  | 'raw_gvz'
+  | 'processed_gvz'
+  | 'raw_deribit_instruments'
+  | 'raw_deribit_summary'
+  | 'processed_deribit_options'
+  | 'processed_deribit_walls'
+  | 'run_metadata'
+  | 'run_json'
+  | 'run_markdown';
+export type CftcCotReportCategory = 'futures_only' | 'futures_and_options_combined';
+
+export interface CftcCotRequest {
+  years?: number[];
+  categories?: CftcCotReportCategory[];
+  source_urls?: string[];
+  local_fixture_paths?: string[];
+  market_filters?: string[];
+}
+
+export interface GvzRequest {
+  series_id?: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  source_url?: string | null;
+  local_fixture_path?: string | null;
+}
+
+export interface DeribitOptionsRequest {
+  underlyings?: string[];
+  include_expired?: boolean;
+  snapshot_timestamp?: string | null;
+  fixture_instruments_path?: string | null;
+  fixture_summary_path?: string | null;
+}
+
+export interface FreeDerivativesBootstrapRequest {
+  include_cftc?: boolean;
+  include_gvz?: boolean;
+  include_deribit?: boolean;
+  cftc?: CftcCotRequest;
+  gvz?: GvzRequest;
+  deribit?: DeribitOptionsRequest;
+  run_label?: string | null;
+  report_format?: FreeDerivativesReportFormat;
+  research_only_acknowledged: boolean;
+}
+
+export interface FreeDerivativesArtifact {
+  artifact_type: FreeDerivativesArtifactType;
+  source: FreeDerivativesSource;
+  path: string;
+  format: FreeDerivativesArtifactFormat;
+  rows: number | null;
+  created_at: string;
+  limitations: string[];
+}
+
+export interface FreeDerivativesSourceResult {
+  source: FreeDerivativesSource;
+  status: FreeDerivativesSourceStatus;
+  requested_items: string[];
+  completed_items: string[];
+  skipped_items: string[];
+  failed_items: string[];
+  row_count: number;
+  instrument_count: number;
+  coverage_start: string | null;
+  coverage_end: string | null;
+  snapshot_timestamp: string | null;
+  artifacts: FreeDerivativesArtifact[];
+  warnings: string[];
+  limitations: string[];
+  missing_data_actions: string[];
+}
+
+export interface FreeDerivativesBootstrapRun {
+  run_id: string;
+  status: FreeDerivativesRunStatus;
+  created_at: string;
+  completed_at: string | null;
+  request: FreeDerivativesBootstrapRequest;
+  source_results: FreeDerivativesSourceResult[];
+  artifacts: FreeDerivativesArtifact[];
+  warnings: string[];
+  limitations: string[];
+  missing_data_actions: string[];
+  research_only_warnings: string[];
+}
+
+export interface FreeDerivativesBootstrapRunSummary {
+  run_id: string;
+  status: FreeDerivativesRunStatus;
+  created_at: string;
+  completed_at: string | null;
+  completed_source_count: number;
+  partial_source_count: number;
+  failed_source_count: number;
+  artifact_count: number;
+  warning_count: number;
+  limitation_count: number;
+}
+
+export interface FreeDerivativesBootstrapRunListResponse {
+  runs: FreeDerivativesBootstrapRunSummary[];
+}
+
 export type DataSourceProviderType =
   | 'binance_public'
   | 'yahoo_finance'
   | 'local_file'
+  | 'cftc_cot'
+  | 'gvz'
+  | 'deribit_public_options'
   | 'kaiko_optional'
   | 'tardis_optional'
   | 'coinglass_optional'
@@ -1314,6 +1434,7 @@ export type DataSourceWorkflowType =
   | 'crypto_multi_asset'
   | 'proxy_ohlcv'
   | 'xau_vol_oi'
+  | 'free_derivatives'
   | 'optional_vendor'
   | 'first_evidence_run';
 
@@ -1507,4 +1628,6 @@ export interface DataSourceDashboardData {
   capabilities: DataSourceCapabilityListResponse;
   missingData: DataSourceMissingDataResponse;
   bootstrapRuns: DataSourceBootstrapRunListResponse;
+  freeDerivativesRuns: FreeDerivativesBootstrapRunListResponse;
+  latestFreeDerivativesRun: FreeDerivativesBootstrapRun | null;
 }

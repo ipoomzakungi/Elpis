@@ -8,6 +8,7 @@ from src.api.routes import (
     data_quality,
     data_sources,
     features,
+    free_derivatives,
     market_data,
     providers,
     regimes,
@@ -42,6 +43,7 @@ app.include_router(regimes.router, prefix="/api/v1", tags=["regimes"])
 app.include_router(data_quality.router, prefix="/api/v1", tags=["data-quality"])
 app.include_router(backtests.router, prefix="/api/v1", tags=["backtests"])
 app.include_router(data_sources.router, prefix="/api/v1", tags=["data-sources"])
+app.include_router(free_derivatives.router, prefix="/api/v1", tags=["free-derivatives"])
 app.include_router(research.router, prefix="/api/v1", tags=["research"])
 app.include_router(research_execution.router, prefix="/api/v1", tags=["research-execution"])
 app.include_router(xau.router, prefix="/api/v1", tags=["xau"])

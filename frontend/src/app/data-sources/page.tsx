@@ -10,6 +10,10 @@ import {
   DataSourceDashboardData,
   DataSourceMissingDataAction,
   DataSourceProviderStatus,
+  FreeDerivativesArtifact,
+  FreeDerivativesBootstrapRun,
+  FreeDerivativesBootstrapRunSummary,
+  FreeDerivativesSourceResult,
   FirstEvidenceRunResult,
 } from '@/types'
 
@@ -21,18 +25,29 @@ const OPTIONAL_PROVIDER_TYPES = new Set([
   'cme_quikstrike_local_or_optional',
 ])
 
+const FREE_DERIVATIVES_PROVIDER_TYPES = new Set([
+  'cftc_cot',
+  'gvz',
+  'deribit_public_options',
+])
+
 export default function DataSourcesPage() {
   const [data, setData] = useState<DataSourceDashboardData | null>(null)
   const [firstRun, setFirstRun] = useState<FirstEvidenceRunResult | null>(null)
   const [bootstrapRun, setBootstrapRun] = useState<DataSourceBootstrapRunResult | null>(null)
+  const [freeDerivativesRun, setFreeDerivativesRun] =
+    useState<FreeDerivativesBootstrapRun | null>(null)
   const [firstRunId, setFirstRunId] = useState('')
   const [bootstrapRunId, setBootstrapRunId] = useState('')
+  const [freeDerivativesRunId, setFreeDerivativesRunId] = useState('')
   const [loading, setLoading] = useState(true)
   const [loadingRun, setLoadingRun] = useState(false)
   const [loadingBootstrap, setLoadingBootstrap] = useState(false)
+  const [loadingFreeDerivatives, setLoadingFreeDerivatives] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [runError, setRunError] = useState<string | null>(null)
   const [bootstrapError, setBootstrapError] = useState<string | null>(null)
+  const [freeDerivativesError, setFreeDerivativesError] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -45,6 +60,8 @@ export default function DataSourcesPage() {
         const latestBootstrap = response.bootstrapRuns.runs[0] ?? null
         setBootstrapRun(latestBootstrap)
         setBootstrapRunId(latestBootstrap?.bootstrap_run_id ?? '')
+        setFreeDerivativesRun(response.latestFreeDerivativesRun)
+        setFreeDerivativesRunId(response.latestFreeDerivativesRun?.run_id ?? '')
       })
       .catch((err) => {
         if (!active) return
@@ -61,17 +78,27 @@ export default function DataSourcesPage() {
 
   const providerStatuses = data?.readiness.provider_statuses ?? []
   const capabilityRows = data?.capabilities.capabilities ?? data?.readiness.capability_matrix ?? []
+  const freeDerivativeStatuses = providerStatuses.filter((status) =>
+    FREE_DERIVATIVES_PROVIDER_TYPES.has(status.provider_type),
+  )
+  const freeDerivativeCapabilities = capabilityRows.filter((row) =>
+    FREE_DERIVATIVES_PROVIDER_TYPES.has(row.provider_type),
+  )
   const optionalStatuses = providerStatuses.filter((status) =>
     OPTIONAL_PROVIDER_TYPES.has(status.provider_type),
   )
   const defaultMissingActions = data?.missingData.actions ?? []
   const readinessMissingActions = data?.readiness.missing_data_actions ?? []
   const bootstrapRuns = data?.bootstrapRuns.runs ?? []
+  const freeDerivativeRuns = data?.freeDerivativesRuns.runs ?? []
   const missingActions = useMemo(
     () => dedupeActions([...readinessMissingActions, ...defaultMissingActions]),
     [readinessMissingActions, defaultMissingActions],
   )
   const xauAction = missingActions.find((action) => action.workflow_type === 'xau_vol_oi')
+  const freeDerivativeActions = missingActions.filter(
+    (action) => action.workflow_type === 'free_derivatives',
+  )
 
   async function loadFirstRunById() {
     if (!firstRunId.trim()) return
@@ -98,6 +125,24 @@ export default function DataSourcesPage() {
       setBootstrapError(err instanceof Error ? err.message : 'Bootstrap run could not be loaded')
     } finally {
       setLoadingBootstrap(false)
+    }
+  }
+
+  async function loadFreeDerivativesRunById() {
+    if (!freeDerivativesRunId.trim()) return
+    setLoadingFreeDerivatives(true)
+    setFreeDerivativesError(null)
+    try {
+      const response = await api.getFreeDerivativesRun(freeDerivativesRunId.trim())
+      setFreeDerivativesRun(response)
+    } catch (err) {
+      setFreeDerivativesError(
+        err instanceof Error
+          ? err.message
+          : 'Free derivatives bootstrap run could not be loaded',
+      )
+    } finally {
+      setLoadingFreeDerivatives(false)
     }
   }
 
@@ -180,7 +225,11 @@ export default function DataSourcesPage() {
             setLoading(true)
             setError(null)
             api.getDataSourceDashboardData()
-              .then(setData)
+              .then((response) => {
+                setData(response)
+                setFreeDerivativesRun(response.latestFreeDerivativesRun)
+                setFreeDerivativesRunId(response.latestFreeDerivativesRun?.run_id ?? '')
+              })
               .catch((err) =>
                 setError(
                   err instanceof Error
@@ -214,6 +263,21 @@ export default function DataSourcesPage() {
               <XauSchemaPanel action={xauAction} />
             </ReportSection>
           </div>
+
+          <ReportSection title="Free Public Derivatives">
+            <FreeDerivativesPanel
+              actions={freeDerivativeActions}
+              capabilities={freeDerivativeCapabilities}
+              error={freeDerivativesError}
+              loading={loadingFreeDerivatives}
+              onLoad={loadFreeDerivativesRunById}
+              onRunIdChange={setFreeDerivativesRunId}
+              run={freeDerivativesRun}
+              runId={freeDerivativesRunId}
+              runs={freeDerivativeRuns}
+              statuses={freeDerivativeStatuses}
+            />
+          </ReportSection>
 
           <ReportSection title="Provider Capability Matrix">
             <CapabilityTable rows={capabilityRows} />
@@ -353,6 +417,240 @@ function XauSchemaPanel({ action }: { action: DataSourceMissingDataAction | unde
       </div>
       <NotesList notes={action.instructions} emptyText="No XAU import instructions." />
     </div>
+  )
+}
+
+function FreeDerivativesPanel({
+  actions,
+  capabilities,
+  error,
+  loading,
+  onLoad,
+  onRunIdChange,
+  run,
+  runId,
+  runs,
+  statuses,
+}: {
+  actions: DataSourceMissingDataAction[]
+  capabilities: DataSourceCapability[]
+  error: string | null
+  loading: boolean
+  onLoad: () => void
+  onRunIdChange: (value: string) => void
+  run: FreeDerivativesBootstrapRun | null
+  runId: string
+  runs: FreeDerivativesBootstrapRunSummary[]
+  statuses: DataSourceProviderStatus[]
+}) {
+  const runWarnings = run
+    ? uniqueValues([
+        ...run.warnings,
+        ...run.research_only_warnings,
+        ...run.source_results.flatMap((result) => result.warnings),
+      ])
+    : []
+  const runLimitations = run
+    ? uniqueValues([
+        ...run.limitations,
+        ...run.source_results.flatMap((result) => result.limitations),
+      ])
+    : []
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <SummaryCard label="Sources" value={statuses.length} />
+        <SummaryCard label="Saved runs" value={runs.length} />
+        <SummaryCard label="Selected run" value={run?.run_id ?? runs[0]?.run_id ?? 'none'} />
+        <SummaryCard label="Scope" value="research only" />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        {statuses.map((status) => (
+          <MiniPanel key={status.provider_type} title={status.capabilities.display_name}>
+            <div className="mb-3">
+              <StatusPill status={status.status} />
+            </div>
+            <NotesList notes={status.limitations} emptyText="No limitations reported." compact />
+          </MiniPanel>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_auto]">
+        <select
+          value={runId}
+          onChange={(event) => onRunIdChange(event.target.value)}
+          className="rounded-md border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-white outline-none focus:border-sky-500"
+        >
+          <option value="">Select free derivatives run</option>
+          {runs.map((summary) => (
+            <option key={summary.run_id} value={summary.run_id}>
+              {summary.run_id} | {summary.status}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={onLoad}
+          disabled={loading || !runId.trim()}
+          className="rounded-md border border-gray-700 px-3 py-2 text-sm text-gray-100 hover:border-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Load run
+        </button>
+      </div>
+
+      {error && <Notice tone="error">{error}</Notice>}
+      {loading && <EmptyInline>Loading free derivatives run...</EmptyInline>}
+
+      {run ? (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <SummaryCard label="Status" value={run.status} />
+            <SummaryCard label="Sources" value={run.source_results.length} />
+            <SummaryCard label="Artifacts" value={run.artifacts.length} />
+            <SummaryCard label="Completed" value={run.completed_at ?? 'n/a'} />
+          </div>
+
+          <FreeDerivativesSourceTable results={run.source_results} />
+          <FreeDerivativesArtifactTable artifacts={run.artifacts} />
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <MiniPanel title="Run warnings">
+              <NotesList notes={runWarnings} emptyText="No warnings reported." compact />
+            </MiniPanel>
+            <MiniPanel title="Run limitations">
+              <NotesList notes={runLimitations} emptyText="No limitations reported." compact />
+            </MiniPanel>
+          </div>
+
+          <MiniPanel title="Run missing-data actions">
+            <NotesList
+              notes={run.missing_data_actions}
+              emptyText="No run-specific missing-data actions."
+              compact
+            />
+          </MiniPanel>
+        </div>
+      ) : (
+        <EmptyInline>No free derivatives run is loaded.</EmptyInline>
+      )}
+
+      <MiniPanel title="Capabilities">
+        <CapabilityTable rows={capabilities} />
+      </MiniPanel>
+
+      <MiniPanel title="Missing-data actions">
+        <MissingDataChecklist actions={actions} />
+      </MiniPanel>
+
+      <p className="text-xs leading-5 text-gray-400">
+        CFTC, GVZ, and Deribit entries are public/no-key research data only. This page
+        does not return secret values, masked values, partial credentials, private
+        account endpoints, or order endpoints; generated outputs stay under ignored
+        data/raw, data/processed, and data/reports paths.
+      </p>
+    </div>
+  )
+}
+
+function FreeDerivativesSourceTable({ results }: { results: FreeDerivativesSourceResult[] }) {
+  if (results.length === 0) {
+    return (
+      <MiniPanel title="Source status">
+        <EmptyInline>No source results are available.</EmptyInline>
+      </MiniPanel>
+    )
+  }
+
+  return (
+    <MiniPanel title="Source status">
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead className="border-b border-gray-700 text-xs uppercase text-gray-400">
+            <tr>
+              <th className="px-3 py-2">Source</th>
+              <th className="px-3 py-2">Status</th>
+              <th className="px-3 py-2">Rows</th>
+              <th className="px-3 py-2">Instruments</th>
+              <th className="px-3 py-2">Coverage</th>
+              <th className="px-3 py-2">Snapshot</th>
+              <th className="px-3 py-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-700">
+            {results.map((result) => (
+              <tr key={result.source}>
+                <td className="px-3 py-2 font-medium">{formatValue(result.source)}</td>
+                <td className="px-3 py-2">
+                  <StatusPill status={result.status} />
+                </td>
+                <td className="px-3 py-2 text-gray-300">{result.row_count}</td>
+                <td className="px-3 py-2 text-gray-300">{result.instrument_count}</td>
+                <td className="px-3 py-2 text-gray-300">
+                  {result.coverage_start ?? 'n/a'} to {result.coverage_end ?? 'n/a'}
+                </td>
+                <td className="px-3 py-2 text-gray-300">
+                  {result.snapshot_timestamp ?? 'n/a'}
+                </td>
+                <td className="min-w-80 px-3 py-2 text-gray-300">
+                  <NotesList
+                    notes={result.missing_data_actions}
+                    emptyText="None"
+                    compact
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </MiniPanel>
+  )
+}
+
+function FreeDerivativesArtifactTable({
+  artifacts,
+}: {
+  artifacts: FreeDerivativesArtifact[]
+}) {
+  if (artifacts.length === 0) {
+    return (
+      <MiniPanel title="Output paths">
+        <EmptyInline>No artifacts were written.</EmptyInline>
+      </MiniPanel>
+    )
+  }
+
+  return (
+    <MiniPanel title="Output paths">
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead className="border-b border-gray-700 text-xs uppercase text-gray-400">
+            <tr>
+              <th className="px-3 py-2">Artifact</th>
+              <th className="px-3 py-2">Source</th>
+              <th className="px-3 py-2">Format</th>
+              <th className="px-3 py-2">Rows</th>
+              <th className="px-3 py-2">Path</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-700">
+            {artifacts.map((artifact) => (
+              <tr key={`${artifact.artifact_type}-${artifact.path}`}>
+                <td className="px-3 py-2 font-medium">{formatValue(artifact.artifact_type)}</td>
+                <td className="px-3 py-2 text-gray-300">{formatValue(artifact.source)}</td>
+                <td className="px-3 py-2 text-gray-300">{artifact.format}</td>
+                <td className="px-3 py-2 text-gray-300">{artifact.rows ?? 'n/a'}</td>
+                <td className="max-w-sm break-all px-3 py-2 text-gray-300">
+                  {artifact.path}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </MiniPanel>
   )
 }
 
@@ -761,7 +1059,7 @@ function StatusPill({ status }: { status: string }) {
   const tone =
     status === 'configured' || status === 'ready' || status === 'completed'
       ? 'border-emerald-700 bg-emerald-950 text-emerald-200'
-      : status === 'forbidden' || status === 'blocking' || status === 'blocked'
+      : status === 'forbidden' || status === 'blocking' || status === 'blocked' || status === 'failed'
         ? 'border-red-800 bg-red-950 text-red-200'
         : 'border-amber-800 bg-amber-950 text-amber-100'
   return (

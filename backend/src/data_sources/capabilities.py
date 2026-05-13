@@ -2,6 +2,16 @@
 
 from collections.abc import Iterable
 
+from src.free_derivatives.processing import (
+    ARTIFACT_SCOPE_LIMITATION,
+    CFTC_CATEGORY_LIMITATION,
+    CFTC_WEEKLY_POSITIONING_LIMITATION,
+    DERIBIT_CRYPTO_OPTIONS_LIMITATION,
+    DERIBIT_UNSUPPORTED_UNDERLYING_LIMITATION,
+    GVZ_NOT_STRIKE_LEVEL_OI_LIMITATION,
+    GVZ_PROXY_LIMITATION,
+    PUBLIC_ONLY_LIMITATION,
+)
 from src.models.data_sources import (
     DataSourceCapability,
     DataSourceLocalFileCapabilityDetection,
@@ -95,6 +105,71 @@ def capability_matrix() -> list[DataSourceCapability]:
             limitations=[
                 "Local file capabilities depend on required columns and parseable timestamps.",
                 "Generated and imported data files must remain ignored and untracked.",
+            ],
+        ),
+        DataSourceCapability(
+            provider_type=DataSourceProviderType.CFTC_COT,
+            display_name="CFTC COT Gold Positioning",
+            tier=DataSourceTier.TIER_0_PUBLIC_LOCAL,
+            supports=[
+                "weekly_gold_positioning",
+                "futures_only_cot",
+                "futures_and_options_combined_cot",
+            ],
+            unsupported=["strike_level_options_oi", "intraday_wall_data", "execution"],
+            requires_key=False,
+            requires_local_file=False,
+            is_optional=False,
+            limitations=[
+                CFTC_WEEKLY_POSITIONING_LIMITATION,
+                CFTC_CATEGORY_LIMITATION,
+                PUBLIC_ONLY_LIMITATION,
+                ARTIFACT_SCOPE_LIMITATION,
+            ],
+        ),
+        DataSourceCapability(
+            provider_type=DataSourceProviderType.GVZ,
+            display_name="GVZ Gold Volatility Proxy",
+            tier=DataSourceTier.TIER_0_PUBLIC_LOCAL,
+            supports=["gold_volatility_proxy", "daily_gvz_close"],
+            unsupported=[
+                "cme_gold_options_iv_surface",
+                "strike_level_options_oi",
+                "execution",
+            ],
+            requires_key=False,
+            requires_local_file=False,
+            is_optional=False,
+            limitations=[
+                GVZ_PROXY_LIMITATION,
+                GVZ_NOT_STRIKE_LEVEL_OI_LIMITATION,
+                PUBLIC_ONLY_LIMITATION,
+                ARTIFACT_SCOPE_LIMITATION,
+            ],
+        ),
+        DataSourceCapability(
+            provider_type=DataSourceProviderType.DERIBIT_PUBLIC_OPTIONS,
+            display_name="Deribit Public Options",
+            tier=DataSourceTier.TIER_0_PUBLIC_LOCAL,
+            supports=[
+                "crypto_options_open_interest",
+                "crypto_options_iv",
+                "public_option_snapshots",
+            ],
+            unsupported=[
+                "gold_options_oi",
+                "xau_options_oi",
+                "private_account_data",
+                "execution",
+            ],
+            requires_key=False,
+            requires_local_file=False,
+            is_optional=False,
+            limitations=[
+                DERIBIT_CRYPTO_OPTIONS_LIMITATION,
+                DERIBIT_UNSUPPORTED_UNDERLYING_LIMITATION,
+                PUBLIC_ONLY_LIMITATION,
+                ARTIFACT_SCOPE_LIMITATION,
             ],
         ),
         DataSourceCapability(
