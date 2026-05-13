@@ -108,7 +108,7 @@ Call:
 ```powershell
 Invoke-RestMethod `
   -Method Post `
-  -Uri "http://localhost:8000/api/v1/quikstrike/extractions" `
+  -Uri "http://localhost:8000/api/v1/quikstrike/extractions/from-fixture" `
   -ContentType "application/json" `
   -Body $body
 ```
@@ -133,10 +133,10 @@ Then call:
 Invoke-RestMethod "http://localhost:8000/api/v1/quikstrike/extractions"
 Invoke-RestMethod "http://localhost:8000/api/v1/quikstrike/extractions/{extraction_id}"
 Invoke-RestMethod "http://localhost:8000/api/v1/quikstrike/extractions/{extraction_id}/rows"
-Invoke-RestMethod -Method Post "http://localhost:8000/api/v1/quikstrike/extractions/{extraction_id}/convert-xau-vol-oi"
+Invoke-RestMethod "http://localhost:8000/api/v1/quikstrike/extractions/{extraction_id}/conversion"
 ```
 
-Confirm missing extraction ids return structured `NOT_FOUND` errors and uncertain strike mapping returns structured `CONVERSION_BLOCKED` errors.
+Confirm missing extraction ids return structured `NOT_FOUND` errors and uncertain strike mapping returns a blocked conversion status with blocked reasons.
 
 ## 6. Inspect Generated Artifacts
 

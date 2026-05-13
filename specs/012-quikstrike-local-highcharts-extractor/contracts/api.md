@@ -21,7 +21,7 @@ These routes operate on sanitized DOM and Highcharts payloads or saved local ext
 
 Creates a local research extraction report from sanitized DOM metadata and sanitized Highcharts chart objects.
 
-**Endpoint**: `POST /api/v1/quikstrike/extractions`
+**Endpoint**: `POST /api/v1/quikstrike/extractions/from-fixture`
 
 **Request Body**:
 
@@ -230,35 +230,39 @@ Returns saved extraction metadata, view summaries, warnings, limitations, resear
 }
 ```
 
-### 5. Convert Extraction To XAU Vol-OI Input
+### 5. Get XAU Vol-OI Conversion Rows
 
-**Endpoint**: `POST /api/v1/quikstrike/extractions/{extraction_id}/convert-xau-vol-oi`
+**Endpoint**: `GET /api/v1/quikstrike/extractions/{extraction_id}/conversion`
 
 **Response** (200 OK):
 
 ```json
 {
-  "conversion_id": "quikstrike_20260513_120000_xau_vol_oi",
   "extraction_id": "quikstrike_20260513_120000",
-  "status": "completed",
-  "row_count": 256,
-  "output_artifacts": [
-    {
-      "artifact_type": "processed_xau_vol_oi_parquet",
-      "path": "data/processed/quikstrike/quikstrike_20260513_120000_xau_vol_oi_input.parquet",
-      "format": "parquet",
-      "rows": 256,
-      "created_at": "2026-05-13T12:00:02Z",
-      "limitations": [
-        "Converted from local QuikStrike chart extraction; source limitations preserved."
-      ]
-    }
-  ],
-  "blocked_reasons": [],
-  "warnings": [],
-  "limitations": [
-    "Conversion prepares local XAU Vol-OI input only and does not run wall scoring."
-  ]
+  "conversion_result": {
+    "conversion_id": "quikstrike_20260513_120000_xau_vol_oi",
+    "extraction_id": "quikstrike_20260513_120000",
+    "status": "completed",
+    "row_count": 256,
+    "output_artifacts": [
+      {
+        "artifact_type": "processed_xau_vol_oi_csv",
+        "path": "data/processed/quikstrike/quikstrike_20260513_120000_xau_vol_oi_input.csv",
+        "format": "csv",
+        "rows": 256,
+        "created_at": "2026-05-13T12:00:02Z",
+        "limitations": [
+          "Converted from local QuikStrike chart extraction; source limitations preserved."
+        ]
+      }
+    ],
+    "blocked_reasons": [],
+    "warnings": [],
+    "limitations": [
+      "Conversion prepares local XAU Vol-OI input only and does not run wall scoring."
+    ]
+  },
+  "rows": []
 }
 ```
 
@@ -297,20 +301,26 @@ Returns saved extraction metadata, view summaries, warnings, limitations, resear
 }
 ```
 
-### Conversion Blocked
+### Blocked Conversion Status
 
 ```json
 {
-  "error": {
-    "code": "CONVERSION_BLOCKED",
-    "message": "QuikStrike extraction is not eligible for XAU Vol-OI conversion",
-    "details": [
-      {
-        "field": "strike_mapping",
-        "message": "Strike mapping confidence is partial."
-      }
+  "extraction_id": "quikstrike_20260513_120000",
+  "conversion_result": {
+    "conversion_id": "quikstrike_20260513_120000_xau_vol_oi",
+    "extraction_id": "quikstrike_20260513_120000",
+    "status": "blocked",
+    "row_count": 0,
+    "output_artifacts": [],
+    "blocked_reasons": [
+      "Strike mapping confidence is partial."
+    ],
+    "warnings": [],
+    "limitations": [
+      "Conversion prepares local XAU Vol-OI research input only and does not run wall scoring."
     ]
-  }
+  },
+  "rows": []
 }
 ```
 

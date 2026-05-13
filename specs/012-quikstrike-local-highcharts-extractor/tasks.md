@@ -27,4 +27,4 @@
 - [x] T018 Add local browser adapter skeleton without credential/session persistence
 - [x] T019 Add integration tests with synthetic Highcharts plus DOM fixtures
 - [x] T020 Add API contract tests if routes are implemented
-- [ ] T021 Run final backend, frontend, artifact guard, smoke, and forbidden-scope validation
+- [x] T021 Run final backend, frontend, artifact guard, smoke, and forbidden-scope validation
