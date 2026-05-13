@@ -18,10 +18,10 @@
 
 ## Phase 2 - Remaining Feature Work
 
-- [ ] T012 Implement normalized row builder and view coverage validation in `backend/src/quikstrike/extraction.py`
-- [ ] T013 Implement strike mapping confidence validation in `backend/src/quikstrike/extraction.py`
-- [ ] T014 Implement XAU Vol-OI compatible conversion in `backend/src/quikstrike/conversion.py`
-- [ ] T015 Implement QuikStrike report-store persistence in `backend/src/quikstrike/report_store.py`
+- [x] T012 Implement normalized row builder and view coverage validation in `backend/src/quikstrike/extraction.py`
+- [x] T013 Implement strike mapping confidence validation in `backend/src/quikstrike/extraction.py`
+- [x] T014 Implement XAU Vol-OI compatible conversion in `backend/src/quikstrike/conversion.py`
+- [x] T015 Implement QuikStrike report-store persistence in `backend/src/quikstrike/report_store.py`
 - [ ] T016 Add optional local API routes in `backend/src/api/routes/quikstrike.py`
 - [ ] T017 Add optional dashboard/status panel if needed
 - [ ] T018 Add local browser adapter skeleton without credential/session persistence

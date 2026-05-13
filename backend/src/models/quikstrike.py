@@ -426,6 +426,44 @@ class QuikStrikeNormalizedRow(QuikStrikeBaseModel):
         return self
 
 
+class QuikStrikeXauVolOiRow(QuikStrikeBaseModel):
+    timestamp: datetime
+    expiry: date
+    strike: float
+    option_type: QuikStrikeOptionType
+    open_interest: float | None = None
+    oi_change: float | None = None
+    volume: float | None = None
+    intraday_volume: float | None = None
+    eod_volume: float | None = None
+    churn: float | None = None
+    implied_volatility: float | None = None
+    underlying_futures_price: float | None = None
+    dte: float | None = Field(default=None, ge=0)
+    source: str = "quikstrike_highcharts_local"
+    source_view: str
+    source_extraction_id: str
+    limitations: list[str] = Field(default_factory=list)
+
+    @field_validator("source", "source_view", "source_extraction_id")
+    @classmethod
+    def normalize_source_strings(cls, value: str) -> str:
+        normalized = " ".join(str(value).split())
+        if not normalized:
+            raise ValueError("QuikStrike XAU Vol-OI source fields must not be blank")
+        return normalized
+
+    @field_validator("source_extraction_id")
+    @classmethod
+    def validate_source_extraction_id(cls, value: str) -> str:
+        return validate_quikstrike_safe_id(value)
+
+    @field_validator("limitations")
+    @classmethod
+    def normalize_xau_row_limitations(cls, values: list[str]) -> list[str]:
+        return _dedupe_nonblank_strings(values)
+
+
 class QuikStrikeExtractionResult(QuikStrikeBaseModel):
     extraction_id: str
     status: QuikStrikeExtractionStatus
@@ -494,6 +532,34 @@ class QuikStrikeConversionResult(QuikStrikeBaseModel):
         if self.status == QuikStrikeConversionStatus.COMPLETED and not self.output_artifacts:
             raise ValueError("completed conversion requires output artifacts")
         return self
+
+
+class QuikStrikeExtractionReport(QuikStrikeBaseModel):
+    extraction_id: str
+    status: QuikStrikeExtractionStatus
+    created_at: datetime
+    completed_at: datetime | None = None
+    request_summary: dict[str, Any] = Field(default_factory=dict)
+    view_summaries: list[dict[str, Any]] = Field(default_factory=list)
+    row_count: int = Field(ge=0)
+    strike_mapping: QuikStrikeStrikeMappingValidation
+    conversion_result: QuikStrikeConversionResult | None = None
+    artifacts: list[QuikStrikeArtifact] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+    research_only_warnings: list[str] = Field(
+        default_factory=lambda: [QUIKSTRIKE_RESEARCH_ONLY_WARNING]
+    )
+
+    @field_validator("extraction_id")
+    @classmethod
+    def validate_report_extraction_id(cls, value: str) -> str:
+        return validate_quikstrike_safe_id(value)
+
+    @field_validator("warnings", "limitations", "research_only_warnings")
+    @classmethod
+    def normalize_report_lists(cls, values: list[str]) -> list[str]:
+        return _dedupe_nonblank_strings(values)
 
 
 def value_type_for_view(view_type: QuikStrikeViewType | str) -> str:
