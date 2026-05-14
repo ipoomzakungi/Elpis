@@ -555,6 +555,7 @@ class QuikStrikeConversionResult(QuikStrikeBaseModel):
 
 class QuikStrikeExtractionReport(QuikStrikeBaseModel):
     extraction_id: str
+    source_kind: str = "operational"
     status: QuikStrikeExtractionStatus
     created_at: datetime
     completed_at: datetime | None = None
@@ -583,6 +584,7 @@ class QuikStrikeExtractionReport(QuikStrikeBaseModel):
 
 class QuikStrikeExtractionSummary(QuikStrikeBaseModel):
     extraction_id: str
+    source_kind: str = "operational"
     status: QuikStrikeExtractionStatus
     created_at: datetime
     completed_at: datetime | None = None

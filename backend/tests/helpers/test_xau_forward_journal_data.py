@@ -10,11 +10,11 @@ from src.models.xau_forward_journal import (
     XauForwardOutcomeWindow,
 )
 
-VOL2VOL_ID = "quikstrike_20260513_101537"
-MATRIX_ID = "quikstrike_matrix_20260513_155058"
-FUSION_ID = "xau_quikstrike_fusion_20260514_030803"
-XAU_VOL_OI_ID = "xau_vol_oi_20260514_030804"
-XAU_REACTION_ID = "xau_reaction_20260514_030804"
+VOL2VOL_ID = "synthetic_quikstrike_20260513_101537"
+MATRIX_ID = "synthetic_quikstrike_matrix_20260513_155058"
+FUSION_ID = "synthetic_xau_quikstrike_fusion_20260514_030803"
+XAU_VOL_OI_ID = "synthetic_xau_vol_oi_20260514_030804"
+XAU_REACTION_ID = "synthetic_xau_reaction_20260514_030804"
 
 
 def synthetic_forward_journal_create_payload() -> dict[str, Any]:
@@ -41,6 +41,7 @@ def synthetic_source_report_ref(
     return {
         "source_type": source_type.value,
         "report_id": report_id,
+        "source_kind": "synthetic",
         "status": "available",
         "created_at": datetime(2026, 5, 14, 3, 8, 4, tzinfo=UTC).isoformat(),
         "product": "Gold (OG|GC)",
@@ -98,6 +99,7 @@ def write_synthetic_source_reports(
         reports_dir / "quikstrike" / VOL2VOL_ID / "report.json",
         {
             "extraction_id": VOL2VOL_ID,
+            "source_kind": "synthetic",
             "status": "completed",
             "created_at": "2026-05-14T03:00:00Z",
             "row_count": 10,
@@ -123,6 +125,7 @@ def write_synthetic_source_reports(
         reports_dir / "quikstrike_matrix" / MATRIX_ID / "report.json",
         {
             "extraction_id": MATRIX_ID,
+            "source_kind": "synthetic",
             "status": "completed",
             "created_at": "2026-05-14T03:01:00Z",
             "product": product,
@@ -139,10 +142,12 @@ def write_synthetic_source_reports(
         reports_dir / "xau_quikstrike_fusion" / FUSION_ID / "report.json",
         {
             "report_id": FUSION_ID,
+            "source_kind": "synthetic",
             "status": fusion_status,
             "created_at": "2026-05-14T03:02:00Z",
             "vol2vol_source": {
                 "report_id": VOL2VOL_ID,
+                "source_kind": "synthetic",
                 "status": "completed",
                 "product": product,
                 "row_count": 10,
@@ -151,6 +156,7 @@ def write_synthetic_source_reports(
             },
             "matrix_source": {
                 "report_id": MATRIX_ID,
+                "source_kind": "synthetic",
                 "status": "completed",
                 "product": product,
                 "row_count": 30,
@@ -189,6 +195,7 @@ def write_synthetic_source_reports(
         reports_dir / "xau_vol_oi" / XAU_VOL_OI_ID / "metadata.json",
         {
             "report_id": XAU_VOL_OI_ID,
+            "source_kind": "synthetic",
             "status": "completed",
             "created_at": "2026-05-14T03:03:00Z",
             "session_date": "2026-05-14",
@@ -209,6 +216,7 @@ def write_synthetic_source_reports(
         reports_dir / "xau_reaction" / XAU_REACTION_ID / "metadata.json",
         {
             "report_id": XAU_REACTION_ID,
+            "source_kind": "synthetic",
             "source_report_id": reaction_source_report_id,
             "status": "partial",
             "created_at": "2026-05-14T03:04:00Z",

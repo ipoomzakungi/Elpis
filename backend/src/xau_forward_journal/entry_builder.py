@@ -23,6 +23,7 @@ from src.models.xau_forward_journal import (
     XauForwardWallSummary,
     validate_xau_forward_journal_safe_id,
 )
+from src.reports.collision_guard import source_kind_from_report, source_kind_warning
 from src.xau_forward_journal.outcome import create_default_pending_outcomes
 
 
@@ -607,11 +608,16 @@ def _source_ref(
 ) -> XauForwardSourceReportRef:
     status = _text_or_none(report.get("status")) or "available"
     warnings = _text_list(report.get("warnings"))
+    source_kind = source_kind_from_report(report, report_id=report_id)
+    kind_warning = source_kind_warning(report_id, source_kind)
+    if kind_warning:
+        warnings.append(kind_warning)
     if status != "completed" and status != "available":
         warnings.append(f"{source_type.value} source status is {status}.")
     return XauForwardSourceReportRef(
         source_type=source_type,
         report_id=report_id,
+        source_kind=source_kind,
         status=status,
         created_at=_datetime_or_none(report.get("created_at")),
         product=product or _text_or_none(report.get("product")),

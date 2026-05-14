@@ -283,6 +283,7 @@ class XauForwardJournalNote(XauForwardJournalBaseModel):
 class XauForwardSourceReportRef(XauForwardJournalBaseModel):
     source_type: XauForwardJournalSourceType
     report_id: str
+    source_kind: str = "operational"
     status: str = "available"
     created_at: datetime | None = None
     product: str | None = None
@@ -305,7 +306,14 @@ class XauForwardSourceReportRef(XauForwardJournalBaseModel):
             return None
         return _normalize_aware_datetime(value)
 
-    @field_validator("status", "product", "expiration", "expiration_code", mode="before")
+    @field_validator(
+        "source_kind",
+        "status",
+        "product",
+        "expiration",
+        "expiration_code",
+        mode="before",
+    )
     @classmethod
     def normalize_optional_strings(cls, value: str | None) -> str | None:
         return _normalize_optional_text(value)
@@ -650,6 +658,7 @@ class XauForwardOutcomeUpdateRequest(XauForwardJournalBaseModel):
 class XauForwardJournalEntry(XauForwardJournalBaseModel):
     journal_id: str
     snapshot_key: str
+    source_kind: str = "operational"
     status: XauForwardJournalEntryStatus
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -703,6 +712,7 @@ class XauForwardJournalEntry(XauForwardJournalBaseModel):
 class XauForwardJournalSummary(XauForwardJournalBaseModel):
     journal_id: str
     snapshot_key: str
+    source_kind: str = "operational"
     status: XauForwardJournalEntryStatus
     snapshot_time: datetime
     capture_window: str = "daily_snapshot"

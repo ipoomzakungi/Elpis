@@ -586,6 +586,7 @@ class XauFusionArtifact(XauFusionBaseModel):
 
 class XauQuikStrikeFusionSummary(XauFusionBaseModel):
     report_id: str
+    source_kind: str = "operational"
     status: XauFusionReportStatus
     created_at: datetime = Field(default_factory=datetime.utcnow)
     vol2vol_report_id: str
@@ -618,6 +619,7 @@ class XauQuikStrikeFusionSummary(XauFusionBaseModel):
 
 class XauQuikStrikeFusionReport(XauFusionBaseModel):
     report_id: str
+    source_kind: str = "operational"
     status: XauFusionReportStatus
     created_at: datetime = Field(default_factory=datetime.utcnow)
     completed_at: datetime | None = None

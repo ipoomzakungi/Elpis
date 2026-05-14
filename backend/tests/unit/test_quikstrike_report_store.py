@@ -14,6 +14,7 @@ from src.quikstrike.dom_metadata import parse_dom_metadata
 from src.quikstrike.extraction import build_extraction_from_request
 from src.quikstrike.highcharts_reader import parse_highcharts_chart
 from src.quikstrike.report_store import QuikStrikeReportStore
+from src.reports.collision_guard import ReportIdCollisionError, ReportSourceKindIsolationError
 
 
 def _chart_fixture() -> dict:
@@ -94,6 +95,10 @@ def test_report_store_persists_and_reads_report_artifacts(tmp_path: Path):
     assert (report_dir / "report.json").exists()
     assert (report_dir / "report.md").exists()
     assert report.artifacts
+    assert report.source_kind == "operational"
+    assert '"source_kind": "operational"' in (report_dir / "metadata.json").read_text(
+        encoding="utf-8"
+    )
     assert all(artifact.path.startswith("data/") for artifact in report.artifacts)
 
     saved_report = store.read_report("quikstrike_report")
@@ -103,6 +108,34 @@ def test_report_store_persists_and_reads_report_artifacts(tmp_path: Path):
     assert saved_report.extraction_id == "quikstrike_report"
     assert saved_rows == bundle.rows
     assert saved_conversion_rows == conversion.rows
+
+
+def test_report_store_blocks_report_id_collisions_and_unisolated_smoke_ids(
+    tmp_path: Path,
+):
+    bundle = _extraction_bundle()
+    store = QuikStrikeReportStore(reports_dir=tmp_path / "data" / "reports")
+
+    store.persist_report(extraction_result=bundle.result, normalized_rows=bundle.rows)
+
+    with pytest.raises(ReportIdCollisionError):
+        store.persist_report(extraction_result=bundle.result, normalized_rows=bundle.rows)
+
+    with pytest.raises((ReportIdCollisionError, ReportSourceKindIsolationError)):
+        store.persist_report(
+            extraction_result=bundle.result,
+            normalized_rows=bundle.rows,
+            source_kind="smoke",
+        )
+
+    with pytest.raises(ReportSourceKindIsolationError):
+        store.persist_report(
+            extraction_result=bundle.result.model_copy(
+                update={"extraction_id": "quikstrike_unisolated"}
+            ),
+            normalized_rows=bundle.rows,
+            source_kind="smoke",
+        )
 
 
 def test_report_store_rejects_unsafe_ids_and_filenames(tmp_path: Path):

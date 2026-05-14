@@ -57,7 +57,8 @@ def test_create_entry_conflicts_when_matching_snapshot_has_non_pending_outcome(t
         }
     )
     store.persist_entry(
-        first.model_copy(update={"outcomes": [completed_outcome, *first.outcomes[1:]]})
+        first.model_copy(update={"outcomes": [completed_outcome, *first.outcomes[1:]]}),
+        overwrite_allowed=True,
     )
 
     with pytest.raises(XauForwardJournalConflictError) as exc:

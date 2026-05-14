@@ -16,6 +16,10 @@ from src.models.xau import (
     XauWallTableResponse,
     XauZoneTableResponse,
 )
+from src.reports.collision_guard import (
+    assert_report_write_allowed,
+    resolve_report_source_kind_for_write,
+)
 from src.reports.writer import compose_xau_report_json, compose_xau_report_markdown
 
 
@@ -27,9 +31,27 @@ class XauReportStore:
         self.repo_root = Path(__file__).resolve().parents[3]
         self.xau_dir = self.reports_dir / "xau_vol_oi"
 
-    def save_source_validation_report(self, report: XauVolOiReport) -> XauVolOiReport:
+    def save_source_validation_report(
+        self,
+        report: XauVolOiReport,
+        *,
+        source_kind: str | None = None,
+        overwrite_allowed: bool = False,
+    ) -> XauVolOiReport:
         self.xau_dir.mkdir(parents=True, exist_ok=True)
         report_dir = self._report_dir(report.report_id)
+        requested_source_kind = resolve_report_source_kind_for_write(
+            report_id=report.report_id,
+            explicit_source_kind=source_kind,
+            model_source_kind=report.source_kind,
+        )
+        normalized_source_kind = assert_report_write_allowed(
+            report_dir=report_dir,
+            report_id=report.report_id,
+            source_kind=requested_source_kind,
+            overwrite_allowed=overwrite_allowed,
+        )
+        report = report.model_copy(update={"source_kind": normalized_source_kind})
         report_dir.mkdir(parents=True, exist_ok=True)
 
         metadata_path = report_dir / "metadata.json"
@@ -94,6 +116,7 @@ class XauReportStore:
             summaries.append(
                 XauVolOiReportSummary(
                     report_id=report.report_id,
+                    source_kind=report.source_kind,
                     status=report.status,
                     created_at=report.created_at,
                     session_date=report.session_date,

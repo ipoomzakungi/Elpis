@@ -21,6 +21,10 @@ from src.models.xau_quikstrike_fusion import (
     XauQuikStrikeFusionSummary,
     validate_xau_fusion_safe_id,
 )
+from src.reports.collision_guard import (
+    assert_report_write_allowed,
+    resolve_report_source_kind_for_write,
+)
 
 
 class XauQuikStrikeFusionReportStore:
@@ -167,9 +171,24 @@ class XauQuikStrikeFusionReportStore:
         report: XauQuikStrikeFusionReport,
         *,
         xau_vol_oi_input_rows: list[XauFusionVolOiInputRow] | None = None,
+        source_kind: str | None = None,
+        overwrite_allowed: bool = False,
     ) -> XauQuikStrikeFusionReport:
         """Persist MVP fusion metadata, rows, JSON, and Markdown artifacts."""
 
+        requested_source_kind = resolve_report_source_kind_for_write(
+            report_id=report.report_id,
+            explicit_source_kind=source_kind,
+            model_source_kind=report.source_kind,
+        )
+        normalized_source_kind = assert_report_write_allowed(
+            report_dir=self.report_dir(report.report_id),
+            report_id=report.report_id,
+            source_kind=requested_source_kind,
+            overwrite_allowed=overwrite_allowed,
+            allowed_existing_filenames={"xau_vol_oi_report_input.csv"},
+        )
+        report = report.model_copy(update={"source_kind": normalized_source_kind})
         report_dir = self.ensure_report_dir(report.report_id)
         metadata_path = report_dir / "metadata.json"
         fused_rows_path = report_dir / "fused_rows.json"
@@ -251,6 +270,7 @@ class XauQuikStrikeFusionReportStore:
         downstream_result = report.downstream_result
         return XauQuikStrikeFusionSummary(
             report_id=report.report_id,
+            source_kind=report.source_kind,
             status=report.status,
             created_at=report.created_at,
             vol2vol_report_id=report.vol2vol_source.report_id,
@@ -346,6 +366,7 @@ def _jsonable(payload: Any) -> Any:
 def _metadata_payload(report: XauQuikStrikeFusionReport) -> dict[str, Any]:
     return {
         "report_id": report.report_id,
+        "source_kind": report.source_kind,
         "status": report.status.value,
         "created_at": report.created_at.isoformat(),
         "completed_at": report.completed_at.isoformat() if report.completed_at else None,

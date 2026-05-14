@@ -570,6 +570,7 @@ class QuikStrikeMatrixConversionResult(QuikStrikeMatrixBaseModel):
 
 class QuikStrikeMatrixExtractionReport(QuikStrikeMatrixBaseModel):
     extraction_id: str
+    source_kind: str = "operational"
     status: QuikStrikeMatrixExtractionStatus
     created_at: datetime
     completed_at: datetime | None = None
@@ -601,6 +602,7 @@ class QuikStrikeMatrixExtractionReport(QuikStrikeMatrixBaseModel):
 
 class QuikStrikeMatrixExtractionSummary(QuikStrikeMatrixBaseModel):
     extraction_id: str
+    source_kind: str = "operational"
     status: QuikStrikeMatrixExtractionStatus
     created_at: datetime
     completed_at: datetime | None = None
