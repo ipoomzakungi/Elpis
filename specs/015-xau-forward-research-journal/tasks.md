@@ -103,25 +103,25 @@
 
 ### Tests for User Story 2
 
-- [ ] T047 [P] [US2] Add outcome window validation tests for supported windows, timestamps, OHLC consistency, and missing data in `backend/tests/unit/test_xau_forward_journal_outcome.py`
-- [ ] T048 [P] [US2] Add outcome label rule tests for pending, inconclusive, wall_held, wall_rejected, wall_accepted_break, moved_to_next_wall, reversed_before_target, stayed_inside_range, and no_trade_was_correct in `backend/tests/unit/test_xau_forward_journal_outcome.py`
-- [ ] T049 [P] [US2] Add no-fabricated-candle regression tests for missing and partial OHLC observations in `backend/tests/unit/test_xau_forward_journal_outcome.py`
-- [ ] T050 [P] [US2] Add outcome conflict update tests requiring an update note for changing non-pending labels in `backend/tests/unit/test_xau_forward_journal_outcome.py`
-- [ ] T051 [P] [US2] Add outcome persistence read/write tests in `backend/tests/unit/test_xau_forward_journal_report_store.py`
-- [ ] T052 [P] [US2] Add outcome update integration test proving snapshot fields remain immutable in `backend/tests/integration/test_xau_forward_journal_flow.py`
-- [ ] T053 [P] [US2] Add outcome API contract tests for update, get outcomes, invalid window, missing entry, and conflict cases in `backend/tests/contract/test_xau_forward_journal_api_contracts.py`
+- [X] T047 [P] [US2] Add outcome window validation tests for supported windows, timestamps, OHLC consistency, and missing data in `backend/tests/unit/test_xau_forward_journal_outcome.py`
+- [X] T048 [P] [US2] Add outcome label rule tests for pending, inconclusive, wall_held, wall_rejected, wall_accepted_break, moved_to_next_wall, reversed_before_target, stayed_inside_range, and no_trade_was_correct in `backend/tests/unit/test_xau_forward_journal_outcome.py`
+- [X] T049 [P] [US2] Add no-fabricated-candle regression tests for missing and partial OHLC observations in `backend/tests/unit/test_xau_forward_journal_outcome.py`
+- [X] T050 [P] [US2] Add outcome conflict update tests requiring an update note for changing non-pending labels in `backend/tests/unit/test_xau_forward_journal_outcome.py`
+- [X] T051 [P] [US2] Add outcome persistence read/write tests in `backend/tests/unit/test_xau_forward_journal_report_store.py`
+- [X] T052 [P] [US2] Add outcome update integration test proving snapshot fields remain immutable in `backend/tests/integration/test_xau_forward_journal_flow.py`
+- [X] T053 [P] [US2] Add outcome API contract tests for update, get outcomes, invalid window, missing entry, and conflict cases in `backend/tests/contract/test_xau_forward_journal_api_contracts.py`
 
 ### Implementation for User Story 2
 
-- [ ] T054 [US2] Implement OHLC observation validation and supported outcome window checks in `backend/src/xau_forward_journal/outcome.py`
-- [ ] T055 [US2] Implement conservative outcome label status rules for pending, inconclusive, and completed labels in `backend/src/xau_forward_journal/outcome.py`
-- [ ] T056 [US2] Implement conflict detection for non-pending label updates and required update notes in `backend/src/xau_forward_journal/outcome.py`
-- [ ] T057 [US2] Implement outcome update application without mutating original snapshot fields in `backend/src/xau_forward_journal/outcome.py`
-- [ ] T058 [US2] Implement persisted outcome update reads and writes in `backend/src/xau_forward_journal/report_store.py`
-- [ ] T059 [US2] Integrate outcome updates into journal orchestration in `backend/src/xau_forward_journal/orchestration.py`
-- [ ] T060 [US2] Implement `POST /api/v1/xau/forward-journal/entries/{journal_id}/outcomes` in `backend/src/api/routes/xau_forward_journal.py`
-- [ ] T061 [US2] Implement `GET /api/v1/xau/forward-journal/entries/{journal_id}/outcomes` in `backend/src/api/routes/xau_forward_journal.py`
-- [ ] T062 [US2] Implement structured outcome API errors for not found, invalid outcome update, conflict, forbidden field, and unsafe notes in `backend/src/api/routes/xau_forward_journal.py`
+- [X] T054 [US2] Implement OHLC observation validation and supported outcome window checks in `backend/src/xau_forward_journal/outcome.py`
+- [X] T055 [US2] Implement conservative outcome label status rules for pending, inconclusive, and completed labels in `backend/src/xau_forward_journal/outcome.py`
+- [X] T056 [US2] Implement conflict detection for non-pending label updates and required update notes in `backend/src/xau_forward_journal/outcome.py`
+- [X] T057 [US2] Implement outcome update application without mutating original snapshot fields in `backend/src/xau_forward_journal/outcome.py`
+- [X] T058 [US2] Implement persisted outcome update reads and writes in `backend/src/xau_forward_journal/report_store.py`
+- [X] T059 [US2] Integrate outcome updates into journal orchestration in `backend/src/xau_forward_journal/orchestration.py`
+- [X] T060 [US2] Implement `POST /api/v1/xau/forward-journal/entries/{journal_id}/outcomes` in `backend/src/api/routes/xau_forward_journal.py`
+- [X] T061 [US2] Implement `GET /api/v1/xau/forward-journal/entries/{journal_id}/outcomes` in `backend/src/api/routes/xau_forward_journal.py`
+- [X] T062 [US2] Implement structured outcome API errors for not found, invalid outcome update, conflict, forbidden field, and unsafe notes in `backend/src/api/routes/xau_forward_journal.py`
 
 **Checkpoint**: US2 allows forward outcome labels to be attached without rewriting snapshot evidence.
 

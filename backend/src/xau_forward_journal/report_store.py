@@ -15,6 +15,7 @@ from src.models.xau_forward_journal import (
     XauForwardJournalSummary,
     XauForwardOutcomeLabel,
     XauForwardOutcomeObservation,
+    XauForwardOutcomeResponse,
     XauForwardOutcomeStatus,
     validate_xau_forward_journal_safe_id,
 )
@@ -173,6 +174,16 @@ class XauForwardJournalReportStore:
         )
         return saved_entry
 
+    def persist_outcome_update(
+        self,
+        entry: XauForwardJournalEntry,
+    ) -> XauForwardJournalEntry:
+        """Persist updated outcome windows and keep entry/report artifacts consistent."""
+
+        if not self.report_dir(entry.journal_id).exists():
+            raise FileNotFoundError(entry.journal_id)
+        return self.persist_entry(entry)
+
     def read_entry(self, journal_id: str) -> XauForwardJournalEntry:
         path = self.artifact_path(journal_id, "entry.json")
         if not path.exists():
@@ -187,6 +198,20 @@ class XauForwardJournalReportStore:
             return self.read_entry(journal_id).outcomes
         payload = json.loads(path.read_text(encoding="utf-8"))
         return [XauForwardOutcomeObservation.model_validate(item) for item in payload]
+
+    def read_outcome_response(self, journal_id: str) -> XauForwardOutcomeResponse:
+        entry = self.read_entry(journal_id)
+        outcomes = self.read_outcomes(journal_id)
+        return XauForwardOutcomeResponse(
+            journal_id=entry.journal_id,
+            outcomes=outcomes,
+            updated_at=entry.updated_at,
+            warnings=entry.warnings,
+            limitations=[
+                *entry.limitations,
+                "Outcome labels are forward research annotations only.",
+            ],
+        )
 
     def list_entries(self) -> XauForwardJournalListResponse:
         root = self.report_root()
@@ -245,11 +270,7 @@ class XauForwardJournalReportStore:
             fusion_report_id=_source_report_id(entry, "xau_quikstrike_fusion"),
             xau_vol_oi_report_id=_source_report_id(entry, "xau_vol_oi"),
             xau_reaction_report_id=_source_report_id(entry, "xau_reaction"),
-            outcome_status=(
-                XauForwardOutcomeStatus.PENDING
-                if not completed_outcomes
-                else XauForwardOutcomeStatus.PARTIAL
-            ),
+            outcome_status=_entry_outcome_status(entry.outcomes),
             completed_outcome_count=len(completed_outcomes),
             pending_outcome_count=len(pending_outcomes),
             no_trade_count=sum(
@@ -293,6 +314,26 @@ def _source_report_id(entry: XauForwardJournalEntry, source_type: str) -> str | 
         if ref.source_type == source_type:
             return ref.report_id
     return None
+
+
+def _entry_outcome_status(
+    outcomes: list[XauForwardOutcomeObservation],
+) -> XauForwardOutcomeStatus:
+    if not outcomes:
+        return XauForwardOutcomeStatus.PENDING
+    pending_count = sum(
+        1
+        for outcome in outcomes
+        if outcome.status == XauForwardOutcomeStatus.PENDING
+        and outcome.label == XauForwardOutcomeLabel.PENDING
+    )
+    if pending_count == len(outcomes):
+        return XauForwardOutcomeStatus.PENDING
+    if pending_count:
+        return XauForwardOutcomeStatus.PARTIAL
+    if any(outcome.status == XauForwardOutcomeStatus.INCONCLUSIVE for outcome in outcomes):
+        return XauForwardOutcomeStatus.INCONCLUSIVE
+    return XauForwardOutcomeStatus.COMPLETED
 
 
 def _entry_markdown(entry: XauForwardJournalEntry) -> str:

@@ -8,8 +8,12 @@ from src.models.xau_forward_journal import (
     XauForwardJournalCreateRequest,
     XauForwardJournalEntryStatus,
     XauForwardJournalSummary,
+    XauForwardOutcomeLabel,
+    XauForwardOutcomeStatus,
+    XauForwardOutcomeUpdateRequest,
 )
 from src.xau_forward_journal.entry_builder import build_journal_entry
+from src.xau_forward_journal.outcome import apply_outcome_update
 from src.xau_forward_journal.report_store import XauForwardJournalReportStore
 from tests.helpers.test_xau_forward_journal_data import (
     synthetic_forward_journal_create_payload,
@@ -128,3 +132,53 @@ def test_report_store_artifact_paths_must_stay_under_report_root(tmp_path: Path)
             path=tmp_path / "outside.json",
             artifact_format=XauForwardArtifactFormat.JSON,
         )
+
+
+def test_report_store_persists_outcome_updates_without_rewriting_snapshot(
+    tmp_path: Path,
+):
+    reports_dir = tmp_path / "data" / "reports"
+    write_synthetic_source_reports(reports_dir)
+    request = XauForwardJournalCreateRequest.model_validate(
+        synthetic_forward_journal_create_payload()
+    )
+    entry = build_journal_entry(request, reports_dir=reports_dir)
+    store = XauForwardJournalReportStore(reports_dir=reports_dir)
+    saved_entry = store.persist_entry(entry)
+    original_snapshot = saved_entry.snapshot.model_dump(mode="json")
+
+    updated_entry = apply_outcome_update(
+        saved_entry,
+        XauForwardOutcomeUpdateRequest(
+            outcomes=[
+                {
+                    "window": "30m",
+                    "label": "stayed_inside_range",
+                    "observation_start": "2026-05-14T03:08:04Z",
+                    "observation_end": "2026-05-14T03:38:04Z",
+                    "open": 4707.2,
+                    "high": 4712.0,
+                    "low": 4701.5,
+                    "close": 4706.0,
+                    "reference_wall_id": "wall_1",
+                    "reference_wall_level": 4675.0,
+                    "notes": ["Synthetic outcome observation."],
+                }
+            ],
+            update_note="Attach first synthetic outcome observation.",
+            research_only_acknowledged=True,
+        ),
+    )
+
+    persisted = store.persist_outcome_update(updated_entry)
+    loaded_entry = store.read_entry(saved_entry.journal_id)
+    loaded_outcomes = store.read_outcomes(saved_entry.journal_id)
+    response = store.read_outcome_response(saved_entry.journal_id)
+
+    assert persisted.snapshot.model_dump(mode="json") == original_snapshot
+    assert loaded_entry.snapshot.model_dump(mode="json") == original_snapshot
+    assert loaded_outcomes[0].status == XauForwardOutcomeStatus.COMPLETED
+    assert loaded_outcomes[0].label == XauForwardOutcomeLabel.STAYED_INSIDE_RANGE
+    assert response.journal_id == saved_entry.journal_id
+    assert response.outcomes[0].label == XauForwardOutcomeLabel.STAYED_INSIDE_RANGE
+    assert (store.report_dir(saved_entry.journal_id) / "outcomes.json").exists()

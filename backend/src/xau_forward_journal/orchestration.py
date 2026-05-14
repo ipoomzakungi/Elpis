@@ -6,12 +6,15 @@ from src.models.xau_forward_journal import (
     XauForwardJournalCreateRequest,
     XauForwardJournalEntry,
     XauForwardOutcomeLabel,
+    XauForwardOutcomeResponse,
     XauForwardOutcomeStatus,
+    XauForwardOutcomeUpdateRequest,
 )
 from src.xau_forward_journal.entry_builder import (
     XauForwardJournalBuildError,
     build_journal_entry,
 )
+from src.xau_forward_journal.outcome import apply_outcome_update
 from src.xau_forward_journal.report_store import XauForwardJournalReportStore
 
 
@@ -52,6 +55,30 @@ def create_xau_forward_journal_entry(
     if not request.persist_report:
         return entry
     return store.persist_entry(entry)
+
+
+def update_xau_forward_journal_outcomes(
+    journal_id: str,
+    request: XauForwardOutcomeUpdateRequest,
+    *,
+    report_store: XauForwardJournalReportStore | None = None,
+    reports_dir: Path | None = None,
+) -> XauForwardOutcomeResponse:
+    store = report_store or XauForwardJournalReportStore(reports_dir=reports_dir)
+    entry = store.read_entry(journal_id)
+    updated_entry = apply_outcome_update(entry, request)
+    persisted_entry = store.persist_outcome_update(updated_entry)
+    return store.read_outcome_response(persisted_entry.journal_id)
+
+
+def get_xau_forward_journal_outcomes(
+    journal_id: str,
+    *,
+    report_store: XauForwardJournalReportStore | None = None,
+    reports_dir: Path | None = None,
+) -> XauForwardOutcomeResponse:
+    store = report_store or XauForwardJournalReportStore(reports_dir=reports_dir)
+    return store.read_outcome_response(journal_id)
 
 
 def _all_outcomes_pending(entry: XauForwardJournalEntry) -> bool:

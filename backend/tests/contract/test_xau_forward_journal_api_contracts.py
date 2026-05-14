@@ -115,7 +115,31 @@ def test_create_forward_journal_entry_rejects_invalid_request_fields(journal_sto
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
-def test_detail_and_outcome_routes_keep_foundation_placeholder_errors(journal_store):
+def _completed_outcome_payload(label: str = "stayed_inside_range") -> dict:
+    return {
+        "outcomes": [
+            {
+                "window": "30m",
+                "label": label,
+                "observation_start": "2026-05-14T03:08:04Z",
+                "observation_end": "2026-05-14T03:38:04Z",
+                "open": 4707.2,
+                "high": 4712.0,
+                "low": 4701.5,
+                "close": 4706.0,
+                "reference_wall_id": "wall_1",
+                "reference_wall_level": 4675.0,
+                "notes": ["Synthetic outcome observation."],
+            }
+        ],
+        "update_note": "Attach synthetic outcome observation.",
+        "research_only_acknowledged": True,
+    }
+
+
+def test_detail_route_keeps_foundation_placeholder_but_outcomes_validate_ids(
+    journal_store,
+):
     invalid = client.get("/api/v1/xau/forward-journal/entries/bad%20id")
     assert invalid.status_code == 400
     assert invalid.json()["error"]["code"] == "VALIDATION_ERROR"
@@ -124,6 +148,96 @@ def test_detail_and_outcome_routes_keep_foundation_placeholder_errors(journal_st
     assert detail.status_code == 501
     assert detail.json()["error"]["code"] == "NOT_IMPLEMENTED"
 
-    outcomes = client.get("/api/v1/xau/forward-journal/entries/journal_report/outcomes")
-    assert outcomes.status_code == 501
-    assert outcomes.json()["error"]["code"] == "NOT_IMPLEMENTED"
+    outcomes = client.get("/api/v1/xau/forward-journal/entries/bad%20id/outcomes")
+    assert outcomes.status_code == 400
+    assert outcomes.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_update_and_get_forward_journal_outcomes(journal_store):
+    write_synthetic_source_reports(journal_store.reports_dir)
+    created = client.post(
+        "/api/v1/xau/forward-journal/entries",
+        json=synthetic_forward_journal_create_payload(),
+    )
+    journal_id = created.json()["journal_id"]
+
+    update = client.post(
+        f"/api/v1/xau/forward-journal/entries/{journal_id}/outcomes",
+        json=_completed_outcome_payload(),
+    )
+    read = client.get(f"/api/v1/xau/forward-journal/entries/{journal_id}/outcomes")
+
+    assert update.status_code == 200
+    assert update.json()["outcomes"][0]["status"] == "completed"
+    assert update.json()["outcomes"][0]["label"] == "stayed_inside_range"
+    assert read.status_code == 200
+    assert read.json()["outcomes"][0]["label"] == "stayed_inside_range"
+
+
+def test_update_outcomes_returns_structured_invalid_window_error(journal_store):
+    response = client.post(
+        "/api/v1/xau/forward-journal/entries/journal_report/outcomes",
+        json={
+            "outcomes": [{"window": "2h", "label": "pending"}],
+            "research_only_acknowledged": True,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_outcome_routes_return_structured_missing_entry_error(journal_store):
+    get_response = client.get("/api/v1/xau/forward-journal/entries/missing/outcomes")
+    post_response = client.post(
+        "/api/v1/xau/forward-journal/entries/missing/outcomes",
+        json=_completed_outcome_payload(),
+    )
+
+    assert get_response.status_code == 404
+    assert get_response.json()["error"]["code"] == "NOT_FOUND"
+    assert post_response.status_code == 404
+    assert post_response.json()["error"]["code"] == "NOT_FOUND"
+
+
+def test_update_outcomes_returns_structured_conflict_error(journal_store):
+    write_synthetic_source_reports(journal_store.reports_dir)
+    created = client.post(
+        "/api/v1/xau/forward-journal/entries",
+        json=synthetic_forward_journal_create_payload(),
+    )
+    journal_id = created.json()["journal_id"]
+
+    first = client.post(
+        f"/api/v1/xau/forward-journal/entries/{journal_id}/outcomes",
+        json=_completed_outcome_payload("wall_held"),
+    )
+    conflict_payload = _completed_outcome_payload("wall_rejected")
+    conflict_payload["update_note"] = None
+    conflict = client.post(
+        f"/api/v1/xau/forward-journal/entries/{journal_id}/outcomes",
+        json=conflict_payload,
+    )
+
+    assert first.status_code == 200
+    assert conflict.status_code == 409
+    assert conflict.json()["error"]["code"] == "OUTCOME_CONFLICT"
+
+
+def test_update_outcomes_rejects_unsafe_notes(journal_store):
+    write_synthetic_source_reports(journal_store.reports_dir)
+    created = client.post(
+        "/api/v1/xau/forward-journal/entries",
+        json=synthetic_forward_journal_create_payload(),
+    )
+    journal_id = created.json()["journal_id"]
+    payload = _completed_outcome_payload()
+    payload["update_note"] = "Bearer secret-token"
+
+    response = client.post(
+        f"/api/v1/xau/forward-journal/entries/{journal_id}/outcomes",
+        json=payload,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
