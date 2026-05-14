@@ -18,6 +18,7 @@ from tests.helpers.test_xau_quikstrike_fusion_data import (
     sample_fused_row,
     sample_matrix_source_ref,
     sample_matrix_source_value,
+    sample_missing_context_item,
     sample_vol2vol_source_ref,
     sample_vol2vol_source_value,
 )
@@ -204,3 +205,47 @@ def test_report_store_persists_fused_xau_input_csv_and_metadata(tmp_path: Path):
     assert XauFusionArtifactType.XAU_VOL_OI_INPUT_CSV in {
         artifact.artifact_type for artifact in saved.artifacts
     }
+
+
+def test_report_store_lists_reads_rows_and_missing_context(tmp_path: Path):
+    store = XauQuikStrikeFusionReportStore(reports_dir=tmp_path / "data" / "reports")
+    report = XauQuikStrikeFusionReport(
+        report_id="fusion_report",
+        status=XauFusionReportStatus.PARTIAL,
+        vol2vol_source=sample_vol2vol_source_ref(),
+        matrix_source=sample_matrix_source_ref(),
+        coverage=sample_coverage_summary(),
+        basis_state=calculate_basis_state(),
+        context_summary=XauFusionContextSummary(
+            basis_status=XauFusionContextStatus.UNAVAILABLE,
+            iv_range_status=XauFusionContextStatus.UNAVAILABLE,
+            open_regime_status=XauFusionContextStatus.UNAVAILABLE,
+            candle_acceptance_status=XauFusionContextStatus.UNAVAILABLE,
+            realized_volatility_status=XauFusionContextStatus.UNAVAILABLE,
+            source_agreement_status=XauFusionContextStatus.AVAILABLE,
+            missing_context=[sample_missing_context_item()],
+        ),
+        fused_row_count=1,
+        fused_rows=[sample_fused_row()],
+    )
+
+    store.persist_report(report)
+    listing = store.list_reports()
+    detail = store.read_report("fusion_report")
+    rows = store.read_rows_response("fusion_report")
+    missing_context = store.read_missing_context_response("fusion_report")
+
+    assert listing.reports[0].report_id == "fusion_report"
+    assert listing.reports[0].fused_row_count == 1
+    assert detail.report_id == "fusion_report"
+    assert rows.report_id == "fusion_report"
+    assert rows.rows[0].fusion_row_id == "fusion_row_1"
+    assert missing_context.report_id == "fusion_report"
+    assert missing_context.missing_context[0].context_key == "basis"
+
+
+def test_report_store_read_missing_report_raises_file_not_found(tmp_path: Path):
+    store = XauQuikStrikeFusionReportStore(reports_dir=tmp_path / "data" / "reports")
+
+    with pytest.raises(FileNotFoundError):
+        store.read_report("missing_report")

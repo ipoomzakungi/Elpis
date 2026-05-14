@@ -11,8 +11,14 @@ from src.models.xau_quikstrike_fusion import (
     XauFusionArtifactFormat,
     XauFusionArtifactType,
     XauFusionBaseModel,
+    XauFusionContextStatus,
+    XauFusionMissingContextResponse,
+    XauFusionRow,
+    XauFusionRowsResponse,
     XauFusionVolOiInputRow,
+    XauQuikStrikeFusionListResponse,
     XauQuikStrikeFusionReport,
+    XauQuikStrikeFusionSummary,
     validate_xau_fusion_safe_id,
 )
 
@@ -218,6 +224,96 @@ class XauQuikStrikeFusionReportStore:
         )
         report_markdown_path.write_text(_report_markdown(saved_report), encoding="utf-8")
         return saved_report
+
+    def read_report(self, report_id: str) -> XauQuikStrikeFusionReport:
+        path = self.artifact_path(report_id, "report.json")
+        if not path.exists():
+            raise FileNotFoundError(report_id)
+        return XauQuikStrikeFusionReport.model_validate_json(path.read_text(encoding="utf-8"))
+
+    def list_reports(self) -> XauQuikStrikeFusionListResponse:
+        root = self.report_root()
+        if not root.exists():
+            return XauQuikStrikeFusionListResponse(reports=[])
+        summaries: list[XauQuikStrikeFusionSummary] = []
+        for report_path in root.glob("*/report.json"):
+            try:
+                summaries.append(self.summarize_report(self.read_report(report_path.parent.name)))
+            except (OSError, ValueError, json.JSONDecodeError):
+                continue
+        return XauQuikStrikeFusionListResponse(
+            reports=sorted(summaries, key=lambda item: item.created_at, reverse=True)
+        )
+
+    def summarize_report(self, report: XauQuikStrikeFusionReport) -> XauQuikStrikeFusionSummary:
+        context_summary = report.context_summary
+        coverage = report.coverage
+        downstream_result = report.downstream_result
+        return XauQuikStrikeFusionSummary(
+            report_id=report.report_id,
+            status=report.status,
+            created_at=report.created_at,
+            vol2vol_report_id=report.vol2vol_source.report_id,
+            matrix_report_id=report.matrix_source.report_id,
+            fused_row_count=report.fused_row_count,
+            strike_count=coverage.strike_count if coverage else 0,
+            expiration_count=coverage.expiration_count if coverage else 0,
+            basis_status=(
+                context_summary.basis_status
+                if context_summary
+                else XauFusionContextStatus.UNAVAILABLE
+            ),
+            iv_range_status=(
+                context_summary.iv_range_status
+                if context_summary
+                else XauFusionContextStatus.UNAVAILABLE
+            ),
+            open_regime_status=(
+                context_summary.open_regime_status
+                if context_summary
+                else XauFusionContextStatus.UNAVAILABLE
+            ),
+            candle_acceptance_status=(
+                context_summary.candle_acceptance_status
+                if context_summary
+                else XauFusionContextStatus.UNAVAILABLE
+            ),
+            xau_vol_oi_report_id=(
+                downstream_result.xau_vol_oi_report_id if downstream_result else None
+            ),
+            xau_reaction_report_id=(
+                downstream_result.xau_reaction_report_id if downstream_result else None
+            ),
+            all_reactions_no_trade=(
+                downstream_result.all_reactions_no_trade if downstream_result else None
+            ),
+            warning_count=len(report.warnings),
+        )
+
+    def read_fused_rows(self, report_id: str) -> list[XauFusionRow]:
+        path = self.artifact_path(report_id, "fused_rows.json")
+        if path.exists():
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            return [XauFusionRow.model_validate(row) for row in payload]
+        return self.read_report(report_id).fused_rows
+
+    def read_rows_response(self, report_id: str) -> XauFusionRowsResponse:
+        return XauFusionRowsResponse(
+            report_id=validate_xau_fusion_safe_id(report_id, "report_id"),
+            rows=self.read_fused_rows(report_id),
+        )
+
+    def read_missing_context_response(
+        self,
+        report_id: str,
+    ) -> XauFusionMissingContextResponse:
+        report = self.read_report(report_id)
+        return XauFusionMissingContextResponse(
+            report_id=report.report_id,
+            missing_context=(
+                report.context_summary.missing_context if report.context_summary else []
+            ),
+        )
 
     def _validate_report_scope(self, path: Path) -> None:
         try:
