@@ -2043,6 +2043,12 @@ export interface XauForwardOutcomeResponse {
   limitations: string[];
 }
 
+export interface XauForwardJournalDashboardData {
+  entries: XauForwardJournalSummary[];
+  selected_entry: XauForwardJournalEntry | null;
+  outcomes: XauForwardOutcomeResponse | null;
+}
+
 export type FreeDerivativesSource =
   | 'cftc_cot'
   | 'gvz'

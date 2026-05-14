@@ -2,8 +2,6 @@ from fastapi import APIRouter, Depends, status
 
 from src.api.validation import api_error
 from src.models.xau_forward_journal import (
-    XAU_FORWARD_JOURNAL_FORWARD_ONLY_LIMITATION,
-    XAU_FORWARD_JOURNAL_RESEARCH_ONLY_WARNING,
     XauForwardJournalCreateRequest,
     XauForwardJournalEntry,
     XauForwardJournalListResponse,
@@ -72,24 +70,37 @@ async def create_xau_forward_journal_entry(
     "/xau/forward-journal/entries",
     response_model=XauForwardJournalListResponse,
 )
-async def list_xau_forward_journal_entries() -> XauForwardJournalListResponse:
+async def list_xau_forward_journal_entries(
+    store: XauForwardJournalReportStore = Depends(get_xau_forward_journal_report_store),
+) -> XauForwardJournalListResponse:
     """List saved local-only XAU forward journal entries."""
 
-    return XauForwardJournalListResponse(entries=[])
+    try:
+        return store.list_entries()
+    except ValueError as exc:
+        api_error(400, "VALIDATION_ERROR", str(exc))
+
+    raise RuntimeError("unreachable")
 
 
 @router.get(
     "/xau/forward-journal/entries/{journal_id}",
     response_model=XauForwardJournalEntry,
 )
-async def get_xau_forward_journal_entry(journal_id: str) -> XauForwardJournalEntry:
+async def get_xau_forward_journal_entry(
+    journal_id: str,
+    store: XauForwardJournalReportStore = Depends(get_xau_forward_journal_report_store),
+) -> XauForwardJournalEntry:
     """Read one saved local-only XAU forward journal entry."""
 
     _validate_journal_id(journal_id)
-    _foundation_not_implemented(
-        "XAU forward journal detail reads are not implemented in this foundation slice.",
-        [{"field": "journal_id", "message": journal_id}],
-    )
+    try:
+        return store.read_entry(journal_id)
+    except FileNotFoundError:
+        _journal_not_found(journal_id)
+    except ValueError as exc:
+        api_error(400, "VALIDATION_ERROR", str(exc))
+
     raise RuntimeError("unreachable")
 
 
@@ -160,33 +171,4 @@ def _journal_not_found(journal_id: str) -> None:
         "NOT_FOUND",
         f"XAU forward journal entry '{journal_id}' was not found",
         [{"field": "journal_id", "message": journal_id}],
-    )
-
-
-def _foundation_not_implemented(
-    message: str,
-    details: list[dict[str, str]] | None = None,
-) -> None:
-    api_error(
-        501,
-        "NOT_IMPLEMENTED",
-        message,
-        [
-            {
-                "field": "scope",
-                "message": (
-                    "Forward journal routes are local-only and research-only placeholders; "
-                    "they do not create entries, label outcomes, or access browser sessions."
-                ),
-            },
-            {
-                "field": "limitation",
-                "message": XAU_FORWARD_JOURNAL_FORWARD_ONLY_LIMITATION,
-            },
-            {
-                "field": "research_only",
-                "message": XAU_FORWARD_JOURNAL_RESEARCH_ONLY_WARNING,
-            },
-            *(details or []),
-        ],
     )

@@ -76,6 +76,7 @@ import {
   XauFusionMissingContextResponse,
   XauFusionRowsResponse,
   XauForwardJournalCreateRequest,
+  XauForwardJournalDashboardData,
   XauForwardJournalEntry,
   XauForwardJournalListResponse,
   XauForwardOutcomeResponse,
@@ -701,5 +702,23 @@ export const api = {
     journalId: string,
   ): Promise<XauForwardOutcomeResponse> => {
     return fetchApi(`/xau/forward-journal/entries/${encodeURIComponent(journalId)}/outcomes`);
+  },
+
+  getXauForwardJournalDashboardData: async (
+    journalId: string,
+  ): Promise<XauForwardJournalDashboardData> => {
+    const encodedJournalId = encodeURIComponent(journalId);
+    const [list, selectedEntry, outcomes] = await Promise.all([
+      fetchApi<XauForwardJournalListResponse>('/xau/forward-journal/entries'),
+      fetchApi<XauForwardJournalEntry>(`/xau/forward-journal/entries/${encodedJournalId}`),
+      fetchApi<XauForwardOutcomeResponse>(
+        `/xau/forward-journal/entries/${encodedJournalId}/outcomes`,
+      ),
+    ]);
+    return {
+      entries: list.entries,
+      selected_entry: selectedEntry,
+      outcomes,
+    };
   },
 };

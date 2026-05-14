@@ -123,6 +123,48 @@ def test_report_store_persists_created_entry_artifacts_and_reads_by_snapshot_key
     assert listed.entries[0].snapshot_key == saved_entry.snapshot_key
 
 
+def test_report_store_lists_and_reads_saved_entry_details(tmp_path: Path):
+    reports_dir = tmp_path / "data" / "reports"
+    write_synthetic_source_reports(reports_dir)
+    base_payload = synthetic_forward_journal_create_payload()
+    later_payload = {
+        **base_payload,
+        "snapshot_time": "2026-05-14T12:08:04Z",
+        "capture_window": "london_snapshot",
+    }
+    store = XauForwardJournalReportStore(reports_dir=reports_dir)
+    first = store.persist_entry(
+        build_journal_entry(
+            XauForwardJournalCreateRequest.model_validate(base_payload),
+            reports_dir=reports_dir,
+        )
+    )
+    second = store.persist_entry(
+        build_journal_entry(
+            XauForwardJournalCreateRequest.model_validate(later_payload),
+            reports_dir=reports_dir,
+        )
+    )
+
+    listed = store.list_entries()
+    detail = store.read_entry(first.journal_id)
+
+    assert [summary.journal_id for summary in listed.entries] == [
+        second.journal_id,
+        first.journal_id,
+    ]
+    assert detail.journal_id == first.journal_id
+    assert detail.snapshot.capture_window == "daily_snapshot"
+    assert detail.source_reports[0].report_id == base_payload["vol2vol_report_id"]
+    assert detail.top_oi_walls[0].open_interest is not None
+    assert detail.reaction_summaries[0].reaction_label == "NO_TRADE"
+    assert detail.missing_context[0].context_key
+    assert len(detail.artifacts) == 5
+
+    with pytest.raises(FileNotFoundError):
+        store.read_entry("missing_journal")
+
+
 def test_report_store_artifact_paths_must_stay_under_report_root(tmp_path: Path):
     store = XauForwardJournalReportStore(reports_dir=tmp_path / "data" / "reports")
 

@@ -135,25 +135,25 @@
 
 ### Tests for User Story 3
 
-- [ ] T063 [P] [US3] Add list and detail API contract tests for saved journal entries in `backend/tests/contract/test_xau_forward_journal_api_contracts.py`
-- [ ] T064 [P] [US3] Add missing journal entry API contract tests in `backend/tests/contract/test_xau_forward_journal_api_contracts.py`
-- [ ] T065 [P] [US3] Add report-store list and detail read tests in `backend/tests/unit/test_xau_forward_journal_report_store.py`
-- [ ] T066 [P] [US3] Add frontend type and API client compile coverage via `frontend/src/types/index.ts` and `frontend/src/services/api.ts`
-- [ ] T067 [P] [US3] Add dashboard data-shape regression coverage for Forward Journal fields in `frontend/src/app/xau-vol-oi/page.tsx`
+- [x] T063 [P] [US3] Add list and detail API contract tests for saved journal entries in `backend/tests/contract/test_xau_forward_journal_api_contracts.py`
+- [x] T064 [P] [US3] Add missing journal entry API contract tests in `backend/tests/contract/test_xau_forward_journal_api_contracts.py`
+- [x] T065 [P] [US3] Add report-store list and detail read tests in `backend/tests/unit/test_xau_forward_journal_report_store.py`
+- [x] T066 [P] [US3] Add frontend type and API client compile coverage via `frontend/src/types/index.ts` and `frontend/src/services/api.ts`
+- [x] T067 [P] [US3] Add dashboard data-shape regression coverage for Forward Journal fields in `frontend/src/app/xau-vol-oi/page.tsx`
 
 ### Implementation for User Story 3
 
-- [ ] T068 [US3] Implement saved journal list and detail reads in `backend/src/xau_forward_journal/report_store.py`
-- [ ] T069 [US3] Implement `GET /api/v1/xau/forward-journal/entries` in `backend/src/api/routes/xau_forward_journal.py`
-- [ ] T070 [US3] Implement `GET /api/v1/xau/forward-journal/entries/{journal_id}` in `backend/src/api/routes/xau_forward_journal.py`
-- [ ] T071 [US3] Implement structured list/detail API errors for missing entries and invalid ids in `backend/src/api/routes/xau_forward_journal.py`
-- [ ] T072 [US3] Implement XAU forward journal request, summary, detail, outcome, wall, reaction, and missing-context frontend types in `frontend/src/types/index.ts`
-- [ ] T073 [US3] Implement `createXauForwardJournalEntry`, `listXauForwardJournalEntries`, `getXauForwardJournalEntry`, `updateXauForwardJournalOutcomes`, and `getXauForwardJournalOutcomes` in `frontend/src/services/api.ts`
-- [ ] T074 [US3] Load forward journal entries, selected detail, and selected outcomes for `/xau-vol-oi` in `frontend/src/app/xau-vol-oi/page.tsx`
-- [ ] T075 [US3] Render Forward Journal entry selector, snapshot time, capture session, source report ids, status, and artifact paths in `frontend/src/app/xau-vol-oi/page.tsx`
-- [ ] T076 [US3] Render top walls, reaction labels, NO_TRADE reasons, missing context checklist, and bounded risk annotation counts in `frontend/src/app/xau-vol-oi/page.tsx`
-- [ ] T077 [US3] Render outcome-window status, labels, notes, pending state, local-only text, and research-only disclaimer in `frontend/src/app/xau-vol-oi/page.tsx`
-- [ ] T078 [US3] Render loading, empty, and error states for the Forward Journal section in `frontend/src/app/xau-vol-oi/page.tsx`
+- [x] T068 [US3] Implement saved journal list and detail reads in `backend/src/xau_forward_journal/report_store.py`
+- [x] T069 [US3] Implement `GET /api/v1/xau/forward-journal/entries` in `backend/src/api/routes/xau_forward_journal.py`
+- [x] T070 [US3] Implement `GET /api/v1/xau/forward-journal/entries/{journal_id}` in `backend/src/api/routes/xau_forward_journal.py`
+- [x] T071 [US3] Implement structured list/detail API errors for missing entries and invalid ids in `backend/src/api/routes/xau_forward_journal.py`
+- [x] T072 [US3] Implement XAU forward journal request, summary, detail, outcome, wall, reaction, and missing-context frontend types in `frontend/src/types/index.ts`
+- [x] T073 [US3] Implement `createXauForwardJournalEntry`, `listXauForwardJournalEntries`, `getXauForwardJournalEntry`, `updateXauForwardJournalOutcomes`, and `getXauForwardJournalOutcomes` in `frontend/src/services/api.ts`
+- [x] T074 [US3] Load forward journal entries, selected detail, and selected outcomes for `/xau-vol-oi` in `frontend/src/app/xau-vol-oi/page.tsx`
+- [x] T075 [US3] Render Forward Journal entry selector, snapshot time, capture session, source report ids, status, and artifact paths in `frontend/src/app/xau-vol-oi/page.tsx`
+- [x] T076 [US3] Render top walls, reaction labels, NO_TRADE reasons, missing context checklist, and bounded risk annotation counts in `frontend/src/app/xau-vol-oi/page.tsx`
+- [x] T077 [US3] Render outcome-window status, labels, notes, pending state, local-only text, and research-only disclaimer in `frontend/src/app/xau-vol-oi/page.tsx`
+- [x] T078 [US3] Render loading, empty, and error states for the Forward Journal section in `frontend/src/app/xau-vol-oi/page.tsx`
 
 **Checkpoint**: US3 makes forward evidence visible through local API and dashboard inspection.
 

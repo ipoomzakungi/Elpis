@@ -137,7 +137,36 @@ def _completed_outcome_payload(label: str = "stayed_inside_range") -> dict:
     }
 
 
-def test_detail_route_keeps_foundation_placeholder_but_outcomes_validate_ids(
+def test_list_and_detail_forward_journal_entries_from_saved_reports(journal_store):
+    write_synthetic_source_reports(journal_store.reports_dir)
+
+    created = client.post(
+        "/api/v1/xau/forward-journal/entries",
+        json=synthetic_forward_journal_create_payload(),
+    )
+    journal_id = created.json()["journal_id"]
+
+    listed = client.get("/api/v1/xau/forward-journal/entries")
+    detail = client.get(f"/api/v1/xau/forward-journal/entries/{journal_id}")
+
+    assert created.status_code == 201
+    assert listed.status_code == 200
+    assert listed.json()["entries"][0]["journal_id"] == journal_id
+    assert listed.json()["entries"][0]["outcome_status"] == "pending"
+    assert listed.json()["entries"][0]["pending_outcome_count"] == 5
+    assert detail.status_code == 200
+    assert detail.json()["journal_id"] == journal_id
+    assert detail.json()["source_reports"][0]["source_type"] == "quikstrike_vol2vol"
+    assert len(detail.json()["top_oi_walls"]) == 2
+    assert len(detail.json()["reaction_summaries"]) == 2
+    assert len(detail.json()["missing_context"]) > 0
+    assert len(detail.json()["outcomes"]) == 5
+    assert detail.json()["artifacts"][0]["path"].startswith(
+        "data/reports/xau_forward_journal/"
+    )
+
+
+def test_detail_route_validates_ids_and_returns_structured_missing_entry_error(
     journal_store,
 ):
     invalid = client.get("/api/v1/xau/forward-journal/entries/bad%20id")
@@ -145,8 +174,9 @@ def test_detail_route_keeps_foundation_placeholder_but_outcomes_validate_ids(
     assert invalid.json()["error"]["code"] == "VALIDATION_ERROR"
 
     detail = client.get("/api/v1/xau/forward-journal/entries/journal_report")
-    assert detail.status_code == 501
-    assert detail.json()["error"]["code"] == "NOT_IMPLEMENTED"
+    assert detail.status_code == 404
+    assert detail.json()["error"]["code"] == "NOT_FOUND"
+    assert detail.json()["error"]["details"][0]["field"] == "journal_id"
 
     outcomes = client.get("/api/v1/xau/forward-journal/entries/bad%20id/outcomes")
     assert outcomes.status_code == 400
