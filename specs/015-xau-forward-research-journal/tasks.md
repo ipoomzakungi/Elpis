@@ -163,19 +163,34 @@
 
 **Purpose**: Final validation, documentation alignment, artifact safety, API/dashboard smoke, and forbidden-scope review.
 
-- [ ] T079 Update `specs/015-xau-forward-research-journal/quickstart.md` if implemented API request or response examples changed
-- [ ] T080 Run backend import check from `backend/src/main.py`
-- [ ] T081 Run focused unit tests for `backend/tests/unit/test_xau_forward_journal_*.py`
-- [ ] T082 Run focused integration tests for `backend/tests/integration/test_xau_forward_journal_*.py`
-- [ ] T083 Run focused API contract tests for `backend/tests/contract/test_xau_forward_journal_api_contracts.py`
-- [ ] T084 Run the full backend test suite from `backend/tests/`
-- [ ] T085 Run frontend dependency install and production build from `frontend/package.json`
-- [ ] T086 Run generated artifact guard from `scripts/check_generated_artifacts.ps1`
-- [ ] T087 Run the API smoke flow documented in `specs/015-xau-forward-research-journal/quickstart.md` without committing generated journal reports
-- [ ] T088 Run the dashboard smoke flow for `/xau-vol-oi` documented in `specs/015-xau-forward-research-journal/quickstart.md`
-- [ ] T089 Review forbidden v0 scope in `backend/pyproject.toml`, `frontend/package.json`, `.github/workflows/validation.yml`, `backend/src/`, and `frontend/src/`
-- [ ] T090 Confirm generated journal artifacts remain ignored and untracked using repository root `git status --ignored --short`
-- [ ] T091 Update final validation notes and task completion status in `specs/015-xau-forward-research-journal/tasks.md`
+- [x] T079 Update `specs/015-xau-forward-research-journal/quickstart.md` if implemented API request or response examples changed
+- [x] T080 Run backend import check from `backend/src/main.py`
+- [x] T081 Run focused unit tests for `backend/tests/unit/test_xau_forward_journal_*.py`
+- [x] T082 Run focused integration tests for `backend/tests/integration/test_xau_forward_journal_*.py`
+- [x] T083 Run focused API contract tests for `backend/tests/contract/test_xau_forward_journal_api_contracts.py`
+- [x] T084 Run the full backend test suite from `backend/tests/`
+- [x] T085 Run frontend dependency install and production build from `frontend/package.json`
+- [x] T086 Run generated artifact guard from `scripts/check_generated_artifacts.ps1`
+- [x] T087 Run the API smoke flow documented in `specs/015-xau-forward-research-journal/quickstart.md` without committing generated journal reports
+- [x] T088 Run the dashboard smoke flow for `/xau-vol-oi` documented in `specs/015-xau-forward-research-journal/quickstart.md`
+- [x] T089 Review forbidden v0 scope in `backend/pyproject.toml`, `frontend/package.json`, `.github/workflows/validation.yml`, `backend/src/`, and `frontend/src/`
+- [x] T090 Confirm generated journal artifacts remain ignored and untracked using repository root `git status --ignored --short`
+- [x] T091 Update final validation notes and task completion status in `specs/015-xau-forward-research-journal/tasks.md`
+
+### Final Validation Notes
+
+- 2026-05-14: Quickstart request/response examples reviewed; implemented API shape remains aligned, so no quickstart example update was required.
+- Backend import check passed with `python -c "from src.main import app; print('backend import ok')"`.
+- Focused unit scope passed with explicit PowerShell file resolution for `tests/unit/test_xau_forward_journal_*.py`: 39 passed.
+- Focused integration scope passed for `tests/integration/test_xau_forward_journal_flow.py`: 3 passed.
+- API contract scope passed for `tests/contract/test_xau_forward_journal_api_contracts.py`: 13 passed.
+- Full backend suite passed: 608 passed.
+- Frontend `npm install` completed and `npm run build` passed.
+- Generated artifact guard passed.
+- API smoke created a synthetic local-only journal entry, listed entries, read detail, updated one outcome window, read outcomes, and verified missing detail returns structured 404.
+- Dashboard smoke opened `/xau-vol-oi`; the Forward Journal panel rendered with the journal selector, artifact paths, outcome windows, research-only text, and no browser console errors.
+- Forbidden-scope review found only guardrail/disclaimer text and existing charting/library terms; no new trading, execution, credential/session storage, paid-vendor, forbidden infrastructure, ML, or unsupported performance behavior was introduced.
+- Generated journal artifacts from smoke validation remained ignored under `backend/data/reports/` and untracked.
 
 ---
 
