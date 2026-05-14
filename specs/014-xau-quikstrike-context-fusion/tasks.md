@@ -188,19 +188,21 @@
 
 **Purpose**: Final validation, documentation alignment, artifact safety, and forbidden-scope review.
 
-- [ ] T088 Update `specs/014-xau-quikstrike-context-fusion/quickstart.md` if implemented API request or response examples changed
-- [ ] T089 Run backend import check from `backend/src/main.py`
-- [ ] T090 Run focused unit tests for `backend/tests/unit/test_xau_quikstrike_fusion_*.py`
-- [ ] T091 Run focused integration tests for `backend/tests/integration/test_xau_quikstrike_fusion_*.py`
-- [ ] T092 Run focused API contract tests for `backend/tests/contract/test_xau_quikstrike_fusion_api_contracts.py`
-- [ ] T093 Run the full backend test suite from `backend/tests/`
-- [ ] T094 Run frontend dependency install and production build from `frontend/package.json`
-- [ ] T095 Run generated artifact guard from `scripts/check_generated_artifacts.ps1`
-- [ ] T096 Run the API smoke flow documented in `specs/014-xau-quikstrike-context-fusion/quickstart.md` without committing generated reports
-- [ ] T097 Run the dashboard smoke flow for `/xau-vol-oi` documented in `specs/014-xau-quikstrike-context-fusion/quickstart.md`
-- [ ] T098 Review forbidden v0 scope in `backend/pyproject.toml`, `frontend/package.json`, `.github/workflows/validation.yml`, `backend/src/`, and `frontend/src/`
-- [ ] T099 Confirm generated fusion artifacts remain ignored and untracked using `git status --ignored --short`
-- [ ] T100 Update final validation notes and task completion status in `specs/014-xau-quikstrike-context-fusion/tasks.md`
+- [X] T088 Update `specs/014-xau-quikstrike-context-fusion/quickstart.md` if implemented API request or response examples changed
+- [X] T089 Run backend import check from `backend/src/main.py`
+- [X] T090 Run focused unit tests for `backend/tests/unit/test_xau_quikstrike_fusion_*.py`
+- [X] T091 Run focused integration tests for `backend/tests/integration/test_xau_quikstrike_fusion_*.py`
+- [X] T092 Run focused API contract tests for `backend/tests/contract/test_xau_quikstrike_fusion_api_contracts.py`
+- [X] T093 Run the full backend test suite from `backend/tests/`
+- [X] T094 Run frontend dependency install and production build from `frontend/package.json`
+- [X] T095 Run generated artifact guard from `scripts/check_generated_artifacts.ps1`
+- [X] T096 Run the API smoke flow documented in `specs/014-xau-quikstrike-context-fusion/quickstart.md` without committing generated reports
+- [X] T097 Run the dashboard smoke flow for `/xau-vol-oi` documented in `specs/014-xau-quikstrike-context-fusion/quickstart.md`
+- [X] T098 Review forbidden v0 scope in `backend/pyproject.toml`, `frontend/package.json`, `.github/workflows/validation.yml`, `backend/src/`, and `frontend/src/`
+- [X] T099 Confirm generated fusion artifacts remain ignored and untracked using `git status --ignored --short`
+- [X] T100 Update final validation notes and task completion status in `specs/014-xau-quikstrike-context-fusion/tasks.md`
+
+**Final validation notes**: Backend import, focused fusion unit/integration/contract tests, full backend suite, frontend production build, artifact guard, API smoke, dashboard smoke, forbidden-scope review, and ignored-artifact status were completed. The in-app Browser smoke tool could not navigate the local target, so the dashboard smoke used a local Edge headless DOM check against `/xau-vol-oi`.
 
 ---
 
