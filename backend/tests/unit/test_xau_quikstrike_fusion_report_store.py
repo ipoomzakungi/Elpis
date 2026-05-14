@@ -11,6 +11,7 @@ from src.models.xau_quikstrike_fusion import (
     XauQuikStrikeFusionReport,
     XauQuikStrikeFusionSummary,
 )
+from src.reports.collision_guard import ReportIdCollisionError, ReportSourceKindIsolationError
 from src.xau_quikstrike_fusion.basis import calculate_basis_state
 from src.xau_quikstrike_fusion.report_store import XauQuikStrikeFusionReportStore
 from tests.helpers.test_xau_quikstrike_fusion_data import (
@@ -100,30 +101,11 @@ def test_report_store_artifact_paths_must_stay_under_report_root(tmp_path: Path)
 
 def test_report_store_persists_mvp_report_metadata_rows_json_and_markdown(tmp_path: Path):
     store = XauQuikStrikeFusionReportStore(reports_dir=tmp_path / "data" / "reports")
-    report = XauQuikStrikeFusionReport(
-        report_id="fusion_report",
-        status=XauFusionReportStatus.PARTIAL,
-        vol2vol_source=sample_vol2vol_source_ref(),
-        matrix_source=sample_matrix_source_ref(),
-        coverage=sample_coverage_summary(),
-        basis_state=calculate_basis_state(
-            xauusd_spot_reference=4692.1,
-            gc_futures_reference=4696.7,
-        ),
-        context_summary=XauFusionContextSummary(
-            basis_status=XauFusionContextStatus.AVAILABLE,
-            iv_range_status=XauFusionContextStatus.UNAVAILABLE,
-            open_regime_status=XauFusionContextStatus.UNAVAILABLE,
-            candle_acceptance_status=XauFusionContextStatus.UNAVAILABLE,
-            realized_volatility_status=XauFusionContextStatus.UNAVAILABLE,
-            source_agreement_status=XauFusionContextStatus.AVAILABLE,
-        ),
-        fused_row_count=1,
-        fused_rows=[sample_fused_row()],
-    )
+    report = _fusion_report()
 
     saved = store.persist_report(report)
 
+    assert saved.source_kind == "operational"
     assert (store.report_dir("fusion_report") / "metadata.json").exists()
     assert (store.report_dir("fusion_report") / "fused_rows.json").exists()
     assert (store.report_dir("fusion_report") / "report.json").exists()
@@ -141,11 +123,44 @@ def test_report_store_persists_mvp_report_metadata_rows_json_and_markdown(tmp_pa
         encoding="utf-8"
     )
     assert '"fused_row_count": 1' in report_json
+    assert '"source_kind": "operational"' in metadata_json
     assert '"basis_state"' in metadata_json
     assert '"missing_context_count": 0' in metadata_json
     assert "local-only research report" in (
         store.report_dir("fusion_report") / "report.md"
     ).read_text(encoding="utf-8").lower()
+
+
+def test_report_store_blocks_report_id_collisions_and_unisolated_smoke_ids(
+    tmp_path: Path,
+):
+    store = XauQuikStrikeFusionReportStore(reports_dir=tmp_path / "data" / "reports")
+    report = _fusion_report()
+
+    store.persist_report(report)
+
+    with pytest.raises(ReportIdCollisionError):
+        store.persist_report(report)
+
+    with pytest.raises(ReportSourceKindIsolationError):
+        store.persist_report(
+            report.model_copy(update={"report_id": "fusion_unisolated"}),
+            source_kind="smoke",
+        )
+
+
+def test_report_store_allows_same_run_precreated_downstream_input_artifact(
+    tmp_path: Path,
+):
+    store = XauQuikStrikeFusionReportStore(reports_dir=tmp_path / "data" / "reports")
+    report = _fusion_report()
+    precreated_path = store.ensure_report_dir(report.report_id) / "xau_vol_oi_report_input.csv"
+    precreated_path.write_text("strike,open_interest\n4700,120\n", encoding="utf-8")
+
+    saved = store.persist_report(report)
+
+    assert saved.report_id == report.report_id
+    assert precreated_path.exists()
 
 
 def test_report_store_persists_fused_xau_input_csv_and_metadata(tmp_path: Path):
@@ -249,3 +264,27 @@ def test_report_store_read_missing_report_raises_file_not_found(tmp_path: Path):
 
     with pytest.raises(FileNotFoundError):
         store.read_report("missing_report")
+
+
+def _fusion_report() -> XauQuikStrikeFusionReport:
+    return XauQuikStrikeFusionReport(
+        report_id="fusion_report",
+        status=XauFusionReportStatus.PARTIAL,
+        vol2vol_source=sample_vol2vol_source_ref(),
+        matrix_source=sample_matrix_source_ref(),
+        coverage=sample_coverage_summary(),
+        basis_state=calculate_basis_state(
+            xauusd_spot_reference=4692.1,
+            gc_futures_reference=4696.7,
+        ),
+        context_summary=XauFusionContextSummary(
+            basis_status=XauFusionContextStatus.AVAILABLE,
+            iv_range_status=XauFusionContextStatus.UNAVAILABLE,
+            open_regime_status=XauFusionContextStatus.UNAVAILABLE,
+            candle_acceptance_status=XauFusionContextStatus.UNAVAILABLE,
+            realized_volatility_status=XauFusionContextStatus.UNAVAILABLE,
+            source_agreement_status=XauFusionContextStatus.AVAILABLE,
+        ),
+        fused_row_count=1,
+        fused_rows=[sample_fused_row()],
+    )

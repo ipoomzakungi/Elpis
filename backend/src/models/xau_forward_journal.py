@@ -65,7 +65,7 @@ FORBIDDEN_XAU_FORWARD_JOURNAL_FIELDS = {
     "walletaddress",
 }
 
-FORBIDDEN_XAU_FORWARD_JOURNAL_VALUE_PATTERNS = (
+FORBIDDEN_XAU_FORWARD_JOURNAL_SENSITIVE_VALUE_PATTERNS = (
     re.compile(r"https?://", re.IGNORECASE),
     re.compile(r"__VIEWSTATE", re.IGNORECASE),
     re.compile(r"__EVENTVALIDATION", re.IGNORECASE),
@@ -73,6 +73,9 @@ FORBIDDEN_XAU_FORWARD_JOURNAL_VALUE_PATTERNS = (
     re.compile(r"\bCookie\s*:", re.IGNORECASE),
     re.compile(r"\bSet-Cookie\s*:", re.IGNORECASE),
     re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]+", re.IGNORECASE),
+)
+
+FORBIDDEN_XAU_FORWARD_JOURNAL_CLAIM_VALUE_PATTERNS = (
     re.compile(r"\bprofit(?:able|ability)\b", re.IGNORECASE),
     re.compile(r"\bpredict(?:s|ive|ion)?\b", re.IGNORECASE),
     re.compile(r"\bsafe to trade\b", re.IGNORECASE),
@@ -174,13 +177,37 @@ def ensure_no_forbidden_xau_forward_journal_content(value: Any, path: str = "") 
         return
 
     if isinstance(value, str):
-        for pattern in FORBIDDEN_XAU_FORWARD_JOURNAL_VALUE_PATTERNS:
+        for pattern in FORBIDDEN_XAU_FORWARD_JOURNAL_SENSITIVE_VALUE_PATTERNS:
             if pattern.search(value):
                 location = path or "value"
                 raise ValueError(
                     f"forbidden sensitive/session or unsupported claim value for "
                     f"XAU forward journal: {location}"
                 )
+        for pattern in FORBIDDEN_XAU_FORWARD_JOURNAL_CLAIM_VALUE_PATTERNS:
+            if pattern.search(value) and not _is_research_only_disclaimer(value):
+                location = path or "value"
+                raise ValueError(
+                    f"forbidden sensitive/session or unsupported claim value for "
+                    f"XAU forward journal: {location}"
+                )
+
+
+def _is_research_only_disclaimer(value: str) -> bool:
+    lowered = value.lower()
+    has_research_context = "research" in lowered or "annotation" in lowered
+    has_negation = any(
+        phrase in lowered
+        for phrase in (
+            "do not imply",
+            "does not imply",
+            "not imply",
+            "not a ",
+            "not action",
+            "not instruction",
+        )
+    )
+    return has_research_context and has_negation
 
 
 def _normalize_optional_text(value: str | None) -> str | None:
@@ -256,6 +283,7 @@ class XauForwardJournalNote(XauForwardJournalBaseModel):
 class XauForwardSourceReportRef(XauForwardJournalBaseModel):
     source_type: XauForwardJournalSourceType
     report_id: str
+    source_kind: str = "operational"
     status: str = "available"
     created_at: datetime | None = None
     product: str | None = None
@@ -278,7 +306,14 @@ class XauForwardSourceReportRef(XauForwardJournalBaseModel):
             return None
         return _normalize_aware_datetime(value)
 
-    @field_validator("status", "product", "expiration", "expiration_code", mode="before")
+    @field_validator(
+        "source_kind",
+        "status",
+        "product",
+        "expiration",
+        "expiration_code",
+        mode="before",
+    )
     @classmethod
     def normalize_optional_strings(cls, value: str | None) -> str | None:
         return _normalize_optional_text(value)
@@ -623,6 +658,7 @@ class XauForwardOutcomeUpdateRequest(XauForwardJournalBaseModel):
 class XauForwardJournalEntry(XauForwardJournalBaseModel):
     journal_id: str
     snapshot_key: str
+    source_kind: str = "operational"
     status: XauForwardJournalEntryStatus
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -676,6 +712,7 @@ class XauForwardJournalEntry(XauForwardJournalBaseModel):
 class XauForwardJournalSummary(XauForwardJournalBaseModel):
     journal_id: str
     snapshot_key: str
+    source_kind: str = "operational"
     status: XauForwardJournalEntryStatus
     snapshot_time: datetime
     capture_window: str = "daily_snapshot"

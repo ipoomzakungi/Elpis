@@ -17,6 +17,10 @@ from src.models.xau_reaction import (
     XauRiskPlanTableResponse,
     validate_filesystem_safe_id,
 )
+from src.reports.collision_guard import (
+    assert_report_write_allowed,
+    resolve_report_source_kind_for_write,
+)
 from src.reports.writer import (
     compose_xau_reaction_report_json,
     compose_xau_reaction_report_markdown,
@@ -76,10 +80,28 @@ class XauReactionReportStore:
             created_at=datetime.now(UTC),
         )
 
-    def save_report(self, report: XauReactionReport) -> XauReactionReport:
+    def save_report(
+        self,
+        report: XauReactionReport,
+        *,
+        source_kind: str | None = None,
+        overwrite_allowed: bool = False,
+    ) -> XauReactionReport:
         """Persist reaction report metadata, section tables, and report artifacts."""
 
         self.ensure_report_root()
+        requested_source_kind = resolve_report_source_kind_for_write(
+            report_id=report.report_id,
+            explicit_source_kind=source_kind,
+            model_source_kind=report.source_kind,
+        )
+        normalized_source_kind = assert_report_write_allowed(
+            report_dir=self.report_dir(report.report_id),
+            report_id=report.report_id,
+            source_kind=requested_source_kind,
+            overwrite_allowed=overwrite_allowed,
+        )
+        report = report.model_copy(update={"source_kind": normalized_source_kind})
         report_dir = self.ensure_report_dir(report.report_id)
         metadata_path = report_dir / "metadata.json"
         report_json_path = report_dir / "report.json"
@@ -167,6 +189,7 @@ class XauReactionReportStore:
         summaries = [
             XauReactionReportSummary(
                 report_id=report.report_id,
+                source_kind=report.source_kind,
                 source_report_id=report.source_report_id,
                 status=report.status,
                 created_at=report.created_at,

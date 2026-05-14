@@ -14,6 +14,7 @@ from src.models.quikstrike_matrix import (
 from src.quikstrike_matrix.conversion import convert_to_xau_vol_oi_rows
 from src.quikstrike_matrix.extraction import build_extraction_from_request
 from src.quikstrike_matrix.report_store import QuikStrikeMatrixReportStore
+from src.reports.collision_guard import ReportIdCollisionError, ReportSourceKindIsolationError
 
 
 def test_report_store_roots_are_path_safe(tmp_path: Path):
@@ -64,12 +65,41 @@ def test_report_store_persists_and_reads_report_rows_and_conversion(tmp_path: Pa
     )
 
     assert report.row_count == len(extraction.rows)
+    assert report.source_kind == "operational"
     assert (store.report_dir("matrix_store") / "report.json").exists()
+    assert '"source_kind": "operational"' in (
+        store.raw_root() / "matrix_store_metadata.json"
+    ).read_text(encoding="utf-8")
     assert (store.report_dir("matrix_store") / "report.md").exists()
     assert store.read_report("matrix_store").extraction_id == "matrix_store"
     assert len(store.read_normalized_rows("matrix_store")) == len(extraction.rows)
     assert len(store.read_conversion_rows("matrix_store")) == len(conversion.rows)
     assert store.list_reports().extractions[0].extraction_id == "matrix_store"
+
+
+def test_matrix_report_store_blocks_report_id_collisions_and_unisolated_smoke_ids(
+    tmp_path: Path,
+):
+    store = QuikStrikeMatrixReportStore(reports_dir=tmp_path / "data" / "reports")
+    extraction = build_extraction_from_request(
+        _request(),
+        extraction_id="matrix_store",
+        capture_timestamp=datetime(2026, 5, 13, tzinfo=UTC),
+    )
+
+    store.persist_report(extraction_result=extraction.result, normalized_rows=extraction.rows)
+
+    with pytest.raises(ReportIdCollisionError):
+        store.persist_report(extraction_result=extraction.result, normalized_rows=extraction.rows)
+
+    with pytest.raises(ReportSourceKindIsolationError):
+        store.persist_report(
+            extraction_result=extraction.result.model_copy(
+                update={"extraction_id": "matrix_unisolated"}
+            ),
+            normalized_rows=extraction.rows,
+            source_kind="smoke",
+        )
 
 
 def test_report_store_does_not_persist_secret_like_content(tmp_path: Path):

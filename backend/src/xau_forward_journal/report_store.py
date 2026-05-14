@@ -19,6 +19,10 @@ from src.models.xau_forward_journal import (
     XauForwardOutcomeStatus,
     validate_xau_forward_journal_safe_id,
 )
+from src.reports.collision_guard import (
+    assert_report_write_allowed,
+    resolve_report_source_kind_for_write,
+)
 
 
 class XauForwardJournalReportStore:
@@ -112,7 +116,25 @@ class XauForwardJournalReportStore:
             rows=rows,
         )
 
-    def persist_entry(self, entry: XauForwardJournalEntry) -> XauForwardJournalEntry:
+    def persist_entry(
+        self,
+        entry: XauForwardJournalEntry,
+        *,
+        source_kind: str | None = None,
+        overwrite_allowed: bool = False,
+    ) -> XauForwardJournalEntry:
+        requested_source_kind = resolve_report_source_kind_for_write(
+            report_id=entry.journal_id,
+            explicit_source_kind=source_kind,
+            model_source_kind=entry.source_kind,
+        )
+        normalized_source_kind = assert_report_write_allowed(
+            report_dir=self.report_dir(entry.journal_id),
+            report_id=entry.journal_id,
+            source_kind=requested_source_kind,
+            overwrite_allowed=overwrite_allowed,
+        )
+        entry = entry.model_copy(update={"source_kind": normalized_source_kind})
         self.ensure_report_dir(entry.journal_id)
         artifacts = [
             self.artifact_for_filename(
@@ -182,7 +204,11 @@ class XauForwardJournalReportStore:
 
         if not self.report_dir(entry.journal_id).exists():
             raise FileNotFoundError(entry.journal_id)
-        return self.persist_entry(entry)
+        return self.persist_entry(
+            entry,
+            source_kind=entry.source_kind,
+            overwrite_allowed=True,
+        )
 
     def read_entry(self, journal_id: str) -> XauForwardJournalEntry:
         path = self.artifact_path(journal_id, "entry.json")
@@ -260,6 +286,7 @@ class XauForwardJournalReportStore:
         return XauForwardJournalSummary(
             journal_id=entry.journal_id,
             snapshot_key=entry.snapshot_key,
+            source_kind=entry.source_kind,
             status=entry.status,
             snapshot_time=entry.snapshot.snapshot_time,
             capture_window=entry.snapshot.capture_window,

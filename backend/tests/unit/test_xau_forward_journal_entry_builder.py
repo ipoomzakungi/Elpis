@@ -54,6 +54,11 @@ def test_loads_source_report_refs_for_all_required_report_families(tmp_path):
         "xau_reaction",
     ]
     assert refs[0].product == "Gold (OG|GC)"
+    assert {ref.source_kind for ref in refs} == {"synthetic"}
+    assert all(
+        any("marked synthetic" in warning for warning in ref.warnings)
+        for ref in refs
+    )
     assert refs[2].expiration_code == "G2RK6"
     assert refs[3].row_count == 2
     assert refs[4].status == "partial"

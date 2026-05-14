@@ -361,6 +361,7 @@ class XauReactionReport(XauReactionBaseModel):
     """Persisted research-only XAU reaction report metadata and rows."""
 
     report_id: str
+    source_kind: str = "operational"
     source_report_id: str
     status: XauReactionReportStatus
     created_at: datetime
@@ -388,6 +389,7 @@ class XauReactionReport(XauReactionBaseModel):
 
 class XauReactionReportSummary(XauReactionBaseModel):
     report_id: str
+    source_kind: str = "operational"
     source_report_id: str
     status: XauReactionReportStatus
     created_at: datetime

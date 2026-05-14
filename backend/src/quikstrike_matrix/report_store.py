@@ -22,6 +22,10 @@ from src.models.quikstrike_matrix import (
     QuikStrikeMatrixXauVolOiRow,
     validate_quikstrike_matrix_safe_id,
 )
+from src.reports.collision_guard import (
+    assert_report_write_allowed,
+    resolve_report_source_kind_for_write,
+)
 
 
 class QuikStrikeMatrixReportStore:
@@ -89,10 +93,22 @@ class QuikStrikeMatrixReportStore:
         normalized_rows: list[QuikStrikeMatrixNormalizedRow],
         conversion_result: QuikStrikeMatrixConversionResult | None = None,
         conversion_rows: list[QuikStrikeMatrixXauVolOiRow] | None = None,
+        source_kind: str | None = None,
+        overwrite_allowed: bool = False,
     ) -> QuikStrikeMatrixExtractionReport:
         """Persist metadata, rows, artifact metadata, and report JSON/Markdown."""
 
         self.ensure_roots()
+        requested_source_kind = resolve_report_source_kind_for_write(
+            report_id=extraction_result.extraction_id,
+            explicit_source_kind=source_kind,
+        )
+        normalized_source_kind = assert_report_write_allowed(
+            report_dir=self.report_dir(extraction_result.extraction_id),
+            report_id=extraction_result.extraction_id,
+            source_kind=requested_source_kind,
+            overwrite_allowed=overwrite_allowed,
+        )
         report_dir = self.ensure_report_dir(extraction_result.extraction_id)
         metadata_path = self.raw_root_dir / f"{extraction_result.extraction_id}_metadata.json"
         normalized_rows_path = (
@@ -151,6 +167,7 @@ class QuikStrikeMatrixReportStore:
             )
         report = QuikStrikeMatrixExtractionReport(
             extraction_id=extraction_result.extraction_id,
+            source_kind=normalized_source_kind,
             status=extraction_result.status,
             created_at=extraction_result.created_at,
             completed_at=extraction_result.completed_at,
@@ -222,6 +239,7 @@ class QuikStrikeMatrixReportStore:
         conversion_eligible = bool(report.request_summary.get("conversion_eligible", False))
         return QuikStrikeMatrixExtractionSummary(
             extraction_id=report.extraction_id,
+            source_kind=report.source_kind,
             status=report.status,
             created_at=report.created_at,
             completed_at=report.completed_at,
@@ -409,6 +427,7 @@ def _view_summaries(
 def _metadata_payload(report: QuikStrikeMatrixExtractionReport) -> dict[str, Any]:
     return {
         "extraction_id": report.extraction_id,
+        "source_kind": report.source_kind,
         "status": report.status.value,
         "created_at": report.created_at.isoformat(),
         "completed_at": report.completed_at.isoformat() if report.completed_at else None,

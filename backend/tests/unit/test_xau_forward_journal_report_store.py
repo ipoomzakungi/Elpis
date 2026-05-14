@@ -12,6 +12,7 @@ from src.models.xau_forward_journal import (
     XauForwardOutcomeStatus,
     XauForwardOutcomeUpdateRequest,
 )
+from src.reports.collision_guard import ReportIdCollisionError, ReportSourceKindIsolationError
 from src.xau_forward_journal.entry_builder import build_journal_entry
 from src.xau_forward_journal.outcome import apply_outcome_update
 from src.xau_forward_journal.report_store import XauForwardJournalReportStore
@@ -103,12 +104,16 @@ def test_report_store_persists_created_entry_artifacts_and_reads_by_snapshot_key
     saved_entry = store.persist_entry(entry)
 
     report_dir = store.report_dir(saved_entry.journal_id)
+    assert saved_entry.source_kind == "operational"
     assert (report_dir / "metadata.json").exists()
     assert (report_dir / "entry.json").exists()
     assert (report_dir / "outcomes.json").exists()
     assert (report_dir / "report.json").exists()
     assert (report_dir / "report.md").exists()
     assert len(saved_entry.artifacts) == 5
+    assert '"source_kind": "operational"' in (report_dir / "metadata.json").read_text(
+        encoding="utf-8"
+    )
     assert saved_entry.artifacts[0].path.startswith("data/reports/xau_forward_journal/")
 
     loaded_entry = store.read_entry(saved_entry.journal_id)
@@ -121,6 +126,30 @@ def test_report_store_persists_created_entry_artifacts_and_reads_by_snapshot_key
     assert found_entry is not None
     assert found_entry.journal_id == saved_entry.journal_id
     assert listed.entries[0].snapshot_key == saved_entry.snapshot_key
+
+
+def test_report_store_blocks_entry_id_collisions_and_unisolated_smoke_ids(
+    tmp_path: Path,
+):
+    reports_dir = tmp_path / "data" / "reports"
+    write_synthetic_source_reports(reports_dir)
+    request = XauForwardJournalCreateRequest.model_validate(
+        synthetic_forward_journal_create_payload()
+    )
+    entry = build_journal_entry(request, reports_dir=reports_dir)
+    store = XauForwardJournalReportStore(reports_dir=reports_dir)
+
+    store.persist_entry(entry)
+
+    with pytest.raises(ReportIdCollisionError):
+        store.persist_entry(entry)
+
+    with pytest.raises(ReportSourceKindIsolationError):
+        store.persist_entry(
+            entry.model_copy(
+                update={"journal_id": "xau_forward_journal_unisolated", "source_kind": "smoke"}
+            )
+        )
 
 
 def test_report_store_lists_and_reads_saved_entry_details(tmp_path: Path):

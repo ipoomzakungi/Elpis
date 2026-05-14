@@ -4,6 +4,7 @@ import polars as pl
 import pytest
 
 from src.models.xau_reaction import XauReactionArtifactFormat, XauReactionArtifactType
+from src.reports.collision_guard import ReportIdCollisionError, ReportSourceKindIsolationError
 from src.xau_reaction.orchestration import assemble_reaction_report
 from src.xau_reaction.report_store import XauReactionReportStore
 from tests.helpers.test_xau_reaction_data import (
@@ -64,6 +65,7 @@ def test_reaction_report_store_persists_metadata_rows_json_and_markdown(tmp_path
     saved = store.save_report(report)
     report_dir = store.report_dir(saved.report_id)
 
+    assert saved.source_kind == "synthetic"
     assert (report_dir / "metadata.json").exists()
     assert (report_dir / "report.json").exists()
     assert (report_dir / "report.md").exists()
@@ -74,6 +76,7 @@ def test_reaction_report_store_persists_metadata_rows_json_and_markdown(tmp_path
     reactions = store.read_reactions(saved.report_id)
     risk_plan = store.read_risk_plan(saved.report_id)
     report_json = (report_dir / "report.json").read_text(encoding="utf-8")
+    metadata_json = (report_dir / "metadata.json").read_text(encoding="utf-8")
     report_markdown = (report_dir / "report.md").read_text(encoding="utf-8")
 
     assert loaded.report_id == saved.report_id
@@ -84,6 +87,7 @@ def test_reaction_report_store_persists_metadata_rows_json_and_markdown(tmp_path
     assert risk_plan.data[0].reaction_id == loaded.reactions[0].reaction_id
     assert "XAU Reaction Report" in report_markdown
     assert "research_disclaimer" in report_json
+    assert '"source_kind": "synthetic"' in metadata_json
 
     reaction_frame = pl.read_parquet(report_dir / "reactions.parquet")
     risk_frame = pl.read_parquet(report_dir / "risk_plans.parquet")
@@ -92,3 +96,24 @@ def test_reaction_report_store_persists_metadata_rows_json_and_markdown(tmp_path
 
     listed = store.list_reports()
     assert [summary.report_id for summary in listed.reports] == [saved.report_id]
+
+
+def test_reaction_report_store_blocks_report_id_collisions_and_unisolated_smoke_ids(
+    tmp_path,
+):
+    store = XauReactionReportStore(reports_dir=tmp_path / "reports")
+    report = assemble_reaction_report(
+        request=sample_xau_reaction_full_context_request(),
+        source_report=sample_feature006_xau_report(),
+    )
+
+    store.save_report(report)
+
+    with pytest.raises(ReportIdCollisionError):
+        store.save_report(report)
+
+    with pytest.raises(ReportSourceKindIsolationError):
+        store.save_report(
+            report.model_copy(update={"report_id": "xau_reaction_unisolated"}),
+            source_kind="smoke",
+        )

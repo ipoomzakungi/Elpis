@@ -322,6 +322,7 @@ class XauVolOiReport(XauBaseModel):
     """Persisted XAU Vol-OI report metadata."""
 
     report_id: str
+    source_kind: str = "operational"
     status: XauReportStatus
     created_at: datetime
     session_date: date | None = None
@@ -346,6 +347,7 @@ class XauVolOiReportSummary(XauBaseModel):
     """List row for saved XAU Vol-OI reports."""
 
     report_id: str
+    source_kind: str = "operational"
     status: XauReportStatus
     created_at: datetime
     session_date: date | None = None
