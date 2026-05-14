@@ -17,6 +17,7 @@ import {
   XauReactionReportSummary,
   XauReactionRow,
   XauRiskPlan,
+  XauQuikStrikeFusionDashboardData,
   XauQuikStrikeFusionSummary,
   XauVolRegimeResult,
   XauVolOiReportSummary,
@@ -41,6 +42,7 @@ export default function XauVolOiPage() {
     useState<QuikStrikeMatrixDashboardData | null>(null)
   const [fusionReports, setFusionReports] = useState<XauQuikStrikeFusionSummary[]>([])
   const [selectedFusionReportId, setSelectedFusionReportId] = useState<string | null>(null)
+  const [fusionData, setFusionData] = useState<XauQuikStrikeFusionDashboardData | null>(null)
   const [loadingReports, setLoadingReports] = useState(true)
   const [loadingReport, setLoadingReport] = useState(false)
   const [loadingReactionReports, setLoadingReactionReports] = useState(true)
@@ -50,6 +52,7 @@ export default function XauVolOiPage() {
   const [loadingQuikStrikeMatrixReports, setLoadingQuikStrikeMatrixReports] = useState(true)
   const [loadingQuikStrikeMatrixReport, setLoadingQuikStrikeMatrixReport] = useState(false)
   const [loadingFusionReports, setLoadingFusionReports] = useState(true)
+  const [loadingFusionReport, setLoadingFusionReport] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reactionError, setReactionError] = useState<string | null>(null)
   const [quikStrikeError, setQuikStrikeError] = useState<string | null>(null)
@@ -204,6 +207,36 @@ export default function XauVolOiPage() {
       active = false
     }
   }, [selectedReportId])
+
+  useEffect(() => {
+    if (!selectedFusionReportId) {
+      setFusionData(null)
+      return
+    }
+
+    let active = true
+    setLoadingFusionReport(true)
+    setFusionError(null)
+    api.getXauQuikStrikeFusionDashboardData(selectedFusionReportId)
+      .then((response) => {
+        if (!active) return
+        setFusionData(response)
+      })
+      .catch((err) => {
+        if (!active) return
+        setFusionData(null)
+        setFusionError(
+          err instanceof Error ? err.message : 'XAU QuikStrike fusion report could not be loaded',
+        )
+      })
+      .finally(() => {
+        if (active) setLoadingFusionReport(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [selectedFusionReportId])
 
   useEffect(() => {
     if (reactionReports.length === 0) {
@@ -410,7 +443,9 @@ export default function XauVolOiPage() {
         reports={fusionReports}
         selectedReportId={selectedFusionReportId}
         selectedSummary={selectedFusionSummary}
+        data={fusionData}
         loadingList={loadingFusionReports}
+        loadingReport={loadingFusionReport}
         error={fusionError}
         onSelect={setSelectedFusionReportId}
       />
@@ -802,17 +837,27 @@ function QuikStrikeFusionInspection({
   reports,
   selectedReportId,
   selectedSummary,
+  data,
   loadingList,
+  loadingReport,
   error,
   onSelect,
 }: {
   reports: XauQuikStrikeFusionSummary[]
   selectedReportId: string | null
   selectedSummary: XauQuikStrikeFusionSummary | null
+  data: XauQuikStrikeFusionDashboardData | null
   loadingList: boolean
+  loadingReport: boolean
   error: string | null
   onSelect: (reportId: string | null) => void
 }) {
+  const report = data?.report ?? null
+  const rowCount = data?.rows.rows.length ?? selectedSummary?.fused_row_count ?? 0
+  const missingContext = data?.missingContext.missing_context ?? []
+  const artifacts = report?.artifacts ?? []
+  const downstream = report?.downstream_result ?? null
+
   return (
     <ReportSection title="QuikStrike Fusion Context">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -874,16 +919,28 @@ function QuikStrikeFusionInspection({
         <div className="mt-5 space-y-4">
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
             <SummaryCard label="Status" value={selectedSummary.status} />
-            <SummaryCard label="Fused Rows" value={selectedSummary.fused_row_count} />
+            <SummaryCard label="Fused Rows" value={rowCount} />
             <SummaryCard label="Strikes" value={selectedSummary.strike_count} />
             <SummaryCard label="Expiries" value={selectedSummary.expiration_count} />
             <SummaryCard label="Warnings" value={selectedSummary.warning_count} />
           </div>
+          {loadingReport && <EmptyState>Loading fusion report detail...</EmptyState>}
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <ContextPanel title="Source Reports">
               <dl className="grid grid-cols-1 gap-3 text-sm">
-                <Metric label="Vol2Vol" value={selectedSummary.vol2vol_report_id} />
-                <Metric label="Matrix" value={selectedSummary.matrix_report_id} />
+                <Metric
+                  label="Vol2Vol"
+                  value={report?.vol2vol_source.report_id ?? selectedSummary.vol2vol_report_id}
+                />
+                <Metric
+                  label="Vol2Vol Rows"
+                  value={report?.vol2vol_source.row_count ?? 'n/a'}
+                />
+                <Metric
+                  label="Matrix"
+                  value={report?.matrix_source.report_id ?? selectedSummary.matrix_report_id}
+                />
+                <Metric label="Matrix Rows" value={report?.matrix_source.row_count ?? 'n/a'} />
               </dl>
             </ContextPanel>
             <ContextPanel title="Context Status">
@@ -892,23 +949,103 @@ function QuikStrikeFusionInspection({
                 <Metric label="IV / Range" value={selectedSummary.iv_range_status} />
                 <Metric label="Open" value={selectedSummary.open_regime_status} />
                 <Metric label="Candle" value={selectedSummary.candle_acceptance_status} />
+                <Metric
+                  label="Realized Vol"
+                  value={report?.context_summary?.realized_volatility_status ?? 'n/a'}
+                />
+                <Metric
+                  label="Source Agreement"
+                  value={report?.context_summary?.source_agreement_status ?? 'n/a'}
+                />
               </dl>
             </ContextPanel>
             <ContextPanel title="Linked XAU Reports">
               <dl className="grid grid-cols-1 gap-3 text-sm">
-                <Metric label="Vol-OI" value={selectedSummary.xau_vol_oi_report_id ?? 'n/a'} />
-                <Metric label="Reaction" value={selectedSummary.xau_reaction_report_id ?? 'n/a'} />
+                <Metric
+                  label="Vol-OI"
+                  value={
+                    downstream?.xau_vol_oi_report_id ??
+                    selectedSummary.xau_vol_oi_report_id ??
+                    'n/a'
+                  }
+                />
+                <Metric
+                  label="Reaction"
+                  value={
+                    downstream?.xau_reaction_report_id ??
+                    selectedSummary.xau_reaction_report_id ??
+                    'n/a'
+                  }
+                />
+                <Metric label="Reaction Rows" value={downstream?.reaction_row_count ?? 'n/a'} />
+                <Metric label="No-Trade Rows" value={downstream?.no_trade_count ?? 'n/a'} />
                 <Metric
                   label="All No-Trade"
                   value={
-                    selectedSummary.all_reactions_no_trade === null
+                    (downstream?.all_reactions_no_trade ??
+                      selectedSummary.all_reactions_no_trade) === null
                       ? 'n/a'
-                      : formatBoolean(selectedSummary.all_reactions_no_trade)
+                      : formatBoolean(
+                          downstream?.all_reactions_no_trade ??
+                            selectedSummary.all_reactions_no_trade ??
+                            false,
+                        )
                   }
                 />
               </dl>
             </ContextPanel>
           </div>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <ContextPanel title="Coverage">
+              <dl className="grid grid-cols-1 gap-3 text-sm">
+                <Metric label="Matched Keys" value={report?.coverage?.matched_key_count ?? 'n/a'} />
+                <Metric
+                  label="Vol2Vol Only"
+                  value={report?.coverage?.vol2vol_only_key_count ?? 'n/a'}
+                />
+                <Metric
+                  label="Matrix Only"
+                  value={report?.coverage?.matrix_only_key_count ?? 'n/a'}
+                />
+                <Metric
+                  label="Conflicts"
+                  value={report?.coverage?.conflict_key_count ?? 'n/a'}
+                />
+              </dl>
+            </ContextPanel>
+            <ContextPanel title="Missing Context">
+              <NotesList
+                notes={missingContext.map(
+                  (item) => `${item.context_key}: ${item.status} - ${item.message}`,
+                )}
+                emptyText="No missing-context items"
+              />
+            </ContextPanel>
+            <ContextPanel title="Artifacts">
+              <NotesList
+                notes={artifacts.map((artifact) => `${artifact.artifact_type}: ${artifact.path}`)}
+                emptyText="No artifacts recorded"
+              />
+            </ContextPanel>
+          </div>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <ContextPanel title="Warnings">
+              <NotesList notes={report?.warnings ?? []} emptyText="No fusion warnings" />
+            </ContextPanel>
+            <ContextPanel title="Limitations">
+              <NotesList
+                notes={[
+                  ...(report?.limitations ?? []),
+                  ...(report?.research_only_warnings ?? []),
+                ]}
+                emptyText="No limitations recorded"
+              />
+            </ContextPanel>
+          </div>
+          <Notice tone="warning">
+            Fusion is local-only and research-only. It does not trigger browser extraction,
+            endpoint replay, credential handling, order execution, or live-readiness claims.
+          </Notice>
         </div>
       ) : null}
     </ReportSection>

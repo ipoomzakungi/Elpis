@@ -104,22 +104,22 @@
 
 ### Tests for User Story 2
 
-- [ ] T048 [P] [US2] Add basis status tests for available, unavailable, invalid, and conflicting references in `backend/tests/unit/test_xau_quikstrike_fusion_basis.py`
-- [ ] T049 [P] [US2] Add spot-equivalent level calculation tests in `backend/tests/unit/test_xau_quikstrike_fusion_basis.py`
-- [ ] T050 [P] [US2] Add missing context checklist tests for basis, IV/range, open, candle, RV, source quality, and source agreement in `backend/tests/unit/test_xau_quikstrike_fusion_fusion.py`
-- [ ] T051 [P] [US2] Add no-fabricated-context regression tests in `backend/tests/unit/test_xau_quikstrike_fusion_fusion.py`
-- [ ] T052 [P] [US2] Add integration test proving missing open/candle context keeps downstream notes conservative in `backend/tests/integration/test_xau_quikstrike_fusion_flow.py`
+- [X] T048 [P] [US2] Add basis status tests for available, unavailable, invalid, and conflicting references in `backend/tests/unit/test_xau_quikstrike_fusion_basis.py`
+- [X] T049 [P] [US2] Add spot-equivalent level calculation tests in `backend/tests/unit/test_xau_quikstrike_fusion_basis.py`
+- [X] T050 [P] [US2] Add missing context checklist tests for basis, IV/range, open, candle, RV, source quality, and source agreement in `backend/tests/unit/test_xau_quikstrike_fusion_fusion.py`
+- [X] T051 [P] [US2] Add no-fabricated-context regression tests in `backend/tests/unit/test_xau_quikstrike_fusion_fusion.py`
+- [X] T052 [P] [US2] Add integration test proving missing open/candle context keeps downstream notes conservative in `backend/tests/integration/test_xau_quikstrike_fusion_flow.py`
 
 ### Implementation for User Story 2
 
-- [ ] T053 [US2] Implement optional futures/spot basis state calculation in `backend/src/xau_quikstrike_fusion/basis.py`
-- [ ] T054 [US2] Implement spot-equivalent level calculation and unavailable-basis behavior in `backend/src/xau_quikstrike_fusion/basis.py`
-- [ ] T055 [US2] Implement IV/range status detection from Vol2Vol range and volatility-style context in `backend/src/xau_quikstrike_fusion/fusion.py`
-- [ ] T056 [US2] Implement realized-volatility, session-open, and candle-acceptance context status generation from optional request inputs in `backend/src/xau_quikstrike_fusion/fusion.py`
-- [ ] T057 [US2] Implement structured missing-context checklist generation in `backend/src/xau_quikstrike_fusion/fusion.py`
-- [ ] T058 [US2] Attach missing-context notes to fusion rows and report context summary in `backend/src/xau_quikstrike_fusion/fusion.py`
-- [ ] T059 [US2] Integrate basis state and missing context into fusion orchestration in `backend/src/xau_quikstrike_fusion/orchestration.py`
-- [ ] T060 [US2] Persist basis state and missing-context checklist in JSON/Markdown fusion reports in `backend/src/xau_quikstrike_fusion/report_store.py`
+- [X] T053 [US2] Implement optional futures/spot basis state calculation in `backend/src/xau_quikstrike_fusion/basis.py`
+- [X] T054 [US2] Implement spot-equivalent level calculation and unavailable-basis behavior in `backend/src/xau_quikstrike_fusion/basis.py`
+- [X] T055 [US2] Implement IV/range status detection from Vol2Vol range and volatility-style context in `backend/src/xau_quikstrike_fusion/fusion.py`
+- [X] T056 [US2] Implement realized-volatility, session-open, and candle-acceptance context status generation from optional request inputs in `backend/src/xau_quikstrike_fusion/fusion.py`
+- [X] T057 [US2] Implement structured missing-context checklist generation in `backend/src/xau_quikstrike_fusion/fusion.py`
+- [X] T058 [US2] Attach missing-context notes to fusion rows and report context summary in `backend/src/xau_quikstrike_fusion/fusion.py`
+- [X] T059 [US2] Integrate basis state and missing context into fusion orchestration in `backend/src/xau_quikstrike_fusion/orchestration.py`
+- [X] T060 [US2] Persist basis state and missing-context checklist in JSON/Markdown fusion reports in `backend/src/xau_quikstrike_fusion/report_store.py`
 
 **Checkpoint**: US2 explains why downstream reaction output may remain NO_TRADE or low confidence.
 
@@ -133,21 +133,21 @@
 
 ### Tests for User Story 3
 
-- [ ] T061 [P] [US3] Add fused XAU Vol-OI conversion tests for Matrix OI/OI Change/Volume and Vol2Vol context preservation in `backend/tests/unit/test_xau_quikstrike_fusion_fusion.py`
-- [ ] T062 [P] [US3] Add blocked conversion tests for missing strike, expiration, option type, and value mapping in `backend/tests/unit/test_xau_quikstrike_fusion_fusion.py`
-- [ ] T063 [P] [US3] Add downstream XAU Vol-OI orchestration integration test in `backend/tests/integration/test_xau_quikstrike_fusion_flow.py`
-- [ ] T064 [P] [US3] Add downstream XAU reaction orchestration integration test with conservative NO_TRADE notes in `backend/tests/integration/test_xau_quikstrike_fusion_flow.py`
-- [ ] T065 [P] [US3] Add forbidden wording tests for downstream fusion notes in `backend/tests/unit/test_xau_quikstrike_fusion_fusion.py`
+- [X] T061 [P] [US3] Add fused XAU Vol-OI conversion tests for Matrix OI/OI Change/Volume and Vol2Vol context preservation in `backend/tests/unit/test_xau_quikstrike_fusion_fusion.py`
+- [X] T062 [P] [US3] Add blocked conversion tests for missing strike, expiration, option type, and value mapping in `backend/tests/unit/test_xau_quikstrike_fusion_fusion.py`
+- [X] T063 [P] [US3] Add downstream XAU Vol-OI orchestration integration test in `backend/tests/integration/test_xau_quikstrike_fusion_flow.py`
+- [X] T064 [P] [US3] Add downstream XAU reaction orchestration integration test with conservative NO_TRADE notes in `backend/tests/integration/test_xau_quikstrike_fusion_flow.py`
+- [X] T065 [P] [US3] Add forbidden wording tests for downstream fusion notes in `backend/tests/unit/test_xau_quikstrike_fusion_fusion.py`
 
 ### Implementation for User Story 3
 
-- [ ] T066 [US3] Implement fused XAU Vol-OI input row creation in `backend/src/xau_quikstrike_fusion/fusion.py`
-- [ ] T067 [US3] Implement conversion eligibility and blocked/partial conversion reasons in `backend/src/xau_quikstrike_fusion/fusion.py`
-- [ ] T068 [US3] Implement fused input artifact persistence metadata in `backend/src/xau_quikstrike_fusion/report_store.py`
-- [ ] T069 [US3] Integrate optional XAU Vol-OI report creation through existing feature 006 orchestration in `backend/src/xau_quikstrike_fusion/orchestration.py`
-- [ ] T070 [US3] Integrate optional XAU reaction report creation through existing feature 010 orchestration in `backend/src/xau_quikstrike_fusion/orchestration.py`
-- [ ] T071 [US3] Implement downstream result summary with linked report ids, no-trade count, and conservative notes in `backend/src/xau_quikstrike_fusion/orchestration.py`
-- [ ] T072 [US3] Persist downstream result and fused XAU input row counts in fusion reports in `backend/src/xau_quikstrike_fusion/report_store.py`
+- [X] T066 [US3] Implement fused XAU Vol-OI input row creation in `backend/src/xau_quikstrike_fusion/fusion.py`
+- [X] T067 [US3] Implement conversion eligibility and blocked/partial conversion reasons in `backend/src/xau_quikstrike_fusion/fusion.py`
+- [X] T068 [US3] Implement fused input artifact persistence metadata in `backend/src/xau_quikstrike_fusion/report_store.py`
+- [X] T069 [US3] Integrate optional XAU Vol-OI report creation through existing feature 006 orchestration in `backend/src/xau_quikstrike_fusion/orchestration.py`
+- [X] T070 [US3] Integrate optional XAU reaction report creation through existing feature 010 orchestration in `backend/src/xau_quikstrike_fusion/orchestration.py`
+- [X] T071 [US3] Implement downstream result summary with linked report ids, no-trade count, and conservative notes in `backend/src/xau_quikstrike_fusion/orchestration.py`
+- [X] T072 [US3] Persist downstream result and fused XAU input row counts in fusion reports in `backend/src/xau_quikstrike_fusion/report_store.py`
 
 **Checkpoint**: US3 can feed the existing XAU research chain without duplicating wall scoring or reaction logic.
 
@@ -161,24 +161,24 @@
 
 ### Tests for User Story 4
 
-- [ ] T073 [P] [US4] Add create fusion report API contract tests in `backend/tests/contract/test_xau_quikstrike_fusion_api_contracts.py`
-- [ ] T074 [P] [US4] Add list/detail/rows/missing-context API contract tests in `backend/tests/contract/test_xau_quikstrike_fusion_api_contracts.py`
-- [ ] T075 [P] [US4] Add missing source report, incompatible source report, missing fusion report, and invalid request API contract tests in `backend/tests/contract/test_xau_quikstrike_fusion_api_contracts.py`
-- [ ] T076 [P] [US4] Add report-store list/detail/rows/missing-context read tests in `backend/tests/unit/test_xau_quikstrike_fusion_report_store.py`
-- [ ] T077 [P] [US4] Add frontend API type and client compile coverage via `frontend/src/types/index.ts` and `frontend/src/services/api.ts`
+- [X] T073 [P] [US4] Add create fusion report API contract tests in `backend/tests/contract/test_xau_quikstrike_fusion_api_contracts.py`
+- [X] T074 [P] [US4] Add list/detail/rows/missing-context API contract tests in `backend/tests/contract/test_xau_quikstrike_fusion_api_contracts.py`
+- [X] T075 [P] [US4] Add missing source report, incompatible source report, missing fusion report, and invalid request API contract tests in `backend/tests/contract/test_xau_quikstrike_fusion_api_contracts.py`
+- [X] T076 [P] [US4] Add report-store list/detail/rows/missing-context read tests in `backend/tests/unit/test_xau_quikstrike_fusion_report_store.py`
+- [X] T077 [P] [US4] Add frontend API type and client compile coverage via `frontend/src/types/index.ts` and `frontend/src/services/api.ts`
 
 ### Implementation for User Story 4
 
-- [ ] T078 [US4] Implement full report save/read/list behavior in `backend/src/xau_quikstrike_fusion/report_store.py`
-- [ ] T079 [US4] Implement `POST /api/v1/xau/quikstrike-fusion/reports` in `backend/src/api/routes/xau_quikstrike_fusion.py`
-- [ ] T080 [US4] Implement `GET /api/v1/xau/quikstrike-fusion/reports` and `GET /api/v1/xau/quikstrike-fusion/reports/{report_id}` in `backend/src/api/routes/xau_quikstrike_fusion.py`
-- [ ] T081 [US4] Implement `GET /api/v1/xau/quikstrike-fusion/reports/{report_id}/rows` and `/missing-context` in `backend/src/api/routes/xau_quikstrike_fusion.py`
-- [ ] T082 [US4] Implement structured API errors for validation, source not found, incompatible sources, blocked fusion, and report not found in `backend/src/api/routes/xau_quikstrike_fusion.py`
-- [ ] T083 [US4] Implement XAU QuikStrike fusion request, summary, detail, row, and missing-context frontend types in `frontend/src/types/index.ts`
-- [ ] T084 [US4] Implement `createXauQuikStrikeFusionReport`, `listXauQuikStrikeFusionReports`, `getXauQuikStrikeFusionReport`, `getXauQuikStrikeFusionRows`, and `getXauQuikStrikeFusionMissingContext` in `frontend/src/services/api.ts`
-- [ ] T085 [US4] Render QuikStrike Fusion report selector, selected source report ids, status, fused row count, strike coverage, and expiry coverage in `frontend/src/app/xau-vol-oi/page.tsx`
-- [ ] T086 [US4] Render source agreement/disagreement, basis status, IV/range status, open/candle context status, and missing-context checklist in `frontend/src/app/xau-vol-oi/page.tsx`
-- [ ] T087 [US4] Render generated artifact paths, linked XAU Vol-OI report id, linked XAU reaction report id, all-NO_TRADE state, and research-only disclaimer in `frontend/src/app/xau-vol-oi/page.tsx`
+- [X] T078 [US4] Implement full report save/read/list behavior in `backend/src/xau_quikstrike_fusion/report_store.py`
+- [X] T079 [US4] Implement `POST /api/v1/xau/quikstrike-fusion/reports` in `backend/src/api/routes/xau_quikstrike_fusion.py`
+- [X] T080 [US4] Implement `GET /api/v1/xau/quikstrike-fusion/reports` and `GET /api/v1/xau/quikstrike-fusion/reports/{report_id}` in `backend/src/api/routes/xau_quikstrike_fusion.py`
+- [X] T081 [US4] Implement `GET /api/v1/xau/quikstrike-fusion/reports/{report_id}/rows` and `/missing-context` in `backend/src/api/routes/xau_quikstrike_fusion.py`
+- [X] T082 [US4] Implement structured API errors for validation, source not found, incompatible sources, blocked fusion, and report not found in `backend/src/api/routes/xau_quikstrike_fusion.py`
+- [X] T083 [US4] Implement XAU QuikStrike fusion request, summary, detail, row, and missing-context frontend types in `frontend/src/types/index.ts`
+- [X] T084 [US4] Implement `createXauQuikStrikeFusionReport`, `listXauQuikStrikeFusionReports`, `getXauQuikStrikeFusionReport`, `getXauQuikStrikeFusionRows`, and `getXauQuikStrikeFusionMissingContext` in `frontend/src/services/api.ts`
+- [X] T085 [US4] Render QuikStrike Fusion report selector, selected source report ids, status, fused row count, strike coverage, and expiry coverage in `frontend/src/app/xau-vol-oi/page.tsx`
+- [X] T086 [US4] Render source agreement/disagreement, basis status, IV/range status, open/candle context status, and missing-context checklist in `frontend/src/app/xau-vol-oi/page.tsx`
+- [X] T087 [US4] Render generated artifact paths, linked XAU Vol-OI report id, linked XAU reaction report id, all-NO_TRADE state, and research-only disclaimer in `frontend/src/app/xau-vol-oi/page.tsx`
 
 **Checkpoint**: US4 makes fusion and downstream outcomes visible through local API and dashboard inspection.
 

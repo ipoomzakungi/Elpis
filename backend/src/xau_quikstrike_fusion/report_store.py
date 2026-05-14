@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 from pathlib import Path
 from typing import Any
@@ -10,7 +11,14 @@ from src.models.xau_quikstrike_fusion import (
     XauFusionArtifactFormat,
     XauFusionArtifactType,
     XauFusionBaseModel,
+    XauFusionContextStatus,
+    XauFusionMissingContextResponse,
+    XauFusionRow,
+    XauFusionRowsResponse,
+    XauFusionVolOiInputRow,
+    XauQuikStrikeFusionListResponse,
     XauQuikStrikeFusionReport,
+    XauQuikStrikeFusionSummary,
     validate_xau_fusion_safe_id,
 )
 
@@ -106,9 +114,59 @@ class XauQuikStrikeFusionReportStore:
             rows=rows,
         )
 
+    def write_xau_vol_oi_input_rows(
+        self,
+        report_id: str,
+        rows: list[XauFusionVolOiInputRow],
+        *,
+        filename: str = "xau_vol_oi_input.csv",
+    ) -> XauFusionArtifact:
+        """Persist fused XAU Vol-OI input rows as a local CSV artifact."""
+
+        path = self.artifact_path(report_id, filename)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fieldnames = [
+            "date",
+            "timestamp",
+            "expiry",
+            "expiration_code",
+            "strike",
+            "spot_equivalent_strike",
+            "option_type",
+            "open_interest",
+            "oi_change",
+            "volume",
+            "intraday_volume",
+            "eod_volume",
+            "churn",
+            "implied_volatility",
+            "underlying_futures_price",
+            "source",
+            "source_report_ids",
+            "source_agreement_status",
+            "limitations",
+        ]
+        with path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fieldnames)
+            writer.writeheader()
+            for row in rows:
+                payload = row.model_dump(mode="json")
+                payload["source_report_ids"] = "|".join(row.source_report_ids)
+                payload["source_agreement_status"] = row.source_agreement_status.value
+                payload["limitations"] = "|".join(row.limitations)
+                writer.writerow({field: payload.get(field) for field in fieldnames})
+        return self.artifact(
+            artifact_type=XauFusionArtifactType.XAU_VOL_OI_INPUT_CSV,
+            path=path,
+            artifact_format=XauFusionArtifactFormat.CSV,
+            rows=len(rows),
+        )
+
     def persist_report(
         self,
         report: XauQuikStrikeFusionReport,
+        *,
+        xau_vol_oi_input_rows: list[XauFusionVolOiInputRow] | None = None,
     ) -> XauQuikStrikeFusionReport:
         """Persist MVP fusion metadata, rows, JSON, and Markdown artifacts."""
 
@@ -144,6 +202,13 @@ class XauQuikStrikeFusionReportStore:
                 rows=1,
             ),
         ]
+        if xau_vol_oi_input_rows is not None:
+            artifacts.append(
+                self.write_xau_vol_oi_input_rows(
+                    report.report_id,
+                    xau_vol_oi_input_rows,
+                )
+            )
         saved_report = report.model_copy(update={"artifacts": artifacts})
         metadata_path.write_text(
             self.serialize_json(_metadata_payload(saved_report)) + "\n",
@@ -159,6 +224,96 @@ class XauQuikStrikeFusionReportStore:
         )
         report_markdown_path.write_text(_report_markdown(saved_report), encoding="utf-8")
         return saved_report
+
+    def read_report(self, report_id: str) -> XauQuikStrikeFusionReport:
+        path = self.artifact_path(report_id, "report.json")
+        if not path.exists():
+            raise FileNotFoundError(report_id)
+        return XauQuikStrikeFusionReport.model_validate_json(path.read_text(encoding="utf-8"))
+
+    def list_reports(self) -> XauQuikStrikeFusionListResponse:
+        root = self.report_root()
+        if not root.exists():
+            return XauQuikStrikeFusionListResponse(reports=[])
+        summaries: list[XauQuikStrikeFusionSummary] = []
+        for report_path in root.glob("*/report.json"):
+            try:
+                summaries.append(self.summarize_report(self.read_report(report_path.parent.name)))
+            except (OSError, ValueError, json.JSONDecodeError):
+                continue
+        return XauQuikStrikeFusionListResponse(
+            reports=sorted(summaries, key=lambda item: item.created_at, reverse=True)
+        )
+
+    def summarize_report(self, report: XauQuikStrikeFusionReport) -> XauQuikStrikeFusionSummary:
+        context_summary = report.context_summary
+        coverage = report.coverage
+        downstream_result = report.downstream_result
+        return XauQuikStrikeFusionSummary(
+            report_id=report.report_id,
+            status=report.status,
+            created_at=report.created_at,
+            vol2vol_report_id=report.vol2vol_source.report_id,
+            matrix_report_id=report.matrix_source.report_id,
+            fused_row_count=report.fused_row_count,
+            strike_count=coverage.strike_count if coverage else 0,
+            expiration_count=coverage.expiration_count if coverage else 0,
+            basis_status=(
+                context_summary.basis_status
+                if context_summary
+                else XauFusionContextStatus.UNAVAILABLE
+            ),
+            iv_range_status=(
+                context_summary.iv_range_status
+                if context_summary
+                else XauFusionContextStatus.UNAVAILABLE
+            ),
+            open_regime_status=(
+                context_summary.open_regime_status
+                if context_summary
+                else XauFusionContextStatus.UNAVAILABLE
+            ),
+            candle_acceptance_status=(
+                context_summary.candle_acceptance_status
+                if context_summary
+                else XauFusionContextStatus.UNAVAILABLE
+            ),
+            xau_vol_oi_report_id=(
+                downstream_result.xau_vol_oi_report_id if downstream_result else None
+            ),
+            xau_reaction_report_id=(
+                downstream_result.xau_reaction_report_id if downstream_result else None
+            ),
+            all_reactions_no_trade=(
+                downstream_result.all_reactions_no_trade if downstream_result else None
+            ),
+            warning_count=len(report.warnings),
+        )
+
+    def read_fused_rows(self, report_id: str) -> list[XauFusionRow]:
+        path = self.artifact_path(report_id, "fused_rows.json")
+        if path.exists():
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            return [XauFusionRow.model_validate(row) for row in payload]
+        return self.read_report(report_id).fused_rows
+
+    def read_rows_response(self, report_id: str) -> XauFusionRowsResponse:
+        return XauFusionRowsResponse(
+            report_id=validate_xau_fusion_safe_id(report_id, "report_id"),
+            rows=self.read_fused_rows(report_id),
+        )
+
+    def read_missing_context_response(
+        self,
+        report_id: str,
+    ) -> XauFusionMissingContextResponse:
+        report = self.read_report(report_id)
+        return XauFusionMissingContextResponse(
+            report_id=report.report_id,
+            missing_context=(
+                report.context_summary.missing_context if report.context_summary else []
+            ),
+        )
 
     def _validate_report_scope(self, path: Path) -> None:
         try:
@@ -197,7 +352,18 @@ def _metadata_payload(report: XauQuikStrikeFusionReport) -> dict[str, Any]:
         "vol2vol_report_id": report.vol2vol_source.report_id,
         "matrix_report_id": report.matrix_source.report_id,
         "fused_row_count": report.fused_row_count,
+        "xau_vol_oi_input_row_count": report.xau_vol_oi_input_row_count,
         "coverage": report.coverage.model_dump(mode="json") if report.coverage else None,
+        "basis_state": report.basis_state.model_dump(mode="json") if report.basis_state else None,
+        "context_summary": (
+            report.context_summary.model_dump(mode="json") if report.context_summary else None
+        ),
+        "downstream_result": (
+            report.downstream_result.model_dump(mode="json") if report.downstream_result else None
+        ),
+        "missing_context_count": (
+            len(report.context_summary.missing_context) if report.context_summary else 0
+        ),
         "warnings": report.warnings,
         "limitations": report.limitations,
         "research_only_warnings": report.research_only_warnings,
@@ -216,6 +382,7 @@ def _report_markdown(report: XauQuikStrikeFusionReport) -> str:
         f"- Vol2Vol report: `{report.vol2vol_source.report_id}`",
         f"- Matrix report: `{report.matrix_source.report_id}`",
         f"- Fused rows: `{report.fused_row_count}`",
+        f"- XAU Vol-OI input rows: `{report.xau_vol_oi_input_row_count}`",
     ]
     if report.coverage is not None:
         lines.extend(
@@ -227,6 +394,56 @@ def _report_markdown(report: XauQuikStrikeFusionReport) -> str:
                 f"- Blocked keys: `{report.coverage.blocked_key_count}`",
             ]
         )
+    if report.basis_state is not None:
+        lines.extend(
+            [
+                "",
+                "## Basis Context",
+                f"- Status: `{report.basis_state.status.value}`",
+                f"- Basis points: `{report.basis_state.basis_points}`",
+                f"- Note: {report.basis_state.calculation_note}",
+            ]
+        )
+    if report.context_summary is not None:
+        lines.extend(
+            [
+                "",
+                "## Context Status",
+                f"- IV/range: `{report.context_summary.iv_range_status.value}`",
+                f"- Open regime: `{report.context_summary.open_regime_status.value}`",
+                (
+                    "- Candle acceptance: "
+                    f"`{report.context_summary.candle_acceptance_status.value}`"
+                ),
+                (
+                    "- Realized volatility: "
+                    f"`{report.context_summary.realized_volatility_status.value}`"
+                ),
+                f"- Source agreement: `{report.context_summary.source_agreement_status.value}`",
+                "",
+                "## Missing Context Checklist",
+            ]
+        )
+        lines.extend(
+            f"- {item.context_key}: `{item.status.value}` - {item.message}"
+            for item in report.context_summary.missing_context
+        )
+    if report.downstream_result is not None:
+        lines.extend(
+            [
+                "",
+                "## Downstream Research Reports",
+                f"- XAU Vol-OI report: `{report.downstream_result.xau_vol_oi_report_id}`",
+                f"- XAU reaction report: `{report.downstream_result.xau_reaction_report_id}`",
+                f"- XAU report status: `{report.downstream_result.xau_report_status}`",
+                f"- Reaction report status: `{report.downstream_result.reaction_report_status}`",
+                f"- Reaction rows: `{report.downstream_result.reaction_row_count}`",
+                f"- NO_TRADE rows: `{report.downstream_result.no_trade_count}`",
+            ]
+        )
+        if report.downstream_result.notes:
+            lines.extend(["", "### Downstream Notes"])
+            lines.extend(f"- {note}" for note in report.downstream_result.notes)
     lines.extend(["", "## Warnings"])
     lines.extend(f"- {warning}" for warning in report.warnings)
     lines.extend(["", "## Limitations"])
