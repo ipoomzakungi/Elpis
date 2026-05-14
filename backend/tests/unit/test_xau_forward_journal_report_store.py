@@ -5,10 +5,16 @@ import pytest
 from src.models.xau_forward_journal import (
     XauForwardArtifactFormat,
     XauForwardArtifactType,
+    XauForwardJournalCreateRequest,
     XauForwardJournalEntryStatus,
     XauForwardJournalSummary,
 )
+from src.xau_forward_journal.entry_builder import build_journal_entry
 from src.xau_forward_journal.report_store import XauForwardJournalReportStore
+from tests.helpers.test_xau_forward_journal_data import (
+    synthetic_forward_journal_create_payload,
+    write_synthetic_source_reports,
+)
 
 
 def test_report_store_roots_are_path_safe(tmp_path: Path):
@@ -52,8 +58,10 @@ def test_report_store_serializes_models_and_writes_json_artifacts(tmp_path: Path
     store = XauForwardJournalReportStore(reports_dir=tmp_path / "data" / "reports")
     summary = XauForwardJournalSummary(
         journal_id="journal_report",
+        snapshot_key="20260514_daily_snapshot_g2rk6_abcdef123456",
         status=XauForwardJournalEntryStatus.PARTIAL,
         snapshot_time="2026-05-14T03:08:04Z",
+        capture_window="daily_snapshot",
         capture_session="quikstrike_gold_am",
         fusion_report_id="fusion_report",
         xau_vol_oi_report_id="xau_report",
@@ -75,6 +83,40 @@ def test_report_store_serializes_models_and_writes_json_artifacts(tmp_path: Path
     assert artifact.path == "data/reports/xau_forward_journal/journal_report/metadata.json"
     assert '"journal_id": "journal_report"' in saved
     assert '"status": "partial"' in saved
+
+
+def test_report_store_persists_created_entry_artifacts_and_reads_by_snapshot_key(
+    tmp_path: Path,
+):
+    reports_dir = tmp_path / "data" / "reports"
+    write_synthetic_source_reports(reports_dir)
+    request = XauForwardJournalCreateRequest.model_validate(
+        synthetic_forward_journal_create_payload()
+    )
+    entry = build_journal_entry(request, reports_dir=reports_dir)
+    store = XauForwardJournalReportStore(reports_dir=reports_dir)
+
+    saved_entry = store.persist_entry(entry)
+
+    report_dir = store.report_dir(saved_entry.journal_id)
+    assert (report_dir / "metadata.json").exists()
+    assert (report_dir / "entry.json").exists()
+    assert (report_dir / "outcomes.json").exists()
+    assert (report_dir / "report.json").exists()
+    assert (report_dir / "report.md").exists()
+    assert len(saved_entry.artifacts) == 5
+    assert saved_entry.artifacts[0].path.startswith("data/reports/xau_forward_journal/")
+
+    loaded_entry = store.read_entry(saved_entry.journal_id)
+    loaded_outcomes = store.read_outcomes(saved_entry.journal_id)
+    found_entry = store.find_entry_by_snapshot_key(saved_entry.snapshot_key)
+    listed = store.list_entries()
+
+    assert loaded_entry.snapshot_key == saved_entry.snapshot_key
+    assert len(loaded_outcomes) == 5
+    assert found_entry is not None
+    assert found_entry.journal_id == saved_entry.journal_id
+    assert listed.entries[0].snapshot_key == saved_entry.snapshot_key
 
 
 def test_report_store_artifact_paths_must_stay_under_report_root(tmp_path: Path):

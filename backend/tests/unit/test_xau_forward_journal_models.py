@@ -237,6 +237,7 @@ def test_entry_summary_and_artifact_models_validate_foundation_rules():
     )
     entry = XauForwardJournalEntry(
         journal_id="journal_report",
+        snapshot_key="20260514_daily_snapshot_g2rk6_abcdef123456",
         status=XauForwardJournalEntryStatus.PARTIAL,
         snapshot=_snapshot(),
         source_reports=[_source_ref()],
@@ -245,8 +246,10 @@ def test_entry_summary_and_artifact_models_validate_foundation_rules():
     )
     summary = XauForwardJournalSummary(
         journal_id="journal_report",
+        snapshot_key="20260514_daily_snapshot_g2rk6_abcdef123456",
         status=XauForwardJournalEntryStatus.PARTIAL,
         snapshot_time=datetime(2026, 5, 14, tzinfo=UTC),
+        capture_window="daily_snapshot",
         capture_session="quikstrike_gold_am",
         fusion_report_id="fusion_report",
         xau_vol_oi_report_id="xau_report",
@@ -270,6 +273,7 @@ def test_entry_summary_and_artifact_models_validate_foundation_rules():
     with pytest.raises(ValidationError, match="blocked journal entry"):
         XauForwardJournalEntry(
             journal_id="journal_blocked",
+            snapshot_key="20260514_daily_snapshot_g2rk6_blocked",
             status=XauForwardJournalEntryStatus.BLOCKED,
             snapshot=_snapshot(),
             source_reports=[],

@@ -10,6 +10,12 @@ from src.models.xau_forward_journal import (
     XauForwardArtifactType,
     XauForwardJournalArtifact,
     XauForwardJournalBaseModel,
+    XauForwardJournalEntry,
+    XauForwardJournalListResponse,
+    XauForwardJournalSummary,
+    XauForwardOutcomeLabel,
+    XauForwardOutcomeObservation,
+    XauForwardOutcomeStatus,
     validate_xau_forward_journal_safe_id,
 )
 
@@ -105,6 +111,155 @@ class XauForwardJournalReportStore:
             rows=rows,
         )
 
+    def persist_entry(self, entry: XauForwardJournalEntry) -> XauForwardJournalEntry:
+        self.ensure_report_dir(entry.journal_id)
+        artifacts = [
+            self.artifact_for_filename(
+                entry.journal_id,
+                "metadata.json",
+                artifact_type=XauForwardArtifactType.METADATA,
+                artifact_format=XauForwardArtifactFormat.JSON,
+                rows=1,
+            ),
+            self.artifact_for_filename(
+                entry.journal_id,
+                "entry.json",
+                artifact_type=XauForwardArtifactType.ENTRY_JSON,
+                artifact_format=XauForwardArtifactFormat.JSON,
+                rows=1,
+            ),
+            self.artifact_for_filename(
+                entry.journal_id,
+                "outcomes.json",
+                artifact_type=XauForwardArtifactType.OUTCOMES_JSON,
+                artifact_format=XauForwardArtifactFormat.JSON,
+                rows=len(entry.outcomes),
+            ),
+            self.artifact_for_filename(
+                entry.journal_id,
+                "report.json",
+                artifact_type=XauForwardArtifactType.REPORT_JSON,
+                artifact_format=XauForwardArtifactFormat.JSON,
+                rows=1,
+            ),
+            self.artifact_for_filename(
+                entry.journal_id,
+                "report.md",
+                artifact_type=XauForwardArtifactType.REPORT_MARKDOWN,
+                artifact_format=XauForwardArtifactFormat.MARKDOWN,
+                rows=1,
+            ),
+        ]
+        saved_entry = entry.model_copy(update={"artifacts": artifacts})
+        self.artifact_path(entry.journal_id, "metadata.json").write_text(
+            self.serialize_json(self.summarize_entry(saved_entry)) + "\n",
+            encoding="utf-8",
+        )
+        self.artifact_path(entry.journal_id, "entry.json").write_text(
+            self.serialize_json(saved_entry) + "\n",
+            encoding="utf-8",
+        )
+        self.artifact_path(entry.journal_id, "outcomes.json").write_text(
+            self.serialize_json(saved_entry.outcomes) + "\n",
+            encoding="utf-8",
+        )
+        self.artifact_path(entry.journal_id, "report.json").write_text(
+            self.serialize_json(saved_entry) + "\n",
+            encoding="utf-8",
+        )
+        self.artifact_path(entry.journal_id, "report.md").write_text(
+            _entry_markdown(saved_entry),
+            encoding="utf-8",
+        )
+        return saved_entry
+
+    def read_entry(self, journal_id: str) -> XauForwardJournalEntry:
+        path = self.artifact_path(journal_id, "entry.json")
+        if not path.exists():
+            path = self.artifact_path(journal_id, "report.json")
+        if not path.exists():
+            raise FileNotFoundError(journal_id)
+        return XauForwardJournalEntry.model_validate_json(path.read_text(encoding="utf-8"))
+
+    def read_outcomes(self, journal_id: str) -> list[XauForwardOutcomeObservation]:
+        path = self.artifact_path(journal_id, "outcomes.json")
+        if not path.exists():
+            return self.read_entry(journal_id).outcomes
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return [XauForwardOutcomeObservation.model_validate(item) for item in payload]
+
+    def list_entries(self) -> XauForwardJournalListResponse:
+        root = self.report_root()
+        if not root.exists():
+            return XauForwardJournalListResponse(entries=[])
+        summaries: list[XauForwardJournalSummary] = []
+        for entry_path in root.glob("*/entry.json"):
+            try:
+                summaries.append(self.summarize_entry(self.read_entry(entry_path.parent.name)))
+            except (OSError, ValueError, json.JSONDecodeError):
+                continue
+        return XauForwardJournalListResponse(
+            entries=sorted(summaries, key=lambda item: item.snapshot_time, reverse=True)
+        )
+
+    def find_entry_by_snapshot_key(
+        self,
+        snapshot_key: str,
+    ) -> XauForwardJournalEntry | None:
+        safe_snapshot_key = validate_xau_forward_journal_safe_id(snapshot_key, "snapshot_key")
+        root = self.report_root()
+        if not root.exists():
+            return None
+        for entry_path in root.glob("*/entry.json"):
+            try:
+                entry = self.read_entry(entry_path.parent.name)
+            except (OSError, ValueError, json.JSONDecodeError):
+                continue
+            if entry.snapshot_key == safe_snapshot_key:
+                return entry
+        return None
+
+    def summarize_entry(self, entry: XauForwardJournalEntry) -> XauForwardJournalSummary:
+        completed_outcomes = [
+            outcome
+            for outcome in entry.outcomes
+            if outcome.status != XauForwardOutcomeStatus.PENDING
+            or outcome.label != XauForwardOutcomeLabel.PENDING
+        ]
+        pending_outcomes = [
+            outcome
+            for outcome in entry.outcomes
+            if outcome.status == XauForwardOutcomeStatus.PENDING
+            and outcome.label == XauForwardOutcomeLabel.PENDING
+        ]
+        return XauForwardJournalSummary(
+            journal_id=entry.journal_id,
+            snapshot_key=entry.snapshot_key,
+            status=entry.status,
+            snapshot_time=entry.snapshot.snapshot_time,
+            capture_window=entry.snapshot.capture_window,
+            capture_session=entry.snapshot.capture_session,
+            product=entry.snapshot.product,
+            expiration=entry.snapshot.expiration,
+            expiration_code=entry.snapshot.expiration_code,
+            fusion_report_id=_source_report_id(entry, "xau_quikstrike_fusion"),
+            xau_vol_oi_report_id=_source_report_id(entry, "xau_vol_oi"),
+            xau_reaction_report_id=_source_report_id(entry, "xau_reaction"),
+            outcome_status=(
+                XauForwardOutcomeStatus.PENDING
+                if not completed_outcomes
+                else XauForwardOutcomeStatus.PARTIAL
+            ),
+            completed_outcome_count=len(completed_outcomes),
+            pending_outcome_count=len(pending_outcomes),
+            no_trade_count=sum(
+                1
+                for reaction in entry.reaction_summaries
+                if reaction.reaction_label == "NO_TRADE"
+            ),
+            warning_count=len(entry.warnings),
+        )
+
     def _validate_report_scope(self, path: Path) -> None:
         try:
             path.resolve().relative_to(self._report_root)
@@ -131,3 +286,57 @@ def _jsonable(payload: Any) -> Any:
     if isinstance(payload, tuple):
         return [_jsonable(value) for value in payload]
     return payload
+
+
+def _source_report_id(entry: XauForwardJournalEntry, source_type: str) -> str | None:
+    for ref in entry.source_reports:
+        if ref.source_type == source_type:
+            return ref.report_id
+    return None
+
+
+def _entry_markdown(entry: XauForwardJournalEntry) -> str:
+    lines = [
+        f"# XAU Forward Journal Entry {entry.journal_id}",
+        "",
+        "Local-only forward research journal entry. This is not a historical "
+        "QuikStrike strike-level backtest.",
+        "",
+        f"- Status: `{entry.status.value}`",
+        f"- Snapshot key: `{entry.snapshot_key}`",
+        f"- Snapshot time: `{entry.snapshot.snapshot_time.isoformat()}`",
+        f"- Capture window: `{entry.snapshot.capture_window}`",
+        f"- Product: `{entry.snapshot.product}`",
+        f"- Expiration: `{entry.snapshot.expiration or entry.snapshot.expiration_code}`",
+        "",
+        "## Source Reports",
+    ]
+    lines.extend(
+        f"- {ref.source_type.value}: `{ref.report_id}` ({ref.status})"
+        for ref in entry.source_reports
+    )
+    lines.extend(["", "## Top OI Walls"])
+    lines.extend(
+        f"- {wall.rank}. {wall.option_type} {wall.strike} OI={wall.open_interest}"
+        for wall in entry.top_oi_walls
+    )
+    lines.extend(["", "## Reaction Summaries"])
+    lines.extend(
+        f"- {reaction.reaction_id}: {reaction.reaction_label}"
+        for reaction in entry.reaction_summaries
+    )
+    lines.extend(["", "## Missing Context"])
+    lines.extend(
+        f"- {item.context_key}: {item.status} - {item.message}"
+        for item in entry.missing_context
+    )
+    lines.extend(["", "## Outcomes"])
+    lines.extend(
+        f"- {outcome.window.value}: {outcome.status.value}/{outcome.label.value}"
+        for outcome in entry.outcomes
+    )
+    lines.extend(["", "## Limitations"])
+    lines.extend(f"- {limitation}" for limitation in entry.limitations)
+    lines.extend(["", "## Artifacts"])
+    lines.extend(f"- `{artifact.path}`" for artifact in entry.artifacts)
+    return "\n".join(lines) + "\n"

@@ -1880,7 +1880,8 @@ export interface XauForwardSourceReportRef {
 
 export interface XauForwardJournalCreateRequest {
   snapshot_time: string;
-  capture_session: string;
+  capture_window?: string;
+  capture_session?: string | null;
   vol2vol_report_id: string;
   matrix_report_id: string;
   fusion_report_id: string;
@@ -1898,7 +1899,8 @@ export interface XauForwardJournalCreateRequest {
 
 export interface XauForwardSnapshotContext {
   snapshot_time: string;
-  capture_session: string;
+  capture_window: string;
+  capture_session: string | null;
   product: string | null;
   expiration: string | null;
   expiration_code: string | null;
@@ -1990,6 +1992,7 @@ export interface XauForwardJournalArtifact {
 
 export interface XauForwardJournalEntry {
   journal_id: string;
+  snapshot_key: string;
   status: XauForwardJournalEntryStatus;
   created_at: string;
   updated_at: string;
@@ -2010,9 +2013,11 @@ export interface XauForwardJournalEntry {
 
 export interface XauForwardJournalSummary {
   journal_id: string;
+  snapshot_key: string;
   status: XauForwardJournalEntryStatus;
   snapshot_time: string;
-  capture_session: string;
+  capture_window: string;
+  capture_session: string | null;
   product: string | null;
   expiration: string | null;
   expiration_code: string | null;

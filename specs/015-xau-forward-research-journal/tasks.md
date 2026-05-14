@@ -69,27 +69,27 @@
 
 ### Tests for User Story 1
 
-- [ ] T029 [P] [US1] Add source report loading tests for Vol2Vol, Matrix, Fusion, XAU Vol-OI, and XAU Reaction refs in `backend/tests/unit/test_xau_forward_journal_entry_builder.py`
-- [ ] T030 [P] [US1] Add source compatibility tests for Gold/OG/GC, missing reports, incompatible products, and partial source warnings in `backend/tests/unit/test_xau_forward_journal_entry_builder.py`
-- [ ] T031 [P] [US1] Add snapshot context tests for optional spot, futures, basis, session open, event flag, and missing context in `backend/tests/unit/test_xau_forward_journal_entry_builder.py`
-- [ ] T032 [P] [US1] Add top wall summary tests for OI, OI Change, and Volume ranks in `backend/tests/unit/test_xau_forward_journal_entry_builder.py`
-- [ ] T033 [P] [US1] Add reaction summary tests for labels, NO_TRADE reasons, bounded risk annotation counts, and limitations in `backend/tests/unit/test_xau_forward_journal_entry_builder.py`
-- [ ] T034 [P] [US1] Add journal entry persistence tests for metadata, entry JSON, outcomes JSON, report JSON, Markdown, and artifact refs in `backend/tests/unit/test_xau_forward_journal_report_store.py`
-- [ ] T035 [P] [US1] Add create-entry integration test using synthetic source report ids in `backend/tests/integration/test_xau_forward_journal_flow.py`
-- [ ] T036 [P] [US1] Add create-entry API contract tests for valid, missing source report, incompatible source report, and invalid request cases in `backend/tests/contract/test_xau_forward_journal_api_contracts.py`
+- [X] T029 [P] [US1] Add source report loading tests for Vol2Vol, Matrix, Fusion, XAU Vol-OI, and XAU Reaction refs in `backend/tests/unit/test_xau_forward_journal_entry_builder.py`
+- [X] T030 [P] [US1] Add source compatibility tests for Gold/OG/GC, missing reports, incompatible products, and partial source warnings in `backend/tests/unit/test_xau_forward_journal_entry_builder.py`
+- [X] T031 [P] [US1] Add snapshot context tests for optional spot, futures, basis, session open, event flag, and missing context in `backend/tests/unit/test_xau_forward_journal_entry_builder.py`
+- [X] T032 [P] [US1] Add top wall summary tests for OI, OI Change, and Volume ranks in `backend/tests/unit/test_xau_forward_journal_entry_builder.py`
+- [X] T033 [P] [US1] Add reaction summary tests for labels, NO_TRADE reasons, bounded risk annotation counts, and limitations in `backend/tests/unit/test_xau_forward_journal_entry_builder.py`
+- [X] T034 [P] [US1] Add journal entry persistence tests for metadata, entry JSON, outcomes JSON, report JSON, Markdown, and artifact refs in `backend/tests/unit/test_xau_forward_journal_report_store.py`
+- [X] T035 [P] [US1] Add create-entry integration test using synthetic source report ids in `backend/tests/integration/test_xau_forward_journal_flow.py`
+- [X] T036 [P] [US1] Add create-entry API contract tests for valid, missing source report, incompatible source report, and invalid request cases in `backend/tests/contract/test_xau_forward_journal_api_contracts.py`
 
 ### Implementation for User Story 1
 
-- [ ] T037 [US1] Implement source report ref loading from existing local report outputs in `backend/src/xau_forward_journal/entry_builder.py`
-- [ ] T038 [US1] Implement source compatibility validation for product, expiration context, capture session, status, warnings, and limitations in `backend/src/xau_forward_journal/entry_builder.py`
-- [ ] T039 [US1] Implement snapshot context derivation and unavailable optional input handling in `backend/src/xau_forward_journal/entry_builder.py`
-- [ ] T040 [US1] Implement top OI, OI Change, and Volume wall summary selection in `backend/src/xau_forward_journal/entry_builder.py`
-- [ ] T041 [US1] Implement reaction label, NO_TRADE reason, bounded risk annotation, and missing-context summary extraction in `backend/src/xau_forward_journal/entry_builder.py`
-- [ ] T042 [US1] Implement default pending outcome windows for 30m, 1h, 4h, session close, and next day in `backend/src/xau_forward_journal/outcome.py`
-- [ ] T043 [US1] Implement create-entry orchestration that assembles a journal entry and preserves immutable snapshot data in `backend/src/xau_forward_journal/orchestration.py`
-- [ ] T044 [US1] Implement metadata, entry JSON, outcomes JSON, report JSON, and Markdown persistence for created entries in `backend/src/xau_forward_journal/report_store.py`
-- [ ] T045 [US1] Implement `POST /api/v1/xau/forward-journal/entries` in `backend/src/api/routes/xau_forward_journal.py`
-- [ ] T046 [US1] Implement structured create-entry API errors for validation, source not found, incompatible sources, blocked entry, and forbidden field requests in `backend/src/api/routes/xau_forward_journal.py`
+- [X] T037 [US1] Implement source report ref loading from existing local report outputs in `backend/src/xau_forward_journal/entry_builder.py`
+- [X] T038 [US1] Implement source compatibility validation for product, expiration context, capture session, status, warnings, and limitations in `backend/src/xau_forward_journal/entry_builder.py`
+- [X] T039 [US1] Implement snapshot context derivation and unavailable optional input handling in `backend/src/xau_forward_journal/entry_builder.py`
+- [X] T040 [US1] Implement top OI, OI Change, and Volume wall summary selection in `backend/src/xau_forward_journal/entry_builder.py`
+- [X] T041 [US1] Implement reaction label, NO_TRADE reason, bounded risk annotation, and missing-context summary extraction in `backend/src/xau_forward_journal/entry_builder.py`
+- [X] T042 [US1] Implement default pending outcome windows for 30m, 1h, 4h, session close, and next day in `backend/src/xau_forward_journal/outcome.py`
+- [X] T043 [US1] Implement create-entry orchestration that assembles a journal entry and preserves immutable snapshot data in `backend/src/xau_forward_journal/orchestration.py`
+- [X] T044 [US1] Implement metadata, entry JSON, outcomes JSON, report JSON, and Markdown persistence for created entries in `backend/src/xau_forward_journal/report_store.py`
+- [X] T045 [US1] Implement `POST /api/v1/xau/forward-journal/entries` in `backend/src/api/routes/xau_forward_journal.py`
+- [X] T046 [US1] Implement structured create-entry API errors for validation, source not found, incompatible sources, blocked entry, and forbidden field requests in `backend/src/api/routes/xau_forward_journal.py`
 
 **Checkpoint**: US1 delivers a testable MVP journal entry from saved source reports.
 

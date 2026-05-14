@@ -1,4 +1,4 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
 
 from src.api.validation import api_error
 from src.models.xau_forward_journal import (
@@ -11,8 +11,24 @@ from src.models.xau_forward_journal import (
     XauForwardOutcomeUpdateRequest,
     validate_xau_forward_journal_safe_id,
 )
+from src.xau_forward_journal.entry_builder import (
+    XauForwardIncompatibleSourceReportError,
+    XauForwardJournalBuildError,
+    XauForwardSourceReportNotFoundError,
+)
+from src.xau_forward_journal.orchestration import (
+    XauForwardJournalConflictError,
+)
+from src.xau_forward_journal.orchestration import (
+    create_xau_forward_journal_entry as orchestrate_xau_forward_journal_entry,
+)
+from src.xau_forward_journal.report_store import XauForwardJournalReportStore
 
 router = APIRouter()
+
+
+def get_xau_forward_journal_report_store() -> XauForwardJournalReportStore:
+    return XauForwardJournalReportStore()
 
 
 @router.post(
@@ -22,21 +38,23 @@ router = APIRouter()
 )
 async def create_xau_forward_journal_entry(
     request: XauForwardJournalCreateRequest,
+    store: XauForwardJournalReportStore = Depends(get_xau_forward_journal_report_store),
 ) -> XauForwardJournalEntry:
     """Create a local-only XAU forward journal entry from saved report ids."""
 
-    _foundation_not_implemented(
-        "XAU forward journal entry creation is not implemented in this foundation slice.",
-        [
-            {
-                "field": "request",
-                "message": (
-                    "The request schema is registered and validated, but source report "
-                    "loading and journal persistence begin in US1."
-                ),
-            }
-        ],
-    )
+    try:
+        return orchestrate_xau_forward_journal_entry(request, report_store=store)
+    except XauForwardSourceReportNotFoundError as exc:
+        api_error(404, exc.code, str(exc), exc.details)
+    except XauForwardIncompatibleSourceReportError as exc:
+        api_error(400, exc.code, str(exc), exc.details)
+    except XauForwardJournalConflictError as exc:
+        api_error(409, exc.code, str(exc), exc.details)
+    except XauForwardJournalBuildError as exc:
+        api_error(400, exc.code, str(exc), exc.details)
+    except ValueError as exc:
+        api_error(400, "VALIDATION_ERROR", str(exc))
+
     raise RuntimeError("unreachable")
 
 
@@ -135,4 +153,3 @@ def _foundation_not_implemented(
             *(details or []),
         ],
     )
-

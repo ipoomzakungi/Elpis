@@ -304,7 +304,8 @@ class XauForwardSourceReportRef(XauForwardJournalBaseModel):
 
 class XauForwardSnapshotContext(XauForwardJournalBaseModel):
     snapshot_time: datetime
-    capture_session: str
+    capture_window: str = "daily_snapshot"
+    capture_session: str | None = None
     product: str | None = None
     expiration: str | None = None
     expiration_code: str | None = None
@@ -329,10 +330,13 @@ class XauForwardSnapshotContext(XauForwardJournalBaseModel):
         mode="before",
     )
     @classmethod
-    def normalize_strings(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        return _normalize_required_text(value)
+    def normalize_optional_strings(cls, value: str | None) -> str | None:
+        return _normalize_optional_text(value)
+
+    @field_validator("capture_window")
+    @classmethod
+    def validate_capture_window(cls, value: str) -> str:
+        return validate_xau_forward_journal_safe_id(value, "capture_window")
 
     @field_validator("missing_context")
     @classmethod
@@ -538,7 +542,8 @@ class XauForwardJournalArtifact(XauForwardJournalBaseModel):
 
 class XauForwardJournalCreateRequest(XauForwardJournalBaseModel):
     snapshot_time: datetime
-    capture_session: str
+    capture_window: str = "daily_snapshot"
+    capture_session: str | None = None
     vol2vol_report_id: str
     matrix_report_id: str
     fusion_report_id: str
@@ -558,9 +563,16 @@ class XauForwardJournalCreateRequest(XauForwardJournalBaseModel):
     def normalize_snapshot_time(cls, value: datetime) -> datetime:
         return _normalize_aware_datetime(value)
 
-    @field_validator("capture_session")
+    @field_validator("capture_window")
     @classmethod
-    def normalize_capture_session(cls, value: str) -> str:
+    def validate_capture_window(cls, value: str) -> str:
+        return validate_xau_forward_journal_safe_id(value, "capture_window")
+
+    @field_validator("capture_session", mode="before")
+    @classmethod
+    def normalize_capture_session(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         return validate_xau_forward_journal_safe_id(value, "capture_session")
 
     @field_validator(
@@ -610,6 +622,7 @@ class XauForwardOutcomeUpdateRequest(XauForwardJournalBaseModel):
 
 class XauForwardJournalEntry(XauForwardJournalBaseModel):
     journal_id: str
+    snapshot_key: str
     status: XauForwardJournalEntryStatus
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -631,7 +644,7 @@ class XauForwardJournalEntry(XauForwardJournalBaseModel):
     )
     artifacts: list[XauForwardJournalArtifact] = Field(default_factory=list)
 
-    @field_validator("journal_id")
+    @field_validator("journal_id", "snapshot_key")
     @classmethod
     def validate_journal_id(cls, value: str) -> str:
         return validate_xau_forward_journal_safe_id(value, "journal_id")
@@ -662,9 +675,11 @@ class XauForwardJournalEntry(XauForwardJournalBaseModel):
 
 class XauForwardJournalSummary(XauForwardJournalBaseModel):
     journal_id: str
+    snapshot_key: str
     status: XauForwardJournalEntryStatus
     snapshot_time: datetime
-    capture_session: str
+    capture_window: str = "daily_snapshot"
+    capture_session: str | None = None
     product: str | None = None
     expiration: str | None = None
     expiration_code: str | None = None
@@ -679,6 +694,7 @@ class XauForwardJournalSummary(XauForwardJournalBaseModel):
 
     @field_validator(
         "journal_id",
+        "snapshot_key",
         "fusion_report_id",
         "xau_vol_oi_report_id",
         "xau_reaction_report_id",
@@ -694,10 +710,21 @@ class XauForwardJournalSummary(XauForwardJournalBaseModel):
     def normalize_snapshot_time(cls, value: datetime) -> datetime:
         return _normalize_aware_datetime(value)
 
-    @field_validator("capture_session", "product", "expiration", "expiration_code", mode="before")
+    @field_validator(
+        "capture_session",
+        "product",
+        "expiration",
+        "expiration_code",
+        mode="before",
+    )
     @classmethod
     def normalize_optional_strings(cls, value: str | None) -> str | None:
         return _normalize_optional_text(value)
+
+    @field_validator("capture_window")
+    @classmethod
+    def validate_capture_window(cls, value: str) -> str:
+        return validate_xau_forward_journal_safe_id(value, "capture_window")
 
 
 class XauForwardJournalListResponse(XauForwardJournalBaseModel):
