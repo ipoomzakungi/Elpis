@@ -10,6 +10,10 @@ import {
   XauDashboardData,
   XauAcceptanceResult,
   XauExpectedRange,
+  XauForwardJournalDashboardData,
+  XauForwardJournalSummary,
+  XauForwardOutcomeResponse,
+  XauForwardWallSummary,
   XauFreshnessResult,
   XauOiWall,
   XauOpenRegimeResult,
@@ -23,6 +27,21 @@ import {
   XauVolOiReportSummary,
   XauZone,
 } from '@/types'
+
+const FORWARD_JOURNAL_DASHBOARD_FIELDS = [
+  'journal_id',
+  'snapshot_time',
+  'capture_session',
+  'source_reports',
+  'top_oi_walls',
+  'top_oi_change_walls',
+  'top_volume_walls',
+  'reaction_summaries',
+  'no_trade_reasons',
+  'missing_context',
+  'outcomes',
+  'artifacts',
+] as const
 
 export default function XauVolOiPage() {
   const [reports, setReports] = useState<XauVolOiReportSummary[]>([])
@@ -43,6 +62,12 @@ export default function XauVolOiPage() {
   const [fusionReports, setFusionReports] = useState<XauQuikStrikeFusionSummary[]>([])
   const [selectedFusionReportId, setSelectedFusionReportId] = useState<string | null>(null)
   const [fusionData, setFusionData] = useState<XauQuikStrikeFusionDashboardData | null>(null)
+  const [forwardJournalEntries, setForwardJournalEntries] = useState<
+    XauForwardJournalSummary[]
+  >([])
+  const [selectedForwardJournalId, setSelectedForwardJournalId] = useState<string | null>(null)
+  const [forwardJournalData, setForwardJournalData] =
+    useState<XauForwardJournalDashboardData | null>(null)
   const [loadingReports, setLoadingReports] = useState(true)
   const [loadingReport, setLoadingReport] = useState(false)
   const [loadingReactionReports, setLoadingReactionReports] = useState(true)
@@ -53,11 +78,14 @@ export default function XauVolOiPage() {
   const [loadingQuikStrikeMatrixReport, setLoadingQuikStrikeMatrixReport] = useState(false)
   const [loadingFusionReports, setLoadingFusionReports] = useState(true)
   const [loadingFusionReport, setLoadingFusionReport] = useState(false)
+  const [loadingForwardJournalEntries, setLoadingForwardJournalEntries] = useState(true)
+  const [loadingForwardJournalEntry, setLoadingForwardJournalEntry] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reactionError, setReactionError] = useState<string | null>(null)
   const [quikStrikeError, setQuikStrikeError] = useState<string | null>(null)
   const [quikStrikeMatrixError, setQuikStrikeMatrixError] = useState<string | null>(null)
   const [fusionError, setFusionError] = useState<string | null>(null)
+  const [forwardJournalError, setForwardJournalError] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -181,6 +209,30 @@ export default function XauVolOiPage() {
   }, [])
 
   useEffect(() => {
+    let active = true
+    setLoadingForwardJournalEntries(true)
+    api.listXauForwardJournalEntries()
+      .then((response) => {
+        if (!active) return
+        setForwardJournalEntries(response.entries)
+        setSelectedForwardJournalId((current) => current ?? response.entries[0]?.journal_id ?? null)
+      })
+      .catch((err) => {
+        if (!active) return
+        setForwardJournalError(
+          err instanceof Error ? err.message : 'XAU forward journal entries could not be loaded',
+        )
+      })
+      .finally(() => {
+        if (active) setLoadingForwardJournalEntries(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
     if (!selectedReportId) {
       setDashboardData(null)
       return
@@ -237,6 +289,37 @@ export default function XauVolOiPage() {
       active = false
     }
   }, [selectedFusionReportId])
+
+  useEffect(() => {
+    if (!selectedForwardJournalId) {
+      setForwardJournalData(null)
+      return
+    }
+
+    let active = true
+    setLoadingForwardJournalEntry(true)
+    setForwardJournalError(null)
+    api.getXauForwardJournalDashboardData(selectedForwardJournalId)
+      .then((response) => {
+        if (!active) return
+        setForwardJournalData(response)
+        setForwardJournalEntries(response.entries)
+      })
+      .catch((err) => {
+        if (!active) return
+        setForwardJournalData(null)
+        setForwardJournalError(
+          err instanceof Error ? err.message : 'XAU forward journal entry could not be loaded',
+        )
+      })
+      .finally(() => {
+        if (active) setLoadingForwardJournalEntry(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [selectedForwardJournalId])
 
   useEffect(() => {
     if (reactionReports.length === 0) {
@@ -372,6 +455,11 @@ export default function XauVolOiPage() {
     () => fusionReports.find((item) => item.report_id === selectedFusionReportId) ?? null,
     [fusionReports, selectedFusionReportId],
   )
+  const selectedForwardJournalSummary = useMemo(
+    () =>
+      forwardJournalEntries.find((item) => item.journal_id === selectedForwardJournalId) ?? null,
+    [forwardJournalEntries, selectedForwardJournalId],
+  )
 
   const report = dashboardData?.report ?? null
   const warningNotes = uniqueValues([
@@ -449,6 +537,16 @@ export default function XauVolOiPage() {
         error={fusionError}
         onSelect={setSelectedFusionReportId}
       />
+      <ForwardJournalInspection
+        entries={forwardJournalEntries}
+        selectedJournalId={selectedForwardJournalId}
+        selectedSummary={selectedForwardJournalSummary}
+        data={forwardJournalData}
+        loadingList={loadingForwardJournalEntries}
+        loadingEntry={loadingForwardJournalEntry}
+        error={forwardJournalError}
+        onSelect={setSelectedForwardJournalId}
+      />
       <ReactionReportInspection
         reports={reactionReports}
         selectedReportId={selectedReactionReportId}
@@ -509,6 +607,313 @@ export default function XauVolOiPage() {
           </ReportSection>
         </>
       ) : null}
+    </div>
+  )
+}
+
+function ForwardJournalInspection({
+  entries,
+  selectedJournalId,
+  selectedSummary,
+  data,
+  loadingList,
+  loadingEntry,
+  error,
+  onSelect,
+}: {
+  entries: XauForwardJournalSummary[]
+  selectedJournalId: string | null
+  selectedSummary: XauForwardJournalSummary | null
+  data: XauForwardJournalDashboardData | null
+  loadingList: boolean
+  loadingEntry: boolean
+  error: string | null
+  onSelect: (journalId: string | null) => void
+}) {
+  const entry = data?.selected_entry ?? null
+  const outcomes = data?.outcomes?.outcomes ?? entry?.outcomes ?? []
+  const topWalls = [
+    ...(entry?.top_oi_walls ?? []),
+    ...(entry?.top_oi_change_walls ?? []),
+    ...(entry?.top_volume_walls ?? []),
+  ]
+  const noTradeReasons = uniqueValues(
+    entry?.reaction_summaries.flatMap((reaction) => reaction.no_trade_reasons) ?? [],
+  )
+  const totalBoundedRiskAnnotations =
+    entry?.reaction_summaries.reduce(
+      (total, reaction) => total + reaction.bounded_risk_annotation_count,
+      0,
+    ) ?? 0
+  const pendingOutcomeCount = outcomes.filter((outcome) => outcome.status === 'pending').length
+
+  return (
+    <ReportSection title="Forward Journal">
+      <div data-forward-journal-fields={FORWARD_JOURNAL_DASHBOARD_FIELDS.join(',')} />
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-sm text-gray-400">
+            Saved forward snapshots for local XAU QuikStrike research review.
+          </p>
+          {selectedSummary && (
+            <p className="mt-2 text-sm text-gray-300">
+              {selectedSummary.journal_id} | {selectedSummary.status} |{' '}
+              {formatDate(selectedSummary.snapshot_time)}
+            </p>
+          )}
+        </div>
+        <label className="flex flex-col gap-2 text-sm text-gray-300">
+          Journal entry
+          <select
+            value={selectedJournalId ?? ''}
+            onChange={(event) => onSelect(event.target.value || null)}
+            className="min-w-80 rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+            disabled={loadingList || entries.length === 0}
+          >
+            {entries.length === 0 ? (
+              <option value="">No journal entries</option>
+            ) : (
+              entries.map((item) => (
+                <option key={item.journal_id} value={item.journal_id}>
+                  {item.journal_id}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+      </div>
+
+      {error && (
+        <div className="mt-4">
+          <Notice tone="error">{error}</Notice>
+        </div>
+      )}
+
+      {loadingList ? (
+        <div className="mt-4">
+          <EmptyState>Loading XAU forward journal entries...</EmptyState>
+        </div>
+      ) : entries.length === 0 ? (
+        <div className="mt-4 space-y-4">
+          <EmptyState>No saved forward journal entries are available.</EmptyState>
+          <ContextPanel title="Journal Scope">
+            <NotesList
+              notes={[
+                'Forward evidence starts from saved local report ids.',
+                'Outcome windows stay pending until candle observations are attached.',
+                'Generated journal reports stay under ignored local report paths.',
+              ]}
+              emptyText="No journal scope notes"
+            />
+          </ContextPanel>
+        </div>
+      ) : selectedSummary ? (
+        <div className="mt-5 space-y-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+            <SummaryCard label="Status" value={selectedSummary.status} />
+            <SummaryCard label="Outcome" value={selectedSummary.outcome_status} />
+            <SummaryCard label="Pending" value={selectedSummary.pending_outcome_count} />
+            <SummaryCard label="Completed" value={selectedSummary.completed_outcome_count} />
+            <SummaryCard label="No-Trade" value={selectedSummary.no_trade_count} />
+          </div>
+
+          {loadingEntry && <EmptyState>Loading forward journal detail...</EmptyState>}
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <ContextPanel title="Snapshot">
+              <dl className="grid grid-cols-1 gap-3 text-sm">
+                <Metric label="Snapshot Time" value={formatDate(entry?.snapshot.snapshot_time ?? null)} />
+                <Metric
+                  label="Capture Window"
+                  value={entry?.snapshot.capture_window ?? selectedSummary.capture_window}
+                />
+                <Metric
+                  label="Capture Session"
+                  value={entry?.snapshot.capture_session ?? selectedSummary.capture_session ?? 'n/a'}
+                />
+                <Metric label="Product" value={entry?.snapshot.product ?? selectedSummary.product ?? 'n/a'} />
+                <Metric
+                  label="Expiration"
+                  value={
+                    entry?.snapshot.expiration ??
+                    entry?.snapshot.expiration_code ??
+                    selectedSummary.expiration ??
+                    selectedSummary.expiration_code ??
+                    'n/a'
+                  }
+                />
+              </dl>
+            </ContextPanel>
+            <ContextPanel title="Source Reports">
+              <dl className="grid grid-cols-1 gap-3 text-sm">
+                {(entry?.source_reports ?? []).map((source) => (
+                  <Metric
+                    key={`${source.source_type}-${source.report_id}`}
+                    label={source.source_type}
+                    value={`${source.report_id} (${source.status})`}
+                  />
+                ))}
+                {!entry && (
+                  <>
+                    <Metric label="Fusion" value={selectedSummary.fusion_report_id ?? 'n/a'} />
+                    <Metric label="Vol-OI" value={selectedSummary.xau_vol_oi_report_id ?? 'n/a'} />
+                    <Metric
+                      label="Reaction"
+                      value={selectedSummary.xau_reaction_report_id ?? 'n/a'}
+                    />
+                  </>
+                )}
+              </dl>
+            </ContextPanel>
+            <ContextPanel title="Artifacts">
+              <ArtifactPathList artifacts={entry?.artifacts ?? []} />
+            </ContextPanel>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <ContextPanel title="Top Walls">
+              <ForwardJournalWallTable rows={topWalls} />
+            </ContextPanel>
+            <ContextPanel title="Reaction Labels">
+              <NotesList
+                notes={
+                  entry?.reaction_summaries.map(
+                    (reaction) =>
+                      `${reaction.reaction_id}: ${reaction.reaction_label} (${reaction.confidence_label ?? 'n/a'})`,
+                  ) ?? []
+                }
+                emptyText="No reaction labels recorded"
+              />
+              <dl className="mt-4 grid grid-cols-1 gap-3 text-sm">
+                <Metric label="Bounded Risk Annotations" value={totalBoundedRiskAnnotations} />
+              </dl>
+            </ContextPanel>
+            <ContextPanel title="No-Trade Reasons">
+              <NotesList notes={noTradeReasons} emptyText="No no-trade reasons recorded" />
+            </ContextPanel>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <ContextPanel title="Missing Context">
+              <NotesList
+                notes={
+                  entry?.missing_context.map(
+                    (item) => `${item.context_key}: ${item.status} - ${item.message}`,
+                  ) ?? []
+                }
+                emptyText="No missing context recorded"
+              />
+            </ContextPanel>
+            <ContextPanel title="Outcome Windows">
+              <ForwardJournalOutcomeTable outcomes={outcomes} />
+              {pendingOutcomeCount > 0 && (
+                <p className="mt-3 text-sm text-amber-200">
+                  {pendingOutcomeCount} outcome window(s) remain pending until synthetic or local
+                  candle observations are attached.
+                </p>
+              )}
+            </ContextPanel>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <ContextPanel title="Warnings">
+              <NotesList notes={entry?.warnings ?? []} emptyText="No journal warnings" />
+            </ContextPanel>
+            <ContextPanel title="Limitations">
+              <NotesList
+                notes={[...(entry?.limitations ?? []), ...(entry?.research_only_warnings ?? [])]}
+                emptyText="No limitations recorded"
+              />
+            </ContextPanel>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="mt-4">
+        <Notice tone="warning">
+          The forward journal is local-only and research-only. It stores saved snapshot review
+          fields and later outcome annotations; it does not fabricate candle data, replay
+          endpoints, store browser sessions, or make profitability or live-readiness claims.
+        </Notice>
+      </div>
+    </ReportSection>
+  )
+}
+
+function ForwardJournalWallTable({ rows }: { rows: XauForwardWallSummary[] }) {
+  if (rows.length === 0) {
+    return <p className="text-sm text-gray-400">No wall summaries recorded.</p>
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-left text-sm">
+        <thead className="text-xs uppercase text-gray-400">
+          <tr>
+            <th className="px-3 py-2">Rank</th>
+            <th className="px-3 py-2">Type</th>
+            <th className="px-3 py-2">Strike</th>
+            <th className="px-3 py-2">Expiry</th>
+            <th className="px-3 py-2">Option</th>
+            <th className="px-3 py-2">Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.summary_id} className="border-t border-gray-700 align-top">
+              <td className="px-3 py-2">{row.rank}</td>
+              <td className="px-3 py-2">{row.wall_type}</td>
+              <td className="px-3 py-2">{formatNumber(row.strike)}</td>
+              <td className="px-3 py-2">{row.expiration ?? row.expiration_code ?? 'n/a'}</td>
+              <td className="px-3 py-2">{row.option_type ?? 'n/a'}</td>
+              <td className="px-3 py-2">
+                {formatForwardJournalWallValue(row)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function ForwardJournalOutcomeTable({
+  outcomes,
+}: {
+  outcomes: XauForwardOutcomeResponse['outcomes']
+}) {
+  if (outcomes.length === 0) {
+    return <p className="text-sm text-gray-400">No outcome windows recorded.</p>
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-left text-sm">
+        <thead className="text-xs uppercase text-gray-400">
+          <tr>
+            <th className="px-3 py-2">Window</th>
+            <th className="px-3 py-2">Status</th>
+            <th className="px-3 py-2">Label</th>
+            <th className="px-3 py-2">Observation</th>
+            <th className="px-3 py-2">Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {outcomes.map((outcome) => (
+            <tr key={outcome.window} className="border-t border-gray-700 align-top">
+              <td className="px-3 py-2">{outcome.window}</td>
+              <td className="px-3 py-2">{outcome.status}</td>
+              <td className="px-3 py-2">{outcome.label}</td>
+              <td className="px-3 py-2">
+                {outcome.observation_start && outcome.observation_end
+                  ? `${formatDate(outcome.observation_start)} - ${formatDate(outcome.observation_end)}`
+                  : 'pending'}
+              </td>
+              <td className="max-w-md px-3 py-2 text-gray-300">
+                {outcome.notes.map((note) => note.text).join(' ') || 'n/a'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
@@ -1600,6 +2005,14 @@ function formatDate(value: string | null): string {
 function formatNumber(value: number | null): string {
   if (value === null || Number.isNaN(value)) return 'n/a'
   return value.toLocaleString(undefined, { maximumFractionDigits: 4 })
+}
+
+function formatForwardJournalWallValue(row: XauForwardWallSummary): string {
+  if (row.open_interest !== null) return `OI ${formatNumber(row.open_interest)}`
+  if (row.oi_change !== null) return `OI chg ${formatNumber(row.oi_change)}`
+  if (row.volume !== null) return `Vol ${formatNumber(row.volume)}`
+  if (row.wall_score !== null) return `Score ${formatNumber(row.wall_score)}`
+  return 'n/a'
 }
 
 function formatBoolean(value: boolean): string {

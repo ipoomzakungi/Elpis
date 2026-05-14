@@ -17,6 +17,7 @@ from src.api.routes import (
     research,
     research_execution,
     xau,
+    xau_forward_journal,
     xau_quikstrike_fusion,
     xau_reaction,
 )
@@ -57,6 +58,11 @@ app.include_router(
     xau_quikstrike_fusion.router,
     prefix="/api/v1",
     tags=["xau-quikstrike-fusion"],
+)
+app.include_router(
+    xau_forward_journal.router,
+    prefix="/api/v1",
+    tags=["xau-forward-journal"],
 )
 
 

@@ -1822,6 +1822,233 @@ export interface XauQuikStrikeFusionDashboardData {
   missingContext: XauFusionMissingContextResponse;
 }
 
+export type XauForwardJournalSourceType =
+  | 'quikstrike_vol2vol'
+  | 'quikstrike_matrix'
+  | 'xau_quikstrike_fusion'
+  | 'xau_vol_oi'
+  | 'xau_reaction';
+export type XauForwardJournalEntryStatus = 'completed' | 'partial' | 'blocked' | 'failed';
+export type XauForwardOutcomeWindow = '30m' | '1h' | '4h' | 'session_close' | 'next_day';
+export type XauForwardOutcomeLabel =
+  | 'wall_held'
+  | 'wall_rejected'
+  | 'wall_accepted_break'
+  | 'moved_to_next_wall'
+  | 'reversed_before_target'
+  | 'stayed_inside_range'
+  | 'no_trade_was_correct'
+  | 'inconclusive'
+  | 'pending';
+export type XauForwardOutcomeStatus =
+  | 'pending'
+  | 'completed'
+  | 'partial'
+  | 'inconclusive'
+  | 'conflict'
+  | 'blocked';
+export type XauForwardArtifactType =
+  | 'metadata'
+  | 'entry_json'
+  | 'outcomes_json'
+  | 'report_json'
+  | 'report_markdown';
+export type XauForwardArtifactFormat = 'json' | 'markdown';
+
+export interface XauForwardJournalNote {
+  note_id: string | null;
+  text: string;
+  created_at: string;
+  source: string;
+}
+
+export type XauForwardJournalNoteInput = string | Partial<XauForwardJournalNote>;
+
+export interface XauForwardSourceReportRef {
+  source_type: XauForwardJournalSourceType;
+  report_id: string;
+  status: string;
+  created_at: string | null;
+  product: string | null;
+  expiration: string | null;
+  expiration_code: string | null;
+  row_count: number;
+  warnings: string[];
+  limitations: string[];
+  artifact_paths: string[];
+}
+
+export interface XauForwardJournalCreateRequest {
+  snapshot_time: string;
+  capture_window?: string;
+  capture_session?: string | null;
+  vol2vol_report_id: string;
+  matrix_report_id: string;
+  fusion_report_id: string;
+  xau_vol_oi_report_id: string;
+  xau_reaction_report_id: string;
+  spot_price_at_snapshot?: number | null;
+  futures_price_at_snapshot?: number | null;
+  basis?: number | null;
+  session_open_price?: number | null;
+  event_news_flag?: string | boolean | null;
+  notes?: XauForwardJournalNoteInput[];
+  persist_report?: boolean;
+  research_only_acknowledged: boolean;
+}
+
+export interface XauForwardSnapshotContext {
+  snapshot_time: string;
+  capture_window: string;
+  capture_session: string | null;
+  product: string | null;
+  expiration: string | null;
+  expiration_code: string | null;
+  spot_price_at_snapshot: number | null;
+  futures_price_at_snapshot: number | null;
+  basis: number | null;
+  session_open_price: number | null;
+  event_news_flag: string | boolean | null;
+  missing_context: string[];
+  notes: XauForwardJournalNote[];
+}
+
+export interface XauForwardWallSummary {
+  summary_id: string;
+  wall_type: string;
+  source_report_id: string;
+  strike: number;
+  expiration: string | null;
+  expiration_code: string | null;
+  option_type: string | null;
+  open_interest: number | null;
+  oi_change: number | null;
+  volume: number | null;
+  wall_score: number | null;
+  rank: number;
+  notes: XauForwardJournalNote[];
+  limitations: string[];
+}
+
+export interface XauForwardReactionSummary {
+  reaction_id: string;
+  source_report_id: string;
+  wall_id: string | null;
+  zone_id: string | null;
+  reaction_label: string;
+  confidence_label: string | null;
+  no_trade_reasons: string[];
+  bounded_risk_annotation_count: number;
+  notes: XauForwardJournalNote[];
+  limitations: string[];
+}
+
+export interface XauForwardMissingContextItem {
+  context_key: string;
+  status: string;
+  severity: string;
+  message: string;
+  source_report_ids: string[];
+  blocks_outcome_label: boolean;
+  blocks_reaction_review: boolean;
+}
+
+export interface XauForwardOutcomeObservation {
+  window: XauForwardOutcomeWindow;
+  status: XauForwardOutcomeStatus;
+  label: XauForwardOutcomeLabel;
+  observation_start: string | null;
+  observation_end: string | null;
+  open: number | null;
+  high: number | null;
+  low: number | null;
+  close: number | null;
+  reference_wall_id: string | null;
+  reference_wall_level: number | null;
+  next_wall_reference: string | null;
+  notes: XauForwardJournalNote[];
+  limitations: string[];
+  updated_at: string;
+}
+
+export interface XauForwardOutcomeUpdateRequest {
+  outcomes: Array<
+    Partial<XauForwardOutcomeObservation> & {
+      window: XauForwardOutcomeWindow;
+    }
+  >;
+  update_note?: string | null;
+  research_only_acknowledged: boolean;
+}
+
+export interface XauForwardJournalArtifact {
+  artifact_type: XauForwardArtifactType;
+  path: string;
+  format: XauForwardArtifactFormat;
+  rows: number | null;
+  created_at: string;
+  limitations: string[];
+}
+
+export interface XauForwardJournalEntry {
+  journal_id: string;
+  snapshot_key: string;
+  status: XauForwardJournalEntryStatus;
+  created_at: string;
+  updated_at: string;
+  snapshot: XauForwardSnapshotContext;
+  source_reports: XauForwardSourceReportRef[];
+  top_oi_walls: XauForwardWallSummary[];
+  top_oi_change_walls: XauForwardWallSummary[];
+  top_volume_walls: XauForwardWallSummary[];
+  reaction_summaries: XauForwardReactionSummary[];
+  missing_context: XauForwardMissingContextItem[];
+  outcomes: XauForwardOutcomeObservation[];
+  notes: XauForwardJournalNote[];
+  warnings: string[];
+  limitations: string[];
+  research_only_warnings: string[];
+  artifacts: XauForwardJournalArtifact[];
+}
+
+export interface XauForwardJournalSummary {
+  journal_id: string;
+  snapshot_key: string;
+  status: XauForwardJournalEntryStatus;
+  snapshot_time: string;
+  capture_window: string;
+  capture_session: string | null;
+  product: string | null;
+  expiration: string | null;
+  expiration_code: string | null;
+  fusion_report_id: string | null;
+  xau_vol_oi_report_id: string | null;
+  xau_reaction_report_id: string | null;
+  outcome_status: XauForwardOutcomeStatus;
+  completed_outcome_count: number;
+  pending_outcome_count: number;
+  no_trade_count: number;
+  warning_count: number;
+}
+
+export interface XauForwardJournalListResponse {
+  entries: XauForwardJournalSummary[];
+}
+
+export interface XauForwardOutcomeResponse {
+  journal_id: string;
+  outcomes: XauForwardOutcomeObservation[];
+  updated_at: string;
+  warnings: string[];
+  limitations: string[];
+}
+
+export interface XauForwardJournalDashboardData {
+  entries: XauForwardJournalSummary[];
+  selected_entry: XauForwardJournalEntry | null;
+  outcomes: XauForwardOutcomeResponse | null;
+}
+
 export type FreeDerivativesSource =
   | 'cftc_cot'
   | 'gvz'
