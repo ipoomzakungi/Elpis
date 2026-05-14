@@ -1,3 +1,4 @@
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -8,13 +9,21 @@ from src.models.xau_forward_journal import (
     XauForwardJournalCreateRequest,
     XauForwardJournalEntryStatus,
     XauForwardJournalSummary,
+    XauForwardOhlcCandle,
     XauForwardOutcomeLabel,
     XauForwardOutcomeStatus,
     XauForwardOutcomeUpdateRequest,
+    XauForwardPriceOutcomeUpdateReport,
+    XauForwardPriceSource,
+    XauForwardPriceSourceLabel,
 )
 from src.reports.collision_guard import ReportIdCollisionError, ReportSourceKindIsolationError
 from src.xau_forward_journal.entry_builder import build_journal_entry
 from src.xau_forward_journal.outcome import apply_outcome_update
+from src.xau_forward_journal.price_outcome import (
+    build_price_coverage_summary,
+    build_price_outcome_observations,
+)
 from src.xau_forward_journal.report_store import XauForwardJournalReportStore
 from tests.helpers.test_xau_forward_journal_data import (
     synthetic_forward_journal_create_payload,
@@ -253,3 +262,77 @@ def test_report_store_persists_outcome_updates_without_rewriting_snapshot(
     assert response.journal_id == saved_entry.journal_id
     assert response.outcomes[0].label == XauForwardOutcomeLabel.STAYED_INSIDE_RANGE
     assert (store.report_dir(saved_entry.journal_id) / "outcomes.json").exists()
+
+
+def test_report_store_persists_price_update_report_artifacts(tmp_path: Path):
+    reports_dir = tmp_path / "data" / "reports"
+    write_synthetic_source_reports(reports_dir)
+    request = XauForwardJournalCreateRequest.model_validate(
+        synthetic_forward_journal_create_payload()
+    )
+    entry = build_journal_entry(request, reports_dir=reports_dir)
+    store = XauForwardJournalReportStore(reports_dir=reports_dir)
+    saved_entry = store.persist_entry(entry)
+    snapshot = saved_entry.snapshot.snapshot_time
+    candles = [
+        XauForwardOhlcCandle(
+            timestamp=snapshot + timedelta(minutes=index),
+            open=4707.0 + index * 0.1,
+            high=4708.0 + index * 0.1,
+            low=4706.0 + index * 0.1,
+            close=4707.5 + index * 0.1,
+        )
+        for index in range(31)
+    ]
+    source = XauForwardPriceSource(
+        source_label=XauForwardPriceSourceLabel.LOCAL_PARQUET,
+        source_symbol="XAUUSD local fixture",
+        source_path="data/raw/xau_fixture.parquet",
+        format="parquet",
+        row_count=len(candles),
+        limitations=["Local Parquet fixture."],
+    )
+    coverage = build_price_coverage_summary(saved_entry, candles, source)
+    outcomes = build_price_outcome_observations(
+        saved_entry,
+        candles,
+        coverage,
+        price_update_id="price_update_fixture",
+    )
+    updated_entry = apply_outcome_update(
+        saved_entry,
+        XauForwardOutcomeUpdateRequest(
+            outcomes=outcomes,
+            update_note="Attach synthetic price outcome observations.",
+            research_only_acknowledged=True,
+        ),
+    )
+    report = XauForwardPriceOutcomeUpdateReport(
+        update_id="price_update_fixture",
+        journal_id=saved_entry.journal_id,
+        source=source,
+        coverage_summary=coverage,
+        updated_outcomes=outcomes,
+        missing_candle_checklist=coverage.missing_candle_checklist,
+        proxy_limitations=coverage.proxy_limitations,
+        limitations=["Outcome price updates are local-only forward research annotations."],
+    )
+
+    persisted_entry, persisted_report = store.persist_price_update_report(updated_entry, report)
+    report_dir = store.report_dir(saved_entry.journal_id)
+
+    assert (report_dir / "price_updates" / "price_update_fixture_coverage.json").exists()
+    assert (report_dir / "price_updates" / "price_update_fixture_report.json").exists()
+    assert (report_dir / "price_updates" / "price_update_fixture_report.md").exists()
+    assert len(persisted_report.artifacts) == 3
+    assert {
+        artifact.artifact_type for artifact in persisted_report.artifacts
+    } == {
+        XauForwardArtifactType.PRICE_COVERAGE_JSON,
+        XauForwardArtifactType.PRICE_UPDATE_REPORT_JSON,
+        XauForwardArtifactType.PRICE_UPDATE_REPORT_MARKDOWN,
+    }
+    assert len(persisted_entry.artifacts) == 8
+    assert store.read_entry(saved_entry.journal_id).outcomes[0].price_update_id == (
+        "price_update_fixture"
+    )

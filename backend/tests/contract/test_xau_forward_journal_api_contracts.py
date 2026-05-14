@@ -1,5 +1,8 @@
 from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
+import polars as pl
 import pytest
 from fastapi.testclient import TestClient
 
@@ -33,6 +36,11 @@ def test_forward_journal_routes_are_registered_in_openapi():
     assert "/api/v1/xau/forward-journal/entries" in paths
     assert "/api/v1/xau/forward-journal/entries/{journal_id}" in paths
     assert "/api/v1/xau/forward-journal/entries/{journal_id}/outcomes" in paths
+    assert (
+        "/api/v1/xau/forward-journal/entries/{journal_id}/outcomes/from-price-data"
+        in paths
+    )
+    assert "/api/v1/xau/forward-journal/entries/{journal_id}/price-coverage" in paths
 
 
 def test_create_forward_journal_entry_from_synthetic_source_reports(journal_store):
@@ -271,3 +279,110 @@ def test_update_outcomes_rejects_unsafe_notes(journal_store):
 
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_price_update_and_coverage_routes_from_synthetic_candles(journal_store, tmp_path):
+    write_synthetic_source_reports(journal_store.reports_dir)
+    created = client.post(
+        "/api/v1/xau/forward-journal/entries",
+        json=synthetic_forward_journal_create_payload(),
+    )
+    journal_id = created.json()["journal_id"]
+    ohlc_path = _write_price_candles(tmp_path / "xau_price.parquet")
+    payload = _price_payload(ohlc_path)
+
+    coverage = client.get(
+        f"/api/v1/xau/forward-journal/entries/{journal_id}/price-coverage",
+        params=payload,
+    )
+    update = client.post(
+        f"/api/v1/xau/forward-journal/entries/{journal_id}/outcomes/from-price-data",
+        json=payload,
+    )
+
+    assert coverage.status_code == 200
+    assert coverage.json()["coverage"]["windows"][0]["status"] == "complete"
+    assert update.status_code == 200
+    body = update.json()
+    assert body["outcomes"][0]["status"] == "completed"
+    assert body["outcomes"][0]["price_source_label"] == "local_parquet"
+    assert body["outcomes"][1]["status"] == "inconclusive"
+    assert body["artifacts"][0]["path"].startswith("data/reports/xau_forward_journal/")
+
+
+def test_price_update_route_returns_structured_price_data_errors(journal_store, tmp_path):
+    write_synthetic_source_reports(journal_store.reports_dir)
+    created = client.post(
+        "/api/v1/xau/forward-journal/entries",
+        json=synthetic_forward_journal_create_payload(),
+    )
+    journal_id = created.json()["journal_id"]
+
+    missing = client.post(
+        f"/api/v1/xau/forward-journal/entries/{journal_id}/outcomes/from-price-data",
+        json=_price_payload(tmp_path / "missing.parquet"),
+    )
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "PRICE_DATA_NOT_FOUND"
+
+    invalid_path = tmp_path / "invalid.parquet"
+    pl.DataFrame([{"timestamp": "2026-05-14T03:08:04Z", "open": 4707.2}]).write_parquet(
+        invalid_path
+    )
+    invalid = client.post(
+        f"/api/v1/xau/forward-journal/entries/{journal_id}/outcomes/from-price-data",
+        json=_price_payload(invalid_path),
+    )
+    assert invalid.status_code == 400
+    assert invalid.json()["error"]["code"] == "INVALID_OHLC_SCHEMA"
+
+
+def test_price_coverage_route_returns_structured_missing_journal_and_unsafe_query_errors(
+    journal_store,
+    tmp_path,
+):
+    missing_journal = client.get(
+        "/api/v1/xau/forward-journal/entries/missing/price-coverage",
+        params=_price_payload(tmp_path / "missing.parquet"),
+    )
+    assert missing_journal.status_code == 404
+    assert missing_journal.json()["error"]["code"] == "NOT_FOUND"
+
+    unsafe = client.get(
+        "/api/v1/xau/forward-journal/entries/missing/price-coverage",
+        params={
+            "source_label": "local_csv",
+            "ohlc_path": "https://example.com/xau.csv",
+            "research_only_acknowledged": "true",
+        },
+    )
+    assert unsafe.status_code == 400
+    assert unsafe.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def _price_payload(path: Path) -> dict:
+    return {
+        "source_label": "local_parquet",
+        "source_symbol": "XAUUSD local fixture",
+        "ohlc_path": str(path),
+        "update_note": "Attach synthetic OHLC validation outcomes.",
+        "research_only_acknowledged": True,
+    }
+
+
+def _write_price_candles(path: Path) -> Path:
+    start = datetime(2026, 5, 14, 3, 8, 4, tzinfo=UTC)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pl.DataFrame(
+        [
+            {
+                "timestamp": (start + timedelta(minutes=index)).isoformat(),
+                "open": 4707.0 + index * 0.1,
+                "high": 4708.0 + index * 0.1,
+                "low": 4706.0 + index * 0.1,
+                "close": 4707.5 + index * 0.1,
+            }
+            for index in range(31)
+        ]
+    ).write_parquet(path)
+    return path
