@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 
 from src.models.xau_quikstrike_fusion import (
     XauFusionAgreementStatus,
@@ -11,9 +12,11 @@ from src.models.xau_quikstrike_fusion import (
     XauFusionDownstreamResult,
     XauFusionMatchKey,
     XauFusionMissingContextItem,
+    XauFusionReportStatus,
     XauFusionRow,
     XauFusionSourceType,
     XauFusionSourceValue,
+    XauFusionVolOiInputRow,
     XauQuikStrikeFusionRequest,
     XauQuikStrikeSourceRef,
     validate_xau_fusion_safe_id,
@@ -23,6 +26,30 @@ from src.xau_quikstrike_fusion.matching import (
     evaluate_source_agreement,
     match_source_rows,
 )
+
+XAU_VOL_OI_SOURCE_LIMITATION = (
+    "Fused XAU Vol-OI input is a local research annotation derived from sanitized "
+    "QuikStrike Vol2Vol and Matrix outputs."
+)
+EXPIRATION_CODE_ONLY_WARNING = "expiration code parsed, calendar expiry date unavailable"
+SUPPORTED_XAU_VALUE_TYPES = {
+    "open_interest",
+    "oi_change",
+    "volume",
+    "intraday_volume",
+    "eod_volume",
+    "churn",
+}
+
+
+@dataclass(frozen=True)
+class XauFusionVolOiConversionBundle:
+    """Converted XAU Vol-OI input rows plus explicit conversion status."""
+
+    status: XauFusionReportStatus
+    rows: list[XauFusionVolOiInputRow]
+    blocked_reasons: list[str]
+    warnings: list[str]
 
 
 def build_fusion_rows(
@@ -59,6 +86,52 @@ def build_fusion_rows(
             )
         )
     return rows, match_result.coverage, match_result.blocked_reasons
+
+
+def build_xau_vol_oi_input_rows(
+    rows: list[XauFusionRow],
+    *,
+    upstream_blocked_reasons: list[str] | None = None,
+) -> XauFusionVolOiConversionBundle:
+    """Convert fused rows into the local XAU Vol-OI input row shape."""
+
+    blocked_reasons = list(upstream_blocked_reasons or [])
+    drafts: dict[tuple[str, float, str], dict] = {}
+    for row in rows:
+        row_blockers = _conversion_blockers_for_row(row)
+        if row_blockers:
+            blocked_reasons.extend(
+                f"{row.fusion_row_id}: {reason}" for reason in row_blockers
+            )
+            continue
+        key = _xau_input_key(row)
+        draft = drafts.setdefault(key, _base_xau_input_draft(row))
+        applied = _apply_xau_input_values(draft, row)
+        if not applied:
+            blocked_reasons.append(
+                f"{row.fusion_row_id}: unsupported value mapping '{row.match_key.value_type}'."
+            )
+
+    converted_rows: list[XauFusionVolOiInputRow] = []
+    for key, draft in sorted(drafts.items(), key=lambda item: item[0]):
+        try:
+            converted_rows.append(XauFusionVolOiInputRow(**draft))
+        except ValueError as exc:
+            blocked_reasons.append(f"{key}: {exc}")
+
+    warnings = _conversion_warnings(converted_rows)
+    if converted_rows and blocked_reasons:
+        status = XauFusionReportStatus.PARTIAL
+    elif converted_rows:
+        status = XauFusionReportStatus.COMPLETED
+    else:
+        status = XauFusionReportStatus.BLOCKED
+    return XauFusionVolOiConversionBundle(
+        status=status,
+        rows=converted_rows,
+        blocked_reasons=_dedupe(blocked_reasons),
+        warnings=warnings,
+    )
 
 
 def build_context_summary(
@@ -338,6 +411,139 @@ def _number_component(value: float) -> str:
     if float(value).is_integer():
         return str(int(value))
     return str(value).replace("-", "m").replace(".", "p")
+
+
+def _conversion_blockers_for_row(row: XauFusionRow) -> list[str]:
+    blockers: list[str] = []
+    if row.match_key.strike <= 0:
+        blockers.append("strike is missing or invalid")
+    if row.match_key.expiration is None and row.match_key.expiration_code is None:
+        blockers.append("expiration or expiration_code is required")
+    if row.match_key.option_type not in {"call", "put"}:
+        blockers.append("option_type must be call or put")
+    if row.match_key.value_type not in SUPPORTED_XAU_VALUE_TYPES:
+        blockers.append(f"value_type '{row.match_key.value_type}' is not supported")
+    if not _has_usable_source_value(row):
+        blockers.append("no usable source value is available")
+    return blockers
+
+
+def _xau_input_key(row: XauFusionRow) -> tuple[str, float, str]:
+    expiration_key = row.match_key.expiration or row.match_key.expiration_code or ""
+    return (expiration_key, row.match_key.strike, row.match_key.option_type)
+
+
+def _base_xau_input_draft(row: XauFusionRow) -> dict:
+    source_values = _source_values(row)
+    return {
+        "expiry": row.match_key.expiration,
+        "expiration_code": row.match_key.expiration_code,
+        "strike": row.match_key.strike,
+        "spot_equivalent_strike": row.spot_equivalent_level,
+        "option_type": row.match_key.option_type,
+        "underlying_futures_price": _first_float(
+            value.future_reference_price for value in source_values
+        ),
+        "source_report_ids": _dedupe(
+            [value.source_report_id for value in source_values if value.source_report_id]
+        ),
+        "source_agreement_status": row.agreement_status,
+        "limitations": _dedupe(
+            [
+                XAU_VOL_OI_SOURCE_LIMITATION,
+                *row.limitations,
+                *(limitation for value in source_values for limitation in value.limitations),
+            ]
+        ),
+    }
+
+
+def _apply_xau_input_values(draft: dict, row: XauFusionRow) -> bool:
+    applied = False
+    source_values = _source_values(row)
+    draft["source_report_ids"] = _dedupe(
+        [
+            *draft.get("source_report_ids", []),
+            *(value.source_report_id for value in source_values if value.source_report_id),
+        ]
+    )
+    draft["limitations"] = _dedupe(
+        [
+            *draft.get("limitations", []),
+            *row.limitations,
+            *(limitation for value in source_values for limitation in value.limitations),
+        ]
+    )
+    matrix_value = row.matrix_value
+    if matrix_value is not None:
+        applied = _apply_source_value(draft, matrix_value, prefer_existing=False) or applied
+    vol2vol_value = row.vol2vol_value
+    if vol2vol_value is not None:
+        applied = _apply_source_value(draft, vol2vol_value, prefer_existing=True) or applied
+        if draft.get("implied_volatility") is None and vol2vol_value.vol_settle is not None:
+            draft["implied_volatility"] = vol2vol_value.vol_settle
+    if draft.get("underlying_futures_price") is None:
+        draft["underlying_futures_price"] = _first_float(
+            value.future_reference_price for value in source_values
+        )
+    return applied
+
+
+def _apply_source_value(
+    draft: dict,
+    value: XauFusionSourceValue,
+    *,
+    prefer_existing: bool,
+) -> bool:
+    field = _xau_field_for_source_value(value)
+    if field is None or value.value is None:
+        return False
+    if prefer_existing and draft.get(field) is not None:
+        return True
+    draft[field] = value.value
+    if field in {"intraday_volume", "eod_volume"} and draft.get("volume") is None:
+        draft["volume"] = value.value
+    return True
+
+
+def _xau_field_for_source_value(value: XauFusionSourceValue) -> str | None:
+    value_type = value.value_type.strip().lower()
+    source_view = (value.source_view or "").strip().lower()
+    if value_type == "open_interest":
+        return "open_interest"
+    if value_type == "oi_change":
+        return "oi_change"
+    if value_type == "churn":
+        return "churn"
+    if source_view == "intraday_volume" or value_type == "intraday_volume":
+        return "intraday_volume"
+    if source_view == "eod_volume" or value_type == "eod_volume":
+        return "eod_volume"
+    if value_type == "volume":
+        return "volume"
+    return None
+
+
+def _has_usable_source_value(row: XauFusionRow) -> bool:
+    return any(value.value is not None for value in _source_values(row))
+
+
+def _source_values(row: XauFusionRow) -> list[XauFusionSourceValue]:
+    return [value for value in (row.matrix_value, row.vol2vol_value) if value is not None]
+
+
+def _first_float(values: object) -> float | None:
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
+def _conversion_warnings(rows: list[XauFusionVolOiInputRow]) -> list[str]:
+    warnings: list[str] = []
+    if any(row.expiry is None and row.expiration_code is not None for row in rows):
+        warnings.append(EXPIRATION_CODE_ONLY_WARNING)
+    return warnings
 
 
 def _context_item(

@@ -133,21 +133,21 @@
 
 ### Tests for User Story 3
 
-- [ ] T061 [P] [US3] Add fused XAU Vol-OI conversion tests for Matrix OI/OI Change/Volume and Vol2Vol context preservation in `backend/tests/unit/test_xau_quikstrike_fusion_fusion.py`
-- [ ] T062 [P] [US3] Add blocked conversion tests for missing strike, expiration, option type, and value mapping in `backend/tests/unit/test_xau_quikstrike_fusion_fusion.py`
-- [ ] T063 [P] [US3] Add downstream XAU Vol-OI orchestration integration test in `backend/tests/integration/test_xau_quikstrike_fusion_flow.py`
-- [ ] T064 [P] [US3] Add downstream XAU reaction orchestration integration test with conservative NO_TRADE notes in `backend/tests/integration/test_xau_quikstrike_fusion_flow.py`
-- [ ] T065 [P] [US3] Add forbidden wording tests for downstream fusion notes in `backend/tests/unit/test_xau_quikstrike_fusion_fusion.py`
+- [X] T061 [P] [US3] Add fused XAU Vol-OI conversion tests for Matrix OI/OI Change/Volume and Vol2Vol context preservation in `backend/tests/unit/test_xau_quikstrike_fusion_fusion.py`
+- [X] T062 [P] [US3] Add blocked conversion tests for missing strike, expiration, option type, and value mapping in `backend/tests/unit/test_xau_quikstrike_fusion_fusion.py`
+- [X] T063 [P] [US3] Add downstream XAU Vol-OI orchestration integration test in `backend/tests/integration/test_xau_quikstrike_fusion_flow.py`
+- [X] T064 [P] [US3] Add downstream XAU reaction orchestration integration test with conservative NO_TRADE notes in `backend/tests/integration/test_xau_quikstrike_fusion_flow.py`
+- [X] T065 [P] [US3] Add forbidden wording tests for downstream fusion notes in `backend/tests/unit/test_xau_quikstrike_fusion_fusion.py`
 
 ### Implementation for User Story 3
 
-- [ ] T066 [US3] Implement fused XAU Vol-OI input row creation in `backend/src/xau_quikstrike_fusion/fusion.py`
-- [ ] T067 [US3] Implement conversion eligibility and blocked/partial conversion reasons in `backend/src/xau_quikstrike_fusion/fusion.py`
-- [ ] T068 [US3] Implement fused input artifact persistence metadata in `backend/src/xau_quikstrike_fusion/report_store.py`
-- [ ] T069 [US3] Integrate optional XAU Vol-OI report creation through existing feature 006 orchestration in `backend/src/xau_quikstrike_fusion/orchestration.py`
-- [ ] T070 [US3] Integrate optional XAU reaction report creation through existing feature 010 orchestration in `backend/src/xau_quikstrike_fusion/orchestration.py`
-- [ ] T071 [US3] Implement downstream result summary with linked report ids, no-trade count, and conservative notes in `backend/src/xau_quikstrike_fusion/orchestration.py`
-- [ ] T072 [US3] Persist downstream result and fused XAU input row counts in fusion reports in `backend/src/xau_quikstrike_fusion/report_store.py`
+- [X] T066 [US3] Implement fused XAU Vol-OI input row creation in `backend/src/xau_quikstrike_fusion/fusion.py`
+- [X] T067 [US3] Implement conversion eligibility and blocked/partial conversion reasons in `backend/src/xau_quikstrike_fusion/fusion.py`
+- [X] T068 [US3] Implement fused input artifact persistence metadata in `backend/src/xau_quikstrike_fusion/report_store.py`
+- [X] T069 [US3] Integrate optional XAU Vol-OI report creation through existing feature 006 orchestration in `backend/src/xau_quikstrike_fusion/orchestration.py`
+- [X] T070 [US3] Integrate optional XAU reaction report creation through existing feature 010 orchestration in `backend/src/xau_quikstrike_fusion/orchestration.py`
+- [X] T071 [US3] Implement downstream result summary with linked report ids, no-trade count, and conservative notes in `backend/src/xau_quikstrike_fusion/orchestration.py`
+- [X] T072 [US3] Persist downstream result and fused XAU input row counts in fusion reports in `backend/src/xau_quikstrike_fusion/report_store.py`
 
 **Checkpoint**: US3 can feed the existing XAU research chain without duplicating wall scoring or reaction logic.
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,7 @@ from src.models.xau_quikstrike_fusion import (
     XauFusionArtifactFormat,
     XauFusionArtifactType,
     XauFusionBaseModel,
+    XauFusionVolOiInputRow,
     XauQuikStrikeFusionReport,
     validate_xau_fusion_safe_id,
 )
@@ -106,9 +108,59 @@ class XauQuikStrikeFusionReportStore:
             rows=rows,
         )
 
+    def write_xau_vol_oi_input_rows(
+        self,
+        report_id: str,
+        rows: list[XauFusionVolOiInputRow],
+        *,
+        filename: str = "xau_vol_oi_input.csv",
+    ) -> XauFusionArtifact:
+        """Persist fused XAU Vol-OI input rows as a local CSV artifact."""
+
+        path = self.artifact_path(report_id, filename)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fieldnames = [
+            "date",
+            "timestamp",
+            "expiry",
+            "expiration_code",
+            "strike",
+            "spot_equivalent_strike",
+            "option_type",
+            "open_interest",
+            "oi_change",
+            "volume",
+            "intraday_volume",
+            "eod_volume",
+            "churn",
+            "implied_volatility",
+            "underlying_futures_price",
+            "source",
+            "source_report_ids",
+            "source_agreement_status",
+            "limitations",
+        ]
+        with path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fieldnames)
+            writer.writeheader()
+            for row in rows:
+                payload = row.model_dump(mode="json")
+                payload["source_report_ids"] = "|".join(row.source_report_ids)
+                payload["source_agreement_status"] = row.source_agreement_status.value
+                payload["limitations"] = "|".join(row.limitations)
+                writer.writerow({field: payload.get(field) for field in fieldnames})
+        return self.artifact(
+            artifact_type=XauFusionArtifactType.XAU_VOL_OI_INPUT_CSV,
+            path=path,
+            artifact_format=XauFusionArtifactFormat.CSV,
+            rows=len(rows),
+        )
+
     def persist_report(
         self,
         report: XauQuikStrikeFusionReport,
+        *,
+        xau_vol_oi_input_rows: list[XauFusionVolOiInputRow] | None = None,
     ) -> XauQuikStrikeFusionReport:
         """Persist MVP fusion metadata, rows, JSON, and Markdown artifacts."""
 
@@ -144,6 +196,13 @@ class XauQuikStrikeFusionReportStore:
                 rows=1,
             ),
         ]
+        if xau_vol_oi_input_rows is not None:
+            artifacts.append(
+                self.write_xau_vol_oi_input_rows(
+                    report.report_id,
+                    xau_vol_oi_input_rows,
+                )
+            )
         saved_report = report.model_copy(update={"artifacts": artifacts})
         metadata_path.write_text(
             self.serialize_json(_metadata_payload(saved_report)) + "\n",
@@ -197,10 +256,14 @@ def _metadata_payload(report: XauQuikStrikeFusionReport) -> dict[str, Any]:
         "vol2vol_report_id": report.vol2vol_source.report_id,
         "matrix_report_id": report.matrix_source.report_id,
         "fused_row_count": report.fused_row_count,
+        "xau_vol_oi_input_row_count": report.xau_vol_oi_input_row_count,
         "coverage": report.coverage.model_dump(mode="json") if report.coverage else None,
         "basis_state": report.basis_state.model_dump(mode="json") if report.basis_state else None,
         "context_summary": (
             report.context_summary.model_dump(mode="json") if report.context_summary else None
+        ),
+        "downstream_result": (
+            report.downstream_result.model_dump(mode="json") if report.downstream_result else None
         ),
         "missing_context_count": (
             len(report.context_summary.missing_context) if report.context_summary else 0
@@ -223,6 +286,7 @@ def _report_markdown(report: XauQuikStrikeFusionReport) -> str:
         f"- Vol2Vol report: `{report.vol2vol_source.report_id}`",
         f"- Matrix report: `{report.matrix_source.report_id}`",
         f"- Fused rows: `{report.fused_row_count}`",
+        f"- XAU Vol-OI input rows: `{report.xau_vol_oi_input_row_count}`",
     ]
     if report.coverage is not None:
         lines.extend(
@@ -268,6 +332,22 @@ def _report_markdown(report: XauQuikStrikeFusionReport) -> str:
             f"- {item.context_key}: `{item.status.value}` - {item.message}"
             for item in report.context_summary.missing_context
         )
+    if report.downstream_result is not None:
+        lines.extend(
+            [
+                "",
+                "## Downstream Research Reports",
+                f"- XAU Vol-OI report: `{report.downstream_result.xau_vol_oi_report_id}`",
+                f"- XAU reaction report: `{report.downstream_result.xau_reaction_report_id}`",
+                f"- XAU report status: `{report.downstream_result.xau_report_status}`",
+                f"- Reaction report status: `{report.downstream_result.reaction_report_status}`",
+                f"- Reaction rows: `{report.downstream_result.reaction_row_count}`",
+                f"- NO_TRADE rows: `{report.downstream_result.no_trade_count}`",
+            ]
+        )
+        if report.downstream_result.notes:
+            lines.extend(["", "### Downstream Notes"])
+            lines.extend(f"- {note}" for note in report.downstream_result.notes)
     lines.extend(["", "## Warnings"])
     lines.extend(f"- {warning}" for warning in report.warnings)
     lines.extend(["", "## Limitations"])
