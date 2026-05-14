@@ -80,6 +80,22 @@ def test_match_source_rows_reports_matched_source_only_and_conflict_statuses():
     assert result.coverage.matrix_only_key_count == 1
 
 
+def test_match_source_rows_matches_calendar_expiry_to_matrix_expiration_code():
+    vol2vol_value = sample_vol2vol_source_value().model_copy(
+        update={"expiration": "2026-05-14", "expiration_code": "G2RK6"}
+    )
+    matrix_value = sample_matrix_source_value().model_copy(
+        update={"expiration": None, "expiration_code": "G2RK6"}
+    )
+
+    result = match_source_rows([vol2vol_value], [matrix_value])
+
+    assert result.coverage.matched_key_count == 1
+    assert result.coverage.vol2vol_only_key_count == 0
+    assert result.coverage.matrix_only_key_count == 0
+    assert result.pairs[0].match_status == XauFusionMatchStatus.MATCHED
+
+
 def test_match_source_rows_counts_blocked_unmatchable_source_values():
     blocked = sample_vol2vol_source_value().model_copy(update={"strike": None})
 
