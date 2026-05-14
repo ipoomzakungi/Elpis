@@ -1852,8 +1852,30 @@ export type XauForwardArtifactType =
   | 'entry_json'
   | 'outcomes_json'
   | 'report_json'
-  | 'report_markdown';
+  | 'report_markdown'
+  | 'price_coverage_json'
+  | 'price_update_report_json'
+  | 'price_update_report_markdown';
 export type XauForwardArtifactFormat = 'json' | 'markdown';
+export type XauForwardPriceSourceLabel =
+  | 'true_xauusd_spot'
+  | 'gc_futures'
+  | 'yahoo_gc_f_proxy'
+  | 'gld_etf_proxy'
+  | 'local_csv'
+  | 'local_parquet'
+  | 'unknown_proxy';
+export type XauForwardPriceCoverageStatus =
+  | 'complete'
+  | 'partial'
+  | 'missing'
+  | 'invalid'
+  | 'blocked';
+export type XauForwardPriceDirection =
+  | 'up_from_snapshot'
+  | 'down_from_snapshot'
+  | 'flat_from_snapshot'
+  | 'unavailable';
 
 export interface XauForwardJournalNote {
   note_id: string | null;
@@ -1963,6 +1985,13 @@ export interface XauForwardOutcomeObservation {
   high: number | null;
   low: number | null;
   close: number | null;
+  range: number | null;
+  direction: XauForwardPriceDirection | null;
+  price_source_label: XauForwardPriceSourceLabel | null;
+  price_source_symbol: string | null;
+  coverage_status: XauForwardPriceCoverageStatus | null;
+  coverage_reason: string | null;
+  price_update_id: string | null;
   reference_wall_id: string | null;
   reference_wall_level: number | null;
   next_wall_reference: string | null;
@@ -1981,6 +2010,34 @@ export interface XauForwardOutcomeUpdateRequest {
   research_only_acknowledged: boolean;
 }
 
+export interface XauForwardPriceDataUpdateRequest {
+  source_label: XauForwardPriceSourceLabel;
+  source_symbol?: string | null;
+  ohlc_path: string;
+  timestamp_column?: string;
+  open_column?: string;
+  high_column?: string;
+  low_column?: string;
+  close_column?: string;
+  timezone?: string;
+  update_note?: string | null;
+  persist_report?: boolean;
+  research_only_acknowledged: boolean;
+}
+
+export interface XauForwardPriceCoverageRequest {
+  source_label: XauForwardPriceSourceLabel;
+  source_symbol?: string | null;
+  ohlc_path: string;
+  timestamp_column?: string;
+  open_column?: string;
+  high_column?: string;
+  low_column?: string;
+  close_column?: string;
+  timezone?: string;
+  research_only_acknowledged: boolean;
+}
+
 export interface XauForwardJournalArtifact {
   artifact_type: XauForwardArtifactType;
   path: string;
@@ -1988,6 +2045,92 @@ export interface XauForwardJournalArtifact {
   rows: number | null;
   created_at: string;
   limitations: string[];
+}
+
+export interface XauForwardPriceSource {
+  source_label: XauForwardPriceSourceLabel;
+  source_symbol: string | null;
+  source_path: string;
+  format: string;
+  row_count: number;
+  first_timestamp: string | null;
+  last_timestamp: string | null;
+  warnings: string[];
+  limitations: string[];
+}
+
+export interface XauForwardPriceCoverageWindow {
+  window: XauForwardOutcomeWindow;
+  status: XauForwardPriceCoverageStatus;
+  required_start: string;
+  required_end: string;
+  observed_start: string | null;
+  observed_end: string | null;
+  candle_count: number;
+  gap_count: number;
+  missing_reason: string | null;
+  partial_reason: string | null;
+  source_label: XauForwardPriceSourceLabel;
+  source_symbol: string | null;
+  limitations: string[];
+}
+
+export interface XauForwardMissingCandleItem {
+  window: XauForwardOutcomeWindow;
+  required_start: string;
+  required_end: string;
+  status: XauForwardPriceCoverageStatus;
+  message: string;
+  action: string;
+}
+
+export interface XauForwardPriceCoverageSummary {
+  journal_id: string;
+  snapshot_time: string;
+  source: XauForwardPriceSource;
+  windows: XauForwardPriceCoverageWindow[];
+  complete_windows: XauForwardOutcomeWindow[];
+  partial_windows: XauForwardOutcomeWindow[];
+  missing_windows: XauForwardOutcomeWindow[];
+  missing_candle_checklist: XauForwardMissingCandleItem[];
+  proxy_limitations: string[];
+  warnings: string[];
+  limitations: string[];
+  research_only_warnings: string[];
+}
+
+export interface XauForwardPriceOutcomeUpdateReport {
+  update_id: string;
+  journal_id: string;
+  created_at: string;
+  source: XauForwardPriceSource;
+  coverage_summary: XauForwardPriceCoverageSummary;
+  updated_outcomes: XauForwardOutcomeObservation[];
+  missing_candle_checklist: XauForwardMissingCandleItem[];
+  proxy_limitations: string[];
+  artifacts: XauForwardJournalArtifact[];
+  warnings: string[];
+  limitations: string[];
+  research_only_warnings: string[];
+}
+
+export interface XauForwardPriceCoverageResponse {
+  journal_id: string;
+  coverage: XauForwardPriceCoverageSummary;
+  warnings: string[];
+  limitations: string[];
+  research_only_warnings: string[];
+}
+
+export interface XauForwardPriceOutcomeUpdateResponse {
+  journal_id: string;
+  update_report: XauForwardPriceOutcomeUpdateReport;
+  outcomes: XauForwardOutcomeObservation[];
+  coverage: XauForwardPriceCoverageSummary;
+  artifacts: XauForwardJournalArtifact[];
+  warnings: string[];
+  limitations: string[];
+  research_only_warnings: string[];
 }
 
 export interface XauForwardJournalEntry {
@@ -2047,6 +2190,7 @@ export interface XauForwardJournalDashboardData {
   entries: XauForwardJournalSummary[];
   selected_entry: XauForwardJournalEntry | null;
   outcomes: XauForwardOutcomeResponse | null;
+  priceCoverage: XauForwardPriceCoverageResponse | null;
 }
 
 export type FreeDerivativesSource =

@@ -17,6 +17,7 @@ from src.models.xau_forward_journal import (
     XauForwardOutcomeObservation,
     XauForwardOutcomeResponse,
     XauForwardOutcomeStatus,
+    XauForwardPriceOutcomeUpdateReport,
     validate_xau_forward_journal_safe_id,
 )
 from src.reports.collision_guard import (
@@ -29,6 +30,11 @@ class XauForwardJournalReportStore:
     """Path-safe helper for local-only XAU forward journal artifacts."""
 
     REPORT_ROOT_NAME = "xau_forward_journal"
+    PRICE_UPDATE_ARTIFACT_TYPES = {
+        XauForwardArtifactType.PRICE_COVERAGE_JSON,
+        XauForwardArtifactType.PRICE_UPDATE_REPORT_JSON,
+        XauForwardArtifactType.PRICE_UPDATE_REPORT_MARKDOWN,
+    }
 
     def __init__(self, reports_dir: Path | None = None) -> None:
         self.settings = get_settings()
@@ -58,6 +64,24 @@ class XauForwardJournalReportStore:
         if not filename or Path(filename).name != filename:
             raise ValueError("artifact filename must be a plain filename")
         artifact_path = (self.report_dir(journal_id) / filename).resolve()
+        self._validate_report_scope(artifact_path)
+        return artifact_path
+
+    def price_update_dir(self, journal_id: str) -> Path:
+        price_update_dir = (self.report_dir(journal_id) / "price_updates").resolve()
+        self._validate_report_scope(price_update_dir)
+        return price_update_dir
+
+    def price_update_artifact_path(
+        self,
+        journal_id: str,
+        update_id: str,
+        filename: str,
+    ) -> Path:
+        validate_xau_forward_journal_safe_id(update_id, "price_update_id")
+        if not filename or Path(filename).name != filename:
+            raise ValueError("price update artifact filename must be a plain filename")
+        artifact_path = (self.price_update_dir(journal_id) / filename).resolve()
         self._validate_report_scope(artifact_path)
         return artifact_path
 
@@ -136,7 +160,7 @@ class XauForwardJournalReportStore:
         )
         entry = entry.model_copy(update={"source_kind": normalized_source_kind})
         self.ensure_report_dir(entry.journal_id)
-        artifacts = [
+        base_artifacts = [
             self.artifact_for_filename(
                 entry.journal_id,
                 "metadata.json",
@@ -173,6 +197,12 @@ class XauForwardJournalReportStore:
                 rows=1,
             ),
         ]
+        price_update_artifacts = [
+            artifact
+            for artifact in entry.artifacts
+            if artifact.artifact_type in self.PRICE_UPDATE_ARTIFACT_TYPES
+        ]
+        artifacts = [*base_artifacts, *_dedupe_artifacts(price_update_artifacts)]
         saved_entry = entry.model_copy(update={"artifacts": artifacts})
         self.artifact_path(entry.journal_id, "metadata.json").write_text(
             self.serialize_json(self.summarize_entry(saved_entry)) + "\n",
@@ -209,6 +239,75 @@ class XauForwardJournalReportStore:
             source_kind=entry.source_kind,
             overwrite_allowed=True,
         )
+
+    def persist_price_update_report(
+        self,
+        entry: XauForwardJournalEntry,
+        report: XauForwardPriceOutcomeUpdateReport,
+    ) -> tuple[XauForwardJournalEntry, XauForwardPriceOutcomeUpdateReport]:
+        """Persist price update artifacts and refreshed journal outcomes."""
+
+        update_id = validate_xau_forward_journal_safe_id(report.update_id, "price_update_id")
+        price_update_dir = self.price_update_dir(entry.journal_id)
+        price_update_dir.mkdir(parents=True, exist_ok=True)
+
+        coverage_path = self.price_update_artifact_path(
+            entry.journal_id,
+            update_id,
+            f"{update_id}_coverage.json",
+        )
+        report_path = self.price_update_artifact_path(
+            entry.journal_id,
+            update_id,
+            f"{update_id}_report.json",
+        )
+        markdown_path = self.price_update_artifact_path(
+            entry.journal_id,
+            update_id,
+            f"{update_id}_report.md",
+        )
+        artifacts = [
+            self.artifact(
+                artifact_type=XauForwardArtifactType.PRICE_COVERAGE_JSON,
+                path=coverage_path,
+                artifact_format=XauForwardArtifactFormat.JSON,
+                rows=len(report.coverage_summary.windows),
+            ),
+            self.artifact(
+                artifact_type=XauForwardArtifactType.PRICE_UPDATE_REPORT_JSON,
+                path=report_path,
+                artifact_format=XauForwardArtifactFormat.JSON,
+                rows=1,
+            ),
+            self.artifact(
+                artifact_type=XauForwardArtifactType.PRICE_UPDATE_REPORT_MARKDOWN,
+                path=markdown_path,
+                artifact_format=XauForwardArtifactFormat.MARKDOWN,
+                rows=1,
+            ),
+        ]
+        report_with_artifacts = report.model_copy(update={"artifacts": artifacts})
+
+        coverage_path.write_text(
+            self.serialize_json(report_with_artifacts.coverage_summary) + "\n",
+            encoding="utf-8",
+        )
+        report_path.write_text(
+            self.serialize_json(report_with_artifacts) + "\n",
+            encoding="utf-8",
+        )
+        markdown_path.write_text(
+            _price_update_markdown(report_with_artifacts),
+            encoding="utf-8",
+        )
+
+        entry_with_artifacts = entry.model_copy(
+            update={
+                "artifacts": _dedupe_artifacts([*entry.artifacts, *artifacts]),
+            }
+        )
+        persisted_entry = self.persist_outcome_update(entry_with_artifacts)
+        return persisted_entry, report_with_artifacts
 
     def read_entry(self, journal_id: str) -> XauForwardJournalEntry:
         path = self.artifact_path(journal_id, "entry.json")
@@ -399,12 +498,80 @@ def _entry_markdown(entry: XauForwardJournalEntry) -> str:
         for item in entry.missing_context
     )
     lines.extend(["", "## Outcomes"])
-    lines.extend(
-        f"- {outcome.window.value}: {outcome.status.value}/{outcome.label.value}"
-        for outcome in entry.outcomes
-    )
+    lines.extend(_outcome_markdown_line(outcome) for outcome in entry.outcomes)
     lines.extend(["", "## Limitations"])
     lines.extend(f"- {limitation}" for limitation in entry.limitations)
     lines.extend(["", "## Artifacts"])
     lines.extend(f"- `{artifact.path}`" for artifact in entry.artifacts)
     return "\n".join(lines) + "\n"
+
+
+def _outcome_markdown_line(outcome: XauForwardOutcomeObservation) -> str:
+    parts = [f"- {outcome.window.value}: {outcome.status.value}/{outcome.label.value}"]
+    if outcome.price_source_label is not None:
+        parts.append(f"source={outcome.price_source_label.value}")
+    if outcome.coverage_status is not None:
+        parts.append(f"coverage={outcome.coverage_status.value}")
+    if outcome.close is not None:
+        parts.append(f"close={outcome.close}")
+    if outcome.range is not None:
+        parts.append(f"range={outcome.range}")
+    if outcome.direction is not None:
+        parts.append(f"direction={outcome.direction.value}")
+    return " ".join(parts)
+
+
+def _price_update_markdown(report: XauForwardPriceOutcomeUpdateReport) -> str:
+    lines = [
+        f"# XAU Forward Journal Price Update {report.update_id}",
+        "",
+        "Local-only research annotation. This report updates saved outcome windows from "
+        "provided OHLC candles and does not imply profitability, prediction, safety, "
+        "live readiness, or any execution instruction.",
+        "",
+        f"- Journal id: `{report.journal_id}`",
+        f"- Created at: `{report.created_at.isoformat()}`",
+        f"- Source label: `{report.source.source_label.value}`",
+        f"- Source symbol: `{report.source.source_symbol or 'unspecified'}`",
+        f"- Row count: `{report.source.row_count}`",
+        "",
+        "## Coverage",
+    ]
+    lines.extend(
+        (
+            f"- {window.window.value}: {window.status.value} "
+            f"candles={window.candle_count} gaps={window.gap_count}"
+        )
+        for window in report.coverage_summary.windows
+    )
+    lines.extend(["", "## Missing Candle Checklist"])
+    if report.missing_candle_checklist:
+        lines.extend(
+            f"- {item.window.value}: {item.status.value} - {item.message}"
+            for item in report.missing_candle_checklist
+        )
+    else:
+        lines.append("- No missing or partial candle windows were detected.")
+    lines.extend(["", "## Updated Outcomes"])
+    lines.extend(_outcome_markdown_line(outcome) for outcome in report.updated_outcomes)
+    lines.extend(["", "## Proxy Limitations"])
+    if report.proxy_limitations:
+        lines.extend(f"- {limitation}" for limitation in report.proxy_limitations)
+    else:
+        lines.append("- No proxy limitation notes were supplied for this source label.")
+    lines.extend(["", "## Artifacts"])
+    lines.extend(f"- `{artifact.path}`" for artifact in report.artifacts)
+    return "\n".join(lines) + "\n"
+
+
+def _dedupe_artifacts(
+    artifacts: list[XauForwardJournalArtifact],
+) -> list[XauForwardJournalArtifact]:
+    deduped: list[XauForwardJournalArtifact] = []
+    seen: set[str] = set()
+    for artifact in artifacts:
+        if artifact.path in seen:
+            continue
+        deduped.append(artifact)
+        seen.add(artifact.path)
+    return deduped

@@ -81,6 +81,10 @@ import {
   XauForwardJournalListResponse,
   XauForwardOutcomeResponse,
   XauForwardOutcomeUpdateRequest,
+  XauForwardPriceCoverageRequest,
+  XauForwardPriceCoverageResponse,
+  XauForwardPriceDataUpdateRequest,
+  XauForwardPriceOutcomeUpdateResponse,
   XauQuikStrikeFusionDashboardData,
   XauQuikStrikeFusionListResponse,
   XauQuikStrikeFusionReport,
@@ -704,6 +708,34 @@ export const api = {
     return fetchApi(`/xau/forward-journal/entries/${encodeURIComponent(journalId)}/outcomes`);
   },
 
+  updateXauForwardJournalOutcomesFromPriceData: async (
+    journalId: string,
+    request: XauForwardPriceDataUpdateRequest,
+  ): Promise<XauForwardPriceOutcomeUpdateResponse> => {
+    return fetchApi(
+      `/xau/forward-journal/entries/${encodeURIComponent(journalId)}/outcomes/from-price-data`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      },
+    );
+  },
+
+  getXauForwardJournalPriceCoverage: async (
+    journalId: string,
+    request: XauForwardPriceCoverageRequest,
+  ): Promise<XauForwardPriceCoverageResponse> => {
+    const params = new URLSearchParams();
+    Object.entries(request).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        params.set(key, String(value));
+      }
+    });
+    return fetchApi(
+      `/xau/forward-journal/entries/${encodeURIComponent(journalId)}/price-coverage?${params.toString()}`,
+    );
+  },
+
   getXauForwardJournalDashboardData: async (
     journalId: string,
   ): Promise<XauForwardJournalDashboardData> => {
@@ -719,6 +751,7 @@ export const api = {
       entries: list.entries,
       selected_entry: selectedEntry,
       outcomes,
+      priceCoverage: null,
     };
   },
 };

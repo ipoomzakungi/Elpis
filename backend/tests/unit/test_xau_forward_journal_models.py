@@ -21,6 +21,11 @@ from src.models.xau_forward_journal import (
     XauForwardOutcomeStatus,
     XauForwardOutcomeUpdateRequest,
     XauForwardOutcomeWindow,
+    XauForwardPriceCoverageRequest,
+    XauForwardPriceCoverageStatus,
+    XauForwardPriceDataUpdateRequest,
+    XauForwardPriceDirection,
+    XauForwardPriceSourceLabel,
     XauForwardReactionSummary,
     XauForwardSnapshotContext,
     XauForwardSourceReportRef,
@@ -59,6 +64,10 @@ def test_forward_journal_enums_are_research_terms():
     assert XauForwardOutcomeLabel.NO_TRADE_WAS_CORRECT == "no_trade_was_correct"
     assert XauForwardOutcomeStatus.PENDING == "pending"
     assert XauForwardArtifactType.REPORT_MARKDOWN == "report_markdown"
+    assert XauForwardArtifactType.PRICE_COVERAGE_JSON == "price_coverage_json"
+    assert XauForwardPriceSourceLabel.YAHOO_GC_F_PROXY == "yahoo_gc_f_proxy"
+    assert XauForwardPriceCoverageStatus.PARTIAL == "partial"
+    assert XauForwardPriceDirection.DOWN_FROM_SNAPSHOT == "down_from_snapshot"
 
 
 def test_safe_ids_reject_path_traversal_spaces_and_empty_values():
@@ -242,6 +251,65 @@ def test_outcome_observation_schema_defaults_to_pending_without_label_logic():
             high=4700.0,
             low=4701.5,
             close=4706.0,
+        )
+
+
+def test_price_update_request_and_extended_outcome_fields_validate_research_guardrails():
+    request = XauForwardPriceDataUpdateRequest(
+        source_label=XauForwardPriceSourceLabel.YAHOO_GC_F_PROXY,
+        source_symbol="GC=F",
+        ohlc_path="data/raw/yahoo/gc=f_1m_ohlcv.parquet",
+        update_note="Attach synthetic OHLC validation outcomes.",
+        research_only_acknowledged=True,
+    )
+    coverage_request = XauForwardPriceCoverageRequest(
+        source_label=XauForwardPriceSourceLabel.LOCAL_CSV,
+        source_symbol="XAUUSD local fixture",
+        ohlc_path="data/raw/xau/local_fixture.csv",
+        research_only_acknowledged=True,
+    )
+    outcome = XauForwardOutcomeObservation(
+        window=XauForwardOutcomeWindow.THIRTY_MINUTES,
+        status=XauForwardOutcomeStatus.COMPLETED,
+        label=XauForwardOutcomeLabel.STAYED_INSIDE_RANGE,
+        observation_start="2026-05-14T03:08:04Z",
+        observation_end="2026-05-14T03:38:04Z",
+        open=4707.2,
+        high=4712.0,
+        low=4701.5,
+        close=4706.0,
+        range=10.5,
+        direction=XauForwardPriceDirection.DOWN_FROM_SNAPSHOT,
+        price_source_label=XauForwardPriceSourceLabel.YAHOO_GC_F_PROXY,
+        price_source_symbol="GC=F",
+        coverage_status=XauForwardPriceCoverageStatus.COMPLETE,
+        price_update_id="price_update_fixture",
+    )
+
+    assert request.source_label == XauForwardPriceSourceLabel.YAHOO_GC_F_PROXY
+    assert coverage_request.source_label == XauForwardPriceSourceLabel.LOCAL_CSV
+    assert outcome.range == 10.5
+    assert outcome.direction == XauForwardPriceDirection.DOWN_FROM_SNAPSHOT
+
+    with pytest.raises(ValidationError, match="research_only_acknowledged"):
+        XauForwardPriceDataUpdateRequest(
+            source_label=XauForwardPriceSourceLabel.LOCAL_PARQUET,
+            ohlc_path="data/raw/xau/local_fixture.parquet",
+            research_only_acknowledged=False,
+        )
+
+    with pytest.raises(ValidationError, match="sensitive/session"):
+        XauForwardPriceCoverageRequest(
+            source_label=XauForwardPriceSourceLabel.LOCAL_CSV,
+            ohlc_path="https://example.com/xau.csv",
+            research_only_acknowledged=True,
+        )
+
+    with pytest.raises(ValidationError, match="parent traversal"):
+        XauForwardPriceDataUpdateRequest(
+            source_label=XauForwardPriceSourceLabel.LOCAL_CSV,
+            ohlc_path="data/raw/../secret.csv",
+            research_only_acknowledged=True,
         )
 
 

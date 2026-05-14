@@ -140,11 +140,39 @@ class XauForwardArtifactType(StrEnum):
     OUTCOMES_JSON = "outcomes_json"
     REPORT_JSON = "report_json"
     REPORT_MARKDOWN = "report_markdown"
+    PRICE_COVERAGE_JSON = "price_coverage_json"
+    PRICE_UPDATE_REPORT_JSON = "price_update_report_json"
+    PRICE_UPDATE_REPORT_MARKDOWN = "price_update_report_markdown"
 
 
 class XauForwardArtifactFormat(StrEnum):
     JSON = "json"
     MARKDOWN = "markdown"
+
+
+class XauForwardPriceSourceLabel(StrEnum):
+    TRUE_XAUUSD_SPOT = "true_xauusd_spot"
+    GC_FUTURES = "gc_futures"
+    YAHOO_GC_F_PROXY = "yahoo_gc_f_proxy"
+    GLD_ETF_PROXY = "gld_etf_proxy"
+    LOCAL_CSV = "local_csv"
+    LOCAL_PARQUET = "local_parquet"
+    UNKNOWN_PROXY = "unknown_proxy"
+
+
+class XauForwardPriceCoverageStatus(StrEnum):
+    COMPLETE = "complete"
+    PARTIAL = "partial"
+    MISSING = "missing"
+    INVALID = "invalid"
+    BLOCKED = "blocked"
+
+
+class XauForwardPriceDirection(StrEnum):
+    UP_FROM_SNAPSHOT = "up_from_snapshot"
+    DOWN_FROM_SNAPSHOT = "down_from_snapshot"
+    FLAT_FROM_SNAPSHOT = "flat_from_snapshot"
+    UNAVAILABLE = "unavailable"
 
 
 def validate_xau_forward_journal_safe_id(value: str, field_name: str = "id") -> str:
@@ -496,6 +524,13 @@ class XauForwardOutcomeObservation(XauForwardJournalBaseModel):
     high: float | None = Field(default=None, gt=0)
     low: float | None = Field(default=None, gt=0)
     close: float | None = Field(default=None, gt=0)
+    range: float | None = Field(default=None, ge=0)
+    direction: XauForwardPriceDirection | None = None
+    price_source_label: XauForwardPriceSourceLabel | None = None
+    price_source_symbol: str | None = None
+    coverage_status: XauForwardPriceCoverageStatus | None = None
+    coverage_reason: str | None = None
+    price_update_id: str | None = None
     reference_wall_id: str | None = None
     reference_wall_level: float | None = Field(default=None, gt=0)
     next_wall_reference: str | None = None
@@ -510,12 +545,17 @@ class XauForwardOutcomeObservation(XauForwardJournalBaseModel):
             return None
         return _normalize_aware_datetime(value)
 
-    @field_validator("reference_wall_id", "next_wall_reference", mode="before")
+    @field_validator("reference_wall_id", "next_wall_reference", "price_update_id", mode="before")
     @classmethod
     def validate_optional_ids(cls, value: str | None) -> str | None:
         if value is None:
             return None
         return validate_xau_forward_journal_safe_id(value, "outcome_reference_id")
+
+    @field_validator("price_source_symbol", "coverage_reason", mode="before")
+    @classmethod
+    def normalize_optional_text_fields(cls, value: str | None) -> str | None:
+        return _normalize_optional_text(value)
 
     @field_validator("limitations")
     @classmethod
@@ -540,6 +580,373 @@ class XauForwardOutcomeObservation(XauForwardJournalBaseModel):
             if low > open_price or low > close_price:
                 raise ValueError("low must be less than or equal to open and close")
         return self
+
+
+class XauForwardPriceDataRequestBase(XauForwardJournalBaseModel):
+    source_label: XauForwardPriceSourceLabel
+    source_symbol: str | None = None
+    ohlc_path: str
+    timestamp_column: str = "timestamp"
+    open_column: str = "open"
+    high_column: str = "high"
+    low_column: str = "low"
+    close_column: str = "close"
+    timezone: str = "UTC"
+    research_only_acknowledged: bool
+
+    @field_validator(
+        "source_symbol",
+        "timestamp_column",
+        "open_column",
+        "high_column",
+        "low_column",
+        "close_column",
+        "timezone",
+        mode="before",
+    )
+    @classmethod
+    def normalize_optional_strings(cls, value: str | None) -> str | None:
+        return _normalize_optional_text(value)
+
+    @field_validator(
+        "timestamp_column",
+        "open_column",
+        "high_column",
+        "low_column",
+        "close_column",
+        "timezone",
+    )
+    @classmethod
+    def require_text_fields(cls, value: str | None) -> str:
+        if value is None:
+            raise ValueError("column and timezone fields are required")
+        return _normalize_required_text(value)
+
+    @field_validator("ohlc_path")
+    @classmethod
+    def validate_ohlc_path(cls, value: str) -> str:
+        cleaned = value.replace("\\", "/").strip()
+        if not cleaned:
+            raise ValueError("ohlc_path is required")
+        if cleaned.startswith(("http://", "https://")):
+            raise ValueError("ohlc_path must be a local research file path")
+        if ".." in cleaned.split("/"):
+            raise ValueError("ohlc_path must not contain parent traversal")
+        return cleaned
+
+    @model_validator(mode="after")
+    def require_research_acknowledgement(self) -> XauForwardPriceDataRequestBase:
+        if not self.research_only_acknowledged:
+            raise ValueError("research_only_acknowledged must be true")
+        return self
+
+
+class XauForwardPriceDataUpdateRequest(XauForwardPriceDataRequestBase):
+    update_note: str | None = None
+    persist_report: bool = True
+
+    @field_validator("update_note", mode="before")
+    @classmethod
+    def normalize_update_note(cls, value: str | None) -> str | None:
+        return _normalize_optional_text(value)
+
+
+class XauForwardPriceCoverageRequest(XauForwardPriceDataRequestBase):
+    pass
+
+
+class XauForwardOhlcCandle(XauForwardJournalBaseModel):
+    timestamp: datetime
+    open: float = Field(gt=0)
+    high: float = Field(gt=0)
+    low: float = Field(gt=0)
+    close: float = Field(gt=0)
+    volume: float | None = Field(default=None, ge=0)
+
+    @field_validator("timestamp")
+    @classmethod
+    def normalize_timestamp(cls, value: datetime) -> datetime:
+        return _normalize_aware_datetime(value)
+
+    @model_validator(mode="after")
+    def validate_ohlc_shape(self) -> XauForwardOhlcCandle:
+        if self.high < self.low or self.high < self.open or self.high < self.close:
+            raise ValueError("high must be greater than or equal to open, low, and close")
+        if self.low > self.open or self.low > self.close:
+            raise ValueError("low must be less than or equal to open and close")
+        return self
+
+
+class XauForwardPriceSource(XauForwardJournalBaseModel):
+    source_label: XauForwardPriceSourceLabel
+    source_symbol: str | None = None
+    source_path: str
+    format: str
+    row_count: int = Field(ge=0)
+    first_timestamp: datetime | None = None
+    last_timestamp: datetime | None = None
+    warnings: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+    @field_validator("source_symbol", "format", mode="before")
+    @classmethod
+    def normalize_optional_strings(cls, value: str | None) -> str | None:
+        return _normalize_optional_text(value)
+
+    @field_validator("source_path")
+    @classmethod
+    def normalize_source_path(cls, value: str) -> str:
+        cleaned = value.replace("\\", "/").strip()
+        if not cleaned:
+            raise ValueError("source_path is required")
+        if ".." in cleaned.split("/"):
+            raise ValueError("source_path must not contain parent traversal")
+        return cleaned
+
+    @field_validator("first_timestamp", "last_timestamp")
+    @classmethod
+    def normalize_optional_datetimes(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        return _normalize_aware_datetime(value)
+
+    @field_validator("warnings", "limitations")
+    @classmethod
+    def normalize_text_lists(cls, values: list[str]) -> list[str]:
+        return _normalize_text_list(values)
+
+
+class XauForwardOutcomeWindowRange(XauForwardJournalBaseModel):
+    window: XauForwardOutcomeWindow
+    required_start: datetime
+    required_end: datetime
+    boundary_basis: str
+    limitations: list[str] = Field(default_factory=list)
+
+    @field_validator("required_start", "required_end")
+    @classmethod
+    def normalize_datetimes(cls, value: datetime) -> datetime:
+        return _normalize_aware_datetime(value)
+
+    @field_validator("boundary_basis")
+    @classmethod
+    def normalize_boundary_basis(cls, value: str) -> str:
+        return _normalize_required_text(value)
+
+    @field_validator("limitations")
+    @classmethod
+    def normalize_limitations(cls, values: list[str]) -> list[str]:
+        return _normalize_text_list(values)
+
+    @model_validator(mode="after")
+    def validate_range(self) -> XauForwardOutcomeWindowRange:
+        if self.required_end <= self.required_start:
+            raise ValueError("required_end must be after required_start")
+        return self
+
+
+class XauForwardPriceCoverageWindow(XauForwardJournalBaseModel):
+    window: XauForwardOutcomeWindow
+    status: XauForwardPriceCoverageStatus
+    required_start: datetime
+    required_end: datetime
+    observed_start: datetime | None = None
+    observed_end: datetime | None = None
+    candle_count: int = Field(default=0, ge=0)
+    gap_count: int = Field(default=0, ge=0)
+    missing_reason: str | None = None
+    partial_reason: str | None = None
+    source_label: XauForwardPriceSourceLabel
+    source_symbol: str | None = None
+    limitations: list[str] = Field(default_factory=list)
+
+    @field_validator("required_start", "required_end", "observed_start", "observed_end")
+    @classmethod
+    def normalize_optional_datetimes(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        return _normalize_aware_datetime(value)
+
+    @field_validator("missing_reason", "partial_reason", "source_symbol", mode="before")
+    @classmethod
+    def normalize_optional_strings(cls, value: str | None) -> str | None:
+        return _normalize_optional_text(value)
+
+    @field_validator("limitations")
+    @classmethod
+    def normalize_limitations(cls, values: list[str]) -> list[str]:
+        return _normalize_text_list(values)
+
+
+class XauForwardPriceOutcomeMetrics(XauForwardJournalBaseModel):
+    window: XauForwardOutcomeWindow
+    status: XauForwardOutcomeStatus
+    label: XauForwardOutcomeLabel
+    observation_start: datetime | None = None
+    observation_end: datetime | None = None
+    open: float | None = Field(default=None, gt=0)
+    high: float | None = Field(default=None, gt=0)
+    low: float | None = Field(default=None, gt=0)
+    close: float | None = Field(default=None, gt=0)
+    range: float | None = Field(default=None, ge=0)
+    snapshot_price: float | None = Field(default=None, gt=0)
+    direction: XauForwardPriceDirection = XauForwardPriceDirection.UNAVAILABLE
+    source_label: XauForwardPriceSourceLabel
+    source_symbol: str | None = None
+    notes: list[XauForwardJournalNote] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+    @field_validator("observation_start", "observation_end")
+    @classmethod
+    def normalize_optional_datetimes(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        return _normalize_aware_datetime(value)
+
+    @field_validator("source_symbol", mode="before")
+    @classmethod
+    def normalize_source_symbol(cls, value: str | None) -> str | None:
+        return _normalize_optional_text(value)
+
+    @field_validator("limitations")
+    @classmethod
+    def normalize_limitations(cls, values: list[str]) -> list[str]:
+        return _normalize_text_list(values)
+
+
+class XauForwardMissingCandleItem(XauForwardJournalBaseModel):
+    window: XauForwardOutcomeWindow
+    required_start: datetime
+    required_end: datetime
+    status: XauForwardPriceCoverageStatus
+    message: str
+    action: str
+
+    @field_validator("required_start", "required_end")
+    @classmethod
+    def normalize_datetimes(cls, value: datetime) -> datetime:
+        return _normalize_aware_datetime(value)
+
+    @field_validator("message", "action")
+    @classmethod
+    def normalize_required_strings(cls, value: str) -> str:
+        return _normalize_required_text(value)
+
+
+class XauForwardPriceCoverageSummary(XauForwardJournalBaseModel):
+    journal_id: str
+    snapshot_time: datetime
+    source: XauForwardPriceSource
+    windows: list[XauForwardPriceCoverageWindow]
+    complete_windows: list[XauForwardOutcomeWindow] = Field(default_factory=list)
+    partial_windows: list[XauForwardOutcomeWindow] = Field(default_factory=list)
+    missing_windows: list[XauForwardOutcomeWindow] = Field(default_factory=list)
+    missing_candle_checklist: list[XauForwardMissingCandleItem] = Field(default_factory=list)
+    proxy_limitations: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+    research_only_warnings: list[str] = Field(
+        default_factory=lambda: ["Price coverage is local-only research metadata."]
+    )
+
+    @field_validator("journal_id")
+    @classmethod
+    def validate_journal_id(cls, value: str) -> str:
+        return validate_xau_forward_journal_safe_id(value, "journal_id")
+
+    @field_validator("snapshot_time")
+    @classmethod
+    def normalize_snapshot_time(cls, value: datetime) -> datetime:
+        return _normalize_aware_datetime(value)
+
+    @field_validator("proxy_limitations", "warnings", "limitations", "research_only_warnings")
+    @classmethod
+    def normalize_text_lists(cls, values: list[str]) -> list[str]:
+        return _normalize_text_list(values)
+
+
+class XauForwardPriceOutcomeUpdateReport(XauForwardJournalBaseModel):
+    update_id: str
+    journal_id: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    source: XauForwardPriceSource
+    coverage_summary: XauForwardPriceCoverageSummary
+    updated_outcomes: list[XauForwardOutcomeObservation]
+    missing_candle_checklist: list[XauForwardMissingCandleItem] = Field(default_factory=list)
+    proxy_limitations: list[str] = Field(default_factory=list)
+    artifacts: list[XauForwardJournalArtifact] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+    research_only_warnings: list[str] = Field(
+        default_factory=lambda: [
+            "This research-only annotation does not imply profitability, prediction, "
+            "safety, live readiness, or any execution instruction."
+        ]
+    )
+
+    @field_validator("update_id", "journal_id")
+    @classmethod
+    def validate_ids(cls, value: str) -> str:
+        return validate_xau_forward_journal_safe_id(value, "price_update_id")
+
+    @field_validator("created_at")
+    @classmethod
+    def normalize_created_at(cls, value: datetime) -> datetime:
+        return _normalize_aware_datetime(value)
+
+    @field_validator("proxy_limitations", "warnings", "limitations", "research_only_warnings")
+    @classmethod
+    def normalize_text_lists(cls, values: list[str]) -> list[str]:
+        return _normalize_text_list(values)
+
+
+class XauForwardPriceCoverageResponse(XauForwardJournalBaseModel):
+    journal_id: str
+    coverage: XauForwardPriceCoverageSummary
+    warnings: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+    research_only_warnings: list[str] = Field(
+        default_factory=lambda: [
+            "This research-only annotation does not imply profitability, prediction, "
+            "safety, live readiness, or any execution instruction."
+        ]
+    )
+
+    @field_validator("journal_id")
+    @classmethod
+    def validate_journal_id(cls, value: str) -> str:
+        return validate_xau_forward_journal_safe_id(value, "journal_id")
+
+    @field_validator("warnings", "limitations", "research_only_warnings")
+    @classmethod
+    def normalize_text_lists(cls, values: list[str]) -> list[str]:
+        return _normalize_text_list(values)
+
+
+class XauForwardPriceOutcomeUpdateResponse(XauForwardJournalBaseModel):
+    journal_id: str
+    update_report: XauForwardPriceOutcomeUpdateReport
+    outcomes: list[XauForwardOutcomeObservation]
+    coverage: XauForwardPriceCoverageSummary
+    artifacts: list[XauForwardJournalArtifact] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+    research_only_warnings: list[str] = Field(
+        default_factory=lambda: [
+            "This research-only annotation does not imply profitability, prediction, "
+            "safety, live readiness, or any execution instruction."
+        ]
+    )
+
+    @field_validator("journal_id")
+    @classmethod
+    def validate_journal_id(cls, value: str) -> str:
+        return validate_xau_forward_journal_safe_id(value, "journal_id")
+
+    @field_validator("warnings", "limitations", "research_only_warnings")
+    @classmethod
+    def normalize_text_lists(cls, values: list[str]) -> list[str]:
+        return _normalize_text_list(values)
 
 
 class XauForwardJournalArtifact(XauForwardJournalBaseModel):

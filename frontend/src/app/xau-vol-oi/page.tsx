@@ -40,6 +40,12 @@ const FORWARD_JOURNAL_DASHBOARD_FIELDS = [
   'no_trade_reasons',
   'missing_context',
   'outcomes',
+  'price_data_source',
+  'coverage_status',
+  'missing_windows',
+  'updated_outcome_labels',
+  'proxy_limitations',
+  'pending_inconclusive_status',
   'artifacts',
 ] as const
 
@@ -646,6 +652,50 @@ function ForwardJournalInspection({
       0,
     ) ?? 0
   const pendingOutcomeCount = outcomes.filter((outcome) => outcome.status === 'pending').length
+  const priceCoverage = data?.priceCoverage?.coverage ?? null
+  const priceOutcomes = outcomes.filter(
+    (outcome) => outcome.price_source_label || outcome.coverage_status || outcome.price_update_id,
+  )
+  const priceSourceLabels = uniqueValues([
+    ...(priceCoverage ? [priceCoverage.source.source_label] : []),
+    ...priceOutcomes.map((outcome) => outcome.price_source_label ?? ''),
+  ])
+  const priceSourceSymbols = uniqueValues([
+    ...(priceCoverage ? [priceCoverage.source.source_symbol ?? ''] : []),
+    ...priceOutcomes.map((outcome) => outcome.price_source_symbol ?? ''),
+  ])
+  const priceCoverageStatuses = uniqueValues([
+    ...(priceCoverage ? priceCoverage.windows.map((window) => window.status) : []),
+    ...priceOutcomes.map((outcome) => outcome.coverage_status ?? ''),
+  ])
+  const missingPriceWindows = uniqueValues([
+    ...(priceCoverage?.missing_windows ?? []),
+    ...priceOutcomes
+      .filter((outcome) => outcome.coverage_status === 'missing')
+      .map((outcome) => outcome.window),
+  ])
+  const inconclusivePriceWindows = uniqueValues(
+    priceOutcomes
+      .filter((outcome) => outcome.status === 'inconclusive')
+      .map((outcome) => outcome.window),
+  )
+  const priceUpdateIds = uniqueValues(priceOutcomes.map((outcome) => outcome.price_update_id ?? ''))
+  const proxyLimitationNotes = uniqueValues([
+    ...(priceCoverage?.proxy_limitations ?? []),
+    ...priceOutcomes.flatMap((outcome) =>
+      outcome.limitations.filter((limitation) => {
+        const normalized = limitation.toLowerCase()
+        return (
+          normalized.includes('proxy') ||
+          normalized.includes('not true xauusd spot') ||
+          normalized.includes('local csv') ||
+          normalized.includes('local parquet')
+        )
+      }),
+    ),
+  ])
+  const priceUpdateArtifacts =
+    entry?.artifacts.filter((artifact) => artifact.artifact_type.startsWith('price_')) ?? []
 
   return (
     <ReportSection title="Forward Journal">
@@ -767,6 +817,38 @@ function ForwardJournalInspection({
             </ContextPanel>
             <ContextPanel title="Artifacts">
               <ArtifactPathList artifacts={entry?.artifacts ?? []} />
+            </ContextPanel>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <ContextPanel title="Price Coverage">
+              <dl className="grid grid-cols-1 gap-3 text-sm">
+                <Metric label="Price Source" value={priceSourceLabels.join(', ') || 'pending'} />
+                <Metric label="Source Symbol" value={priceSourceSymbols.join(', ') || 'n/a'} />
+                <Metric
+                  label="Coverage Status"
+                  value={priceCoverageStatuses.join(', ') || 'pending'}
+                />
+                <Metric label="Price Update" value={priceUpdateIds.join(', ') || 'n/a'} />
+              </dl>
+            </ContextPanel>
+            <ContextPanel title="Missing Windows">
+              <NotesList
+                notes={[
+                  ...missingPriceWindows.map((window) => `${window}: missing`),
+                  ...inconclusivePriceWindows.map((window) => `${window}: inconclusive`),
+                ]}
+                emptyText="No missing or inconclusive price windows recorded"
+              />
+            </ContextPanel>
+            <ContextPanel title="Proxy Limitations">
+              <NotesList
+                notes={proxyLimitationNotes}
+                emptyText="No proxy limitation notes recorded"
+              />
+            </ContextPanel>
+            <ContextPanel title="Price Artifacts">
+              <ArtifactPathList artifacts={priceUpdateArtifacts} />
             </ContextPanel>
           </div>
 
@@ -893,25 +975,55 @@ function ForwardJournalOutcomeTable({
             <th className="px-3 py-2">Status</th>
             <th className="px-3 py-2">Label</th>
             <th className="px-3 py-2">Observation</th>
+            <th className="px-3 py-2">Price Data</th>
+            <th className="px-3 py-2">Metrics</th>
+            <th className="px-3 py-2">Coverage</th>
             <th className="px-3 py-2">Notes</th>
           </tr>
         </thead>
         <tbody>
-          {outcomes.map((outcome) => (
-            <tr key={outcome.window} className="border-t border-gray-700 align-top">
-              <td className="px-3 py-2">{outcome.window}</td>
-              <td className="px-3 py-2">{outcome.status}</td>
-              <td className="px-3 py-2">{outcome.label}</td>
-              <td className="px-3 py-2">
-                {outcome.observation_start && outcome.observation_end
-                  ? `${formatDate(outcome.observation_start)} - ${formatDate(outcome.observation_end)}`
-                  : 'pending'}
-              </td>
-              <td className="max-w-md px-3 py-2 text-gray-300">
-                {outcome.notes.map((note) => note.text).join(' ') || 'n/a'}
-              </td>
-            </tr>
-          ))}
+          {outcomes.map((outcome) => {
+            const priceMetrics = [
+              outcome.high !== null ? `H ${formatNumber(outcome.high)}` : '',
+              outcome.low !== null ? `L ${formatNumber(outcome.low)}` : '',
+              outcome.close !== null ? `C ${formatNumber(outcome.close)}` : '',
+              outcome.range !== null ? `R ${formatNumber(outcome.range)}` : '',
+              outcome.direction ? outcome.direction : '',
+            ].filter(Boolean)
+            const sourceText = [
+              outcome.price_source_label ?? '',
+              outcome.price_source_symbol ?? '',
+              outcome.price_update_id ?? '',
+            ].filter(Boolean)
+            const coverageText = [
+              outcome.coverage_status ?? '',
+              outcome.coverage_reason ?? '',
+            ].filter(Boolean)
+            return (
+              <tr key={outcome.window} className="border-t border-gray-700 align-top">
+                <td className="px-3 py-2">{outcome.window}</td>
+                <td className="px-3 py-2">{outcome.status}</td>
+                <td className="px-3 py-2">{outcome.label}</td>
+                <td className="px-3 py-2">
+                  {outcome.observation_start && outcome.observation_end
+                    ? `${formatDate(outcome.observation_start)} - ${formatDate(outcome.observation_end)}`
+                    : 'pending'}
+                </td>
+                <td className="max-w-sm px-3 py-2 text-gray-300">
+                  {sourceText.join(' | ') || 'pending'}
+                </td>
+                <td className="max-w-sm px-3 py-2 text-gray-300">
+                  {priceMetrics.join(' | ') || 'pending'}
+                </td>
+                <td className="max-w-sm px-3 py-2 text-gray-300">
+                  {coverageText.join(' | ') || 'pending'}
+                </td>
+                <td className="max-w-md px-3 py-2 text-gray-300">
+                  {outcome.notes.map((note) => note.text).join(' ') || 'n/a'}
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>
