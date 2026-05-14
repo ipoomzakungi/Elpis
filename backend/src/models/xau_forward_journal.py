@@ -228,6 +228,13 @@ class XauForwardJournalNote(XauForwardJournalBaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     source: str = "manual"
 
+    @model_validator(mode="before")
+    @classmethod
+    def coerce_string_note(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return {"text": value}
+        return value
+
     @field_validator("note_id", mode="before")
     @classmethod
     def validate_optional_note_id(cls, value: str | None) -> str | None:

@@ -21,16 +21,16 @@
 
 - [X] T001 Create backend package marker in `backend/src/xau_forward_journal/__init__.py`
 - [X] T002 Create schema module placeholder in `backend/src/models/xau_forward_journal.py`
-- [ ] T003 [P] Create journal entry builder module placeholder in `backend/src/xau_forward_journal/entry_builder.py`
-- [ ] T004 [P] Create outcome module placeholder in `backend/src/xau_forward_journal/outcome.py`
-- [ ] T005 [P] Create orchestration module placeholder in `backend/src/xau_forward_journal/orchestration.py`
+- [X] T003 [P] Create journal entry builder module placeholder in `backend/src/xau_forward_journal/entry_builder.py`
+- [X] T004 [P] Create outcome module placeholder in `backend/src/xau_forward_journal/outcome.py`
+- [X] T005 [P] Create orchestration module placeholder in `backend/src/xau_forward_journal/orchestration.py`
 - [X] T006 [P] Create report-store module placeholder in `backend/src/xau_forward_journal/report_store.py`
-- [ ] T007 Create local API route placeholder in `backend/src/api/routes/xau_forward_journal.py`
-- [ ] T008 Register the forward journal router with the v0 API prefix in `backend/src/main.py`
-- [ ] T009 [P] Add XAU forward journal frontend type placeholders in `frontend/src/types/index.ts`
-- [ ] T010 [P] Add XAU forward journal API client placeholders in `frontend/src/services/api.ts`
-- [ ] T011 Add placeholder Forward Journal panel section in `frontend/src/app/xau-vol-oi/page.tsx`
-- [ ] T012 Create synthetic forward journal fixture folder marker in `backend/tests/fixtures/xau_forward_journal/.gitkeep`
+- [X] T007 Create local API route placeholder in `backend/src/api/routes/xau_forward_journal.py`
+- [X] T008 Register the forward journal router with the v0 API prefix in `backend/src/main.py`
+- [X] T009 [P] Add XAU forward journal frontend type placeholders in `frontend/src/types/index.ts`
+- [X] T010 [P] Add XAU forward journal API client placeholders in `frontend/src/services/api.ts`
+- [X] T011 Add placeholder Forward Journal panel section in `frontend/src/app/xau-vol-oi/page.tsx`
+- [X] T012 Create synthetic forward journal fixture folder marker in `backend/tests/fixtures/xau_forward_journal/.gitkeep`
 - [X] T013 Add `backend/data/reports/xau_forward_journal/` and `data/reports/xau_forward_journal/` generated artifact coverage in `.gitignore`
 - [X] T014 Add forward journal artifact guard denied paths in `scripts/check_generated_artifacts.ps1`
 
@@ -44,8 +44,8 @@
 
 - [X] T015 [P] Add schema validation tests for journal enums, ids, request validation, and forbidden secret/session fields in `backend/tests/unit/test_xau_forward_journal_models.py`
 - [X] T016 [P] Add report-store path safety tests for journal report roots and artifact paths in `backend/tests/unit/test_xau_forward_journal_report_store.py`
-- [ ] T017 [P] Add API route registration smoke tests in `backend/tests/contract/test_xau_forward_journal_api_contracts.py`
-- [ ] T018 [P] Add shared synthetic source report fixture helpers in `backend/tests/helpers/test_xau_forward_journal_data.py`
+- [X] T017 [P] Add API route registration smoke tests in `backend/tests/contract/test_xau_forward_journal_api_contracts.py`
+- [X] T018 [P] Add shared synthetic source report fixture helpers in `backend/tests/helpers/test_xau_forward_journal_data.py`
 - [X] T019 Implement `XauForwardJournalSourceType`, `XauForwardJournalEntryStatus`, `XauForwardOutcomeWindow`, `XauForwardOutcomeLabel`, `XauForwardOutcomeStatus`, and `XauForwardArtifactType` in `backend/src/models/xau_forward_journal.py`
 - [X] T020 Implement `XauForwardJournalCreateRequest`, `XauForwardOutcomeUpdateRequest`, and `XauForwardSourceReportRef` in `backend/src/models/xau_forward_journal.py`
 - [X] T021 Implement `XauForwardSnapshotContext`, `XauForwardWallSummary`, `XauForwardReactionSummary`, and `XauForwardMissingContextItem` in `backend/src/models/xau_forward_journal.py`
@@ -53,9 +53,9 @@
 - [X] T023 Implement safe id, forbidden field, note text, and research-only acknowledgement validation helpers in `backend/src/models/xau_forward_journal.py`
 - [X] T024 Implement path-safe journal report root and artifact path helpers in `backend/src/xau_forward_journal/report_store.py`
 - [X] T025 Implement journal artifact metadata helper and JSON serialization helpers in `backend/src/xau_forward_journal/report_store.py`
-- [ ] T026 Implement route skeleton responses and structured placeholder errors in `backend/src/api/routes/xau_forward_journal.py`
-- [ ] T027 Verify frontend placeholder types and API client exports compile in `frontend/src/types/index.ts` and `frontend/src/services/api.ts`
-- [ ] T028 Verify generated artifact path coverage for journal paths using `scripts/check_generated_artifacts.ps1`
+- [X] T026 Implement route skeleton responses and structured placeholder errors in `backend/src/api/routes/xau_forward_journal.py`
+- [X] T027 Verify frontend placeholder types and API client exports compile in `frontend/src/types/index.ts` and `frontend/src/services/api.ts`
+- [X] T028 Verify generated artifact path coverage for journal paths using `scripts/check_generated_artifacts.ps1`
 
 **Checkpoint**: Foundation ready. User stories can be implemented after T001-T028.
 

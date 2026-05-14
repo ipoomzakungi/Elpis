@@ -449,6 +449,7 @@ export default function XauVolOiPage() {
         error={fusionError}
         onSelect={setSelectedFusionReportId}
       />
+      <ForwardJournalFoundationPanel />
       <ReactionReportInspection
         reports={reactionReports}
         selectedReportId={selectedReactionReportId}
@@ -510,6 +511,49 @@ export default function XauVolOiPage() {
         </>
       ) : null}
     </div>
+  )
+}
+
+function ForwardJournalFoundationPanel() {
+  return (
+    <ReportSection title="Forward Journal">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <ContextPanel title="Foundation Status">
+          <dl className="grid grid-cols-1 gap-3 text-sm">
+            <Metric label="API Route" value="registered" />
+            <Metric label="Entry Builder" value="pending" />
+            <Metric label="Outcome Labels" value="pending" />
+            <Metric label="Dashboard Detail" value="pending" />
+          </dl>
+        </ContextPanel>
+        <ContextPanel title="Journal Scope">
+          <NotesList
+            notes={[
+              'Forward evidence starts from saved local report ids.',
+              'Outcome windows stay pending until candle observations are attached.',
+              'Generated journal reports stay under ignored local report paths.',
+            ]}
+            emptyText="No journal scope notes"
+          />
+        </ContextPanel>
+        <ContextPanel title="Limitations">
+          <NotesList
+            notes={[
+              'Local-only research annotations.',
+              'No historical QuikStrike strike-level backtest is implied.',
+              'No endpoint replay, browser session storage, or execution behavior.',
+            ]}
+            emptyText="No limitations recorded"
+          />
+        </ContextPanel>
+      </div>
+      <div className="mt-4">
+        <Notice tone="warning">
+          The forward journal foundation is research-only. Entry creation, outcome labeling,
+          and saved-entry dashboard detail are intentionally pending for later slices.
+        </Notice>
+      </div>
+    </ReportSection>
   )
 }
 

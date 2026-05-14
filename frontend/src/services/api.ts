@@ -75,6 +75,11 @@ import {
   XauRiskPlanRowsResponse,
   XauFusionMissingContextResponse,
   XauFusionRowsResponse,
+  XauForwardJournalCreateRequest,
+  XauForwardJournalEntry,
+  XauForwardJournalListResponse,
+  XauForwardOutcomeResponse,
+  XauForwardOutcomeUpdateRequest,
   XauQuikStrikeFusionDashboardData,
   XauQuikStrikeFusionListResponse,
   XauQuikStrikeFusionReport,
@@ -662,5 +667,39 @@ export const api = {
       ),
     ]);
     return { report, rows, missingContext };
+  },
+
+  // XAU forward journal entries
+  createXauForwardJournalEntry: async (
+    request: XauForwardJournalCreateRequest,
+  ): Promise<XauForwardJournalEntry> => {
+    return fetchApi('/xau/forward-journal/entries', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  listXauForwardJournalEntries: async (): Promise<XauForwardJournalListResponse> => {
+    return fetchApi('/xau/forward-journal/entries');
+  },
+
+  getXauForwardJournalEntry: async (journalId: string): Promise<XauForwardJournalEntry> => {
+    return fetchApi(`/xau/forward-journal/entries/${encodeURIComponent(journalId)}`);
+  },
+
+  updateXauForwardJournalOutcomes: async (
+    journalId: string,
+    request: XauForwardOutcomeUpdateRequest,
+  ): Promise<XauForwardOutcomeResponse> => {
+    return fetchApi(`/xau/forward-journal/entries/${encodeURIComponent(journalId)}/outcomes`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  getXauForwardJournalOutcomes: async (
+    journalId: string,
+  ): Promise<XauForwardOutcomeResponse> => {
+    return fetchApi(`/xau/forward-journal/entries/${encodeURIComponent(journalId)}/outcomes`);
   },
 };
