@@ -141,6 +141,23 @@ def test_source_ref_normalizes_warnings_and_rejects_unsafe_artifact_paths():
     assert source.warnings == ["Basis unavailable."]
     assert source.limitations == ["Local-only research artifact."]
 
+    disclaimer = XauForwardSourceReportRef(
+        source_type=XauForwardJournalSourceType.XAU_VOL_OI,
+        report_id="xau_report",
+        warnings=[
+            (
+                "XAU Vol-OI outputs are research annotations only and do not imply "
+                "profitability, predictive power, safety, or live readiness."
+            )
+        ],
+    )
+    assert disclaimer.warnings == [
+        (
+            "XAU Vol-OI outputs are research annotations only and do not imply "
+            "profitability, predictive power, safety, or live readiness."
+        )
+    ]
+
     with pytest.raises(ValidationError, match="parent traversal"):
         XauForwardSourceReportRef(
             source_type=XauForwardJournalSourceType.XAU_REACTION,

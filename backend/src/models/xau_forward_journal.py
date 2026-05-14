@@ -65,7 +65,7 @@ FORBIDDEN_XAU_FORWARD_JOURNAL_FIELDS = {
     "walletaddress",
 }
 
-FORBIDDEN_XAU_FORWARD_JOURNAL_VALUE_PATTERNS = (
+FORBIDDEN_XAU_FORWARD_JOURNAL_SENSITIVE_VALUE_PATTERNS = (
     re.compile(r"https?://", re.IGNORECASE),
     re.compile(r"__VIEWSTATE", re.IGNORECASE),
     re.compile(r"__EVENTVALIDATION", re.IGNORECASE),
@@ -73,6 +73,9 @@ FORBIDDEN_XAU_FORWARD_JOURNAL_VALUE_PATTERNS = (
     re.compile(r"\bCookie\s*:", re.IGNORECASE),
     re.compile(r"\bSet-Cookie\s*:", re.IGNORECASE),
     re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]+", re.IGNORECASE),
+)
+
+FORBIDDEN_XAU_FORWARD_JOURNAL_CLAIM_VALUE_PATTERNS = (
     re.compile(r"\bprofit(?:able|ability)\b", re.IGNORECASE),
     re.compile(r"\bpredict(?:s|ive|ion)?\b", re.IGNORECASE),
     re.compile(r"\bsafe to trade\b", re.IGNORECASE),
@@ -174,13 +177,37 @@ def ensure_no_forbidden_xau_forward_journal_content(value: Any, path: str = "") 
         return
 
     if isinstance(value, str):
-        for pattern in FORBIDDEN_XAU_FORWARD_JOURNAL_VALUE_PATTERNS:
+        for pattern in FORBIDDEN_XAU_FORWARD_JOURNAL_SENSITIVE_VALUE_PATTERNS:
             if pattern.search(value):
                 location = path or "value"
                 raise ValueError(
                     f"forbidden sensitive/session or unsupported claim value for "
                     f"XAU forward journal: {location}"
                 )
+        for pattern in FORBIDDEN_XAU_FORWARD_JOURNAL_CLAIM_VALUE_PATTERNS:
+            if pattern.search(value) and not _is_research_only_disclaimer(value):
+                location = path or "value"
+                raise ValueError(
+                    f"forbidden sensitive/session or unsupported claim value for "
+                    f"XAU forward journal: {location}"
+                )
+
+
+def _is_research_only_disclaimer(value: str) -> bool:
+    lowered = value.lower()
+    has_research_context = "research" in lowered or "annotation" in lowered
+    has_negation = any(
+        phrase in lowered
+        for phrase in (
+            "do not imply",
+            "does not imply",
+            "not imply",
+            "not a ",
+            "not action",
+            "not instruction",
+        )
+    )
+    return has_research_context and has_negation
 
 
 def _normalize_optional_text(value: str | None) -> str | None:
