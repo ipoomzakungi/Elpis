@@ -504,17 +504,13 @@ def build_reaction_summaries(
     limit: int = 10,
 ) -> list[XauForwardReactionSummary]:
     risk_counts: dict[str, int] = {}
-    for plan in loaded.xau_reaction_report.get("risk_plans", []):
-        if not isinstance(plan, dict):
-            continue
+    for plan in _dict_list(loaded.xau_reaction_report.get("risk_plans")):
         reaction_id = _text_or_none(plan.get("reaction_id"))
         if reaction_id:
             risk_counts[reaction_id] = risk_counts.get(reaction_id, 0) + 1
 
     summaries: list[XauForwardReactionSummary] = []
-    for reaction in loaded.xau_reaction_report.get("reactions", [])[:limit]:
-        if not isinstance(reaction, dict):
-            continue
+    for reaction in _dict_list(loaded.xau_reaction_report.get("reactions"))[:limit]:
         reaction_id = _text_or_none(reaction.get("reaction_id"))
         if not reaction_id:
             continue
@@ -800,6 +796,12 @@ def _text_list(value: Any) -> list[str]:
     else:
         values = [str(value)]
     return _dedupe([text for text in (_text_or_none(item) for item in values) if text])
+
+
+def _dict_list(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
 
 
 def _datetime_or_none(value: Any) -> datetime | None:

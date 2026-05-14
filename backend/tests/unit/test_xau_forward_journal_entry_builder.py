@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from src.models.xau_forward_journal import XauForwardJournalCreateRequest
@@ -158,6 +160,26 @@ def test_reaction_summaries_preserve_no_trade_reasons_and_risk_counts(tmp_path):
     assert reactions[0].bounded_risk_annotation_count == 1
     assert "Basis mapping is unavailable." in reactions[0].no_trade_reasons
     assert reactions[0].limitations == ["XAU reaction local-only fixture."]
+
+
+def test_reaction_summaries_ignore_non_list_reaction_payloads(tmp_path):
+    reports_dir = tmp_path / "data" / "reports"
+    write_synthetic_source_reports(reports_dir)
+    reaction_report_path = reports_dir / "xau_reaction" / XAU_REACTION_ID / "metadata.json"
+    reaction_report = json.loads(reaction_report_path.read_text(encoding="utf-8"))
+    reaction_report["reactions"] = None
+    reaction_report["risk_plans"] = {"reaction_id": "reaction_1"}
+    reaction_report_path.write_text(
+        json.dumps(reaction_report, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    loaded = load_source_reports(_request(), reports_dir=reports_dir)
+
+    reactions = build_reaction_summaries(loaded)
+    entry = build_journal_entry(_request(), reports_dir=reports_dir)
+
+    assert reactions == []
+    assert entry.reaction_summaries == []
 
 
 def test_build_journal_entry_includes_snapshot_key_and_pending_outcomes(tmp_path):
