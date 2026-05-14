@@ -205,9 +205,14 @@ def _index_values(
 
 
 def _key_tuple(match_key: XauFusionMatchKey) -> tuple[float, str, str, str]:
+    # Matrix reports often carry only the QuikStrike expiration code, while
+    # Vol2Vol rows can carry both a calendar date and the same code. Prefer the
+    # code for matching so those compatible rows fuse instead of splitting into
+    # source-only groups.
+    expiration_key = match_key.expiration_code or match_key.expiration_key
     return (
         round(match_key.strike, 8),
-        (match_key.expiration_key or "").lower(),
+        (expiration_key or "").lower(),
         match_key.option_type.lower(),
         match_key.value_type.lower(),
     )
