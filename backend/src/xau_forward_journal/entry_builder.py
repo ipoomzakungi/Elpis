@@ -254,6 +254,13 @@ def build_journal_entry(
     reports_dir: Path | None = None,
 ) -> XauForwardJournalEntry:
     loaded = load_source_reports(request, reports_dir=reports_dir)
+    return build_journal_entry_from_loaded(loaded)
+
+
+def build_journal_entry_from_loaded(
+    loaded: XauForwardLoadedSources,
+) -> XauForwardJournalEntry:
+    request = loaded.request
     validate_source_compatibility(loaded)
 
     refs = loaded.source_refs

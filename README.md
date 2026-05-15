@@ -28,6 +28,14 @@ product/view navigation after manual CME login. It does not save or print
 cookies, tokens, headers, HAR, screenshots, viewstate, private URLs, or
 credentials.
 
+CME/QuikStrike content may lag the user's local midnight and update closer to
+local noon. The daily runner fingerprints sanitized Vol2Vol, Matrix, and Fusion
+content before creating a Forward Journal entry. If the latest previous entry
+for the same product, expiration, and capture window has identical content, the
+runner returns `duplicate_content` and references the previous `journal_id`
+instead of creating a duplicate journal entry. Rerun after CME updates, or pass
+`-ForceCreate` only when a manual research override is intentional.
+
 ## Local Runner Config
 
 On first run the wrapper creates this ignored workspace config:

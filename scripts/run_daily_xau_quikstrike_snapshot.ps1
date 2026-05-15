@@ -12,7 +12,8 @@ param(
     [double]$SessionOpenPrice = 0,
     [double]$RealizedVolatility = 0,
     [switch]$SkipBrowserLaunch,
-    [switch]$ManualPrompts
+    [switch]$ManualPrompts,
+    [switch]$ForceCreate
 )
 
 $ErrorActionPreference = "Stop"
@@ -194,6 +195,9 @@ try {
     )
     if (-not $ManualPrompts) {
         $pythonArgs += @("--no-prompt")
+    }
+    if ($ForceCreate) {
+        $pythonArgs += @("--force-create")
     }
     if ($CaptureSession) {
         $pythonArgs += @("--capture-session", $CaptureSession)

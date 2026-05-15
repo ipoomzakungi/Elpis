@@ -35,7 +35,7 @@ from src.quikstrike_matrix.playwright_local import (
 from src.quikstrike_matrix.playwright_local import (
     extract_from_cdp as extract_matrix_from_cdp,
 )
-from src.xau_forward_journal.orchestration import create_xau_forward_journal_entry
+from src.xau_forward_journal.orchestration import create_xau_forward_journal_entry_result
 from src.xau_quikstrike_fusion.orchestration import create_xau_quikstrike_fusion_report
 
 
@@ -51,6 +51,7 @@ def main() -> int:
     parser.add_argument("--gc-futures-reference", type=float, default=None)
     parser.add_argument("--session-open-price", type=float, default=None)
     parser.add_argument("--realized-volatility", type=float, default=None)
+    parser.add_argument("--force-create", action="store_true")
     parser.add_argument("--no-prompt", action="store_true")
     args = parser.parse_args()
 
@@ -111,9 +112,12 @@ def main() -> int:
     xau_reaction_report_id = downstream.xau_reaction_report_id if downstream else None
 
     journal = None
+    journal_create_status = None
+    previous_journal_id = None
+    content_fingerprint = None
     journal_blocker = None
     if xau_vol_oi_report_id and xau_reaction_report_id:
-        journal = create_xau_forward_journal_entry(
+        journal_result = create_xau_forward_journal_entry_result(
             XauForwardJournalCreateRequest(
                 snapshot_time=datetime.now(UTC),
                 capture_window="daily_snapshot",
@@ -135,16 +139,30 @@ def main() -> int:
                         source="xau_daily_quikstrike_snapshot",
                     )
                 ],
+                force_create=args.force_create,
                 research_only_acknowledged=True,
             )
         )
+        journal = journal_result.entry
+        journal_create_status = journal_result.status
+        previous_journal_id = journal_result.previous_journal_id
+        content_fingerprint = journal_result.content_fingerprint
     else:
         journal_blocker = (
             "Forward journal entry was not created because linked XAU Vol-OI and "
             "XAU reaction reports were not both created."
         )
 
-    summary = _summary(vol2vol.report, matrix.report, fusion, journal, journal_blocker)
+    summary = _summary(
+        vol2vol.report,
+        matrix.report,
+        fusion,
+        journal,
+        journal_blocker,
+        journal_create_status=journal_create_status,
+        previous_journal_id=previous_journal_id,
+        content_fingerprint=content_fingerprint,
+    )
     print(json.dumps(summary, indent=2))
     return 0
 
@@ -163,6 +181,10 @@ def _summary(
     fusion: object,
     journal: object | None,
     blocker: str | None,
+    *,
+    journal_create_status: str | None = None,
+    previous_journal_id: str | None = None,
+    content_fingerprint: str | None = None,
 ) -> dict:
     downstream = fusion.downstream_result
     return {
@@ -180,6 +202,9 @@ def _summary(
         "reaction_count": downstream.reaction_row_count if downstream else None,
         "no_trade_count": downstream.no_trade_count if downstream else None,
         "journal_id": journal.journal_id if journal else None,
+        "journal_create_status": journal_create_status,
+        "previous_journal_id": previous_journal_id,
+        "content_fingerprint": content_fingerprint,
         "snapshot_key": journal.snapshot_key if journal else None,
         "pending_outcome_windows": (
             [outcome.window.value for outcome in journal.outcomes] if journal else []
@@ -191,6 +216,10 @@ def _summary(
             "Local-only research workflow.",
             "Manual QuikStrike authentication is required; product and view navigation "
             "is automated after login.",
+            (
+                "CME/QuikStrike content can lag local midnight; identical sanitized "
+                "content returns duplicate_content unless --force-create is used."
+            ),
             (
                 "No credentials, cookies, headers, HAR, screenshots, viewstate, "
                 "or private URLs are saved."
