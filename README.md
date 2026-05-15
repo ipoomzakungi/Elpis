@@ -31,8 +31,10 @@ credentials.
 The browser profile is reused, but CME/SSO can still expire or reject the saved
 browser session. If that happens, manual login is required again; the project
 must not persist or replay session cookies/tokens to bypass login. Normal runs
-close the dedicated CDP browser when extraction finishes. Pass `-KeepBrowserOpen`
-only for debugging.
+close the dedicated Elpis CDP browser when extraction finishes. If the config
+points to the normal Edge profile, the wrapper leaves Edge open to avoid closing
+your working browser tabs. Close normal Edge before launching it through the
+wrapper, or start it yourself with local CDP and rerun with `-SkipBrowserLaunch`.
 
 CME/QuikStrike content may lag the user's local midnight and update closer to
 local noon. The daily runner fingerprints sanitized Vol2Vol, Matrix, and Fusion

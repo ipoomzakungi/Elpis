@@ -3,6 +3,7 @@ param(
     [int]$CdpPort = 9222,
     [string]$Browser = "msedge",
     [string]$ProfilePath = "$env:LOCALAPPDATA\Elpis\quikstrike-browser-profile",
+    [string]$ProfileDirectory = "",
     [string]$StartUrl = "https://cmegroup-sso.quikstrike.net//User/QuikStrikeView.aspx?mode=",
     [int]$WaitSeconds = 900,
     [int]$PollSeconds = 5,
@@ -14,7 +15,8 @@ param(
     [switch]$SkipBrowserLaunch,
     [switch]$ManualPrompts,
     [switch]$ForceCreate,
-    [switch]$KeepBrowserOpen
+    [switch]$KeepBrowserOpen,
+    [switch]$CloseBrowser
 )
 
 $ErrorActionPreference = "Stop"
@@ -25,6 +27,7 @@ function New-DefaultRunnerConfig {
         [int]$DefaultCdpPort,
         [string]$DefaultBrowser,
         [string]$DefaultProfilePath,
+        [string]$DefaultProfileDirectory,
         [int]$DefaultWaitSeconds,
         [int]$DefaultPollSeconds
     )
@@ -41,6 +44,7 @@ function New-DefaultRunnerConfig {
         "QUIKSTRIKE_CDP_PORT=$DefaultCdpPort",
         "QUIKSTRIKE_BROWSER=$DefaultBrowser",
         "QUIKSTRIKE_PROFILE_PATH=$DefaultProfilePath",
+        "QUIKSTRIKE_PROFILE_DIRECTORY=$DefaultProfileDirectory",
         "QUIKSTRIKE_WAIT_SECONDS=$DefaultWaitSeconds",
         "QUIKSTRIKE_POLL_SECONDS=$DefaultPollSeconds"
     )
@@ -145,6 +149,33 @@ function Get-QuikStrikeBrowserProcesses {
     }
 }
 
+function Get-BrowserProfileProcesses {
+    param([string]$ProfilePath)
+    $profileFullPath = [System.IO.Path]::GetFullPath($ProfilePath).ToLowerInvariant()
+    Get-CimInstance Win32_Process | Where-Object {
+        if (-not $_.CommandLine) {
+            return $false
+        }
+        $commandLine = $_.CommandLine.ToLowerInvariant()
+        return $commandLine.Contains($profileFullPath)
+    }
+}
+
+function Test-IsSharedEdgeProfile {
+    param([string]$ProfilePath)
+    $profileFullPath = [System.IO.Path]::GetFullPath($ProfilePath).TrimEnd(
+        [System.IO.Path]::DirectorySeparatorChar,
+        [System.IO.Path]::AltDirectorySeparatorChar
+    )
+    $defaultEdgeProfile = [System.IO.Path]::GetFullPath(
+        (Join-Path $env:LOCALAPPDATA "Microsoft\Edge\User Data")
+    ).TrimEnd(
+        [System.IO.Path]::DirectorySeparatorChar,
+        [System.IO.Path]::AltDirectorySeparatorChar
+    )
+    return $profileFullPath.Equals($defaultEdgeProfile, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
 function Stop-QuikStrikeBrowser {
     param(
         [int]$Port,
@@ -192,6 +223,7 @@ New-DefaultRunnerConfig `
     -DefaultCdpPort $CdpPort `
     -DefaultBrowser $Browser `
     -DefaultProfilePath $ProfilePath `
+    -DefaultProfileDirectory $ProfileDirectory `
     -DefaultWaitSeconds $WaitSeconds `
     -DefaultPollSeconds $PollSeconds
 
@@ -205,6 +237,9 @@ if (-not $PSBoundParameters.ContainsKey("Browser") -and $runnerConfig.ContainsKe
 if (-not $PSBoundParameters.ContainsKey("ProfilePath") -and $runnerConfig.ContainsKey("QUIKSTRIKE_PROFILE_PATH")) {
     $ProfilePath = $runnerConfig["QUIKSTRIKE_PROFILE_PATH"]
 }
+if (-not $PSBoundParameters.ContainsKey("ProfileDirectory") -and $runnerConfig.ContainsKey("QUIKSTRIKE_PROFILE_DIRECTORY")) {
+    $ProfileDirectory = $runnerConfig["QUIKSTRIKE_PROFILE_DIRECTORY"]
+}
 if (-not $PSBoundParameters.ContainsKey("WaitSeconds") -and $runnerConfig.ContainsKey("QUIKSTRIKE_WAIT_SECONDS")) {
     $WaitSeconds = [int]$runnerConfig["QUIKSTRIKE_WAIT_SECONDS"]
 }
@@ -213,21 +248,46 @@ if (-not $PSBoundParameters.ContainsKey("PollSeconds") -and $runnerConfig.Contai
 }
 
 Assert-ProfilePathOutsideRepo -Path $ProfilePath -RepoRoot $repoRoot
+$isSharedEdgeProfile = Test-IsSharedEdgeProfile -ProfilePath $ProfilePath
 
 Write-Host "Using QuikStrike runner config:"
 Write-Host "  $ConfigPath"
 Write-Host "Using local browser profile:"
 Write-Host "  $ProfilePath"
+if ($ProfileDirectory) {
+    Write-Host "Using Edge profile directory:"
+    Write-Host "  $ProfileDirectory"
+}
 
 if (-not $SkipBrowserLaunch -and -not (Test-CdpPort -Port $CdpPort)) {
+    if ($isSharedEdgeProfile -and @(Get-BrowserProfileProcesses -ProfilePath $ProfilePath).Count) {
+        throw (
+            "The normal Edge profile is already open without local CDP on port $CdpPort. " +
+            "Close normal Edge first, or start Edge yourself with --remote-debugging-port=$CdpPort " +
+            "and rerun with -SkipBrowserLaunch."
+        )
+    }
     New-Item -ItemType Directory -Force -Path $ProfilePath | Out-Null
     $browserPath = Resolve-BrowserPath -BrowserName $Browser
     $browserArgs = @(
         "--remote-debugging-port=$CdpPort",
-        "--user-data-dir=$ProfilePath",
+        "`"--user-data-dir=$ProfilePath`"",
         "--disable-sync",
+        "--no-first-run",
+        "--no-default-browser-check",
         $StartUrl
     )
+    if ($ProfileDirectory) {
+        $browserArgs = @(
+            "--remote-debugging-port=$CdpPort",
+            "`"--user-data-dir=$ProfilePath`"",
+            "--profile-directory=$ProfileDirectory",
+            "--disable-sync",
+            "--no-first-run",
+            "--no-default-browser-check",
+            $StartUrl
+        )
+    }
     Start-Process -FilePath $browserPath -ArgumentList $browserArgs | Out-Null
     Write-Host "Opened $Browser with local CDP on port $CdpPort and non-sync profile:"
     Write-Host "  $ProfilePath"
@@ -269,7 +329,13 @@ try {
 }
 finally {
     Pop-Location
-    if (-not $SkipBrowserLaunch -and -not $KeepBrowserOpen) {
+    if ($CloseBrowser -and -not $SkipBrowserLaunch) {
+        Stop-QuikStrikeBrowser -Port $CdpPort -ProfilePath $ProfilePath
+    }
+    elseif ($isSharedEdgeProfile -and -not $SkipBrowserLaunch) {
+        Write-Host "Leaving normal Edge profile open to avoid closing your working browser."
+    }
+    elseif (-not $SkipBrowserLaunch -and -not $KeepBrowserOpen) {
         Stop-QuikStrikeBrowser -Port $CdpPort -ProfilePath $ProfilePath
     }
     elseif ($SkipBrowserLaunch) {
