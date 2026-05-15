@@ -1,5 +1,5 @@
 param(
-    [string]$ConfigPath = "$env:LOCALAPPDATA\Elpis\quikstrike-runner.env",
+    [string]$ConfigPath = "",
     [int]$CdpPort = 9222,
     [string]$Browser = "msedge",
     [string]$ProfilePath = "$env:LOCALAPPDATA\Elpis\quikstrike-browser-profile",
@@ -101,8 +101,39 @@ function Resolve-BrowserPath {
     throw "Could not find $BrowserName. Pass -Browser chrome or install Edge/Chrome."
 }
 
+function Resolve-LocalPath {
+    param(
+        [string]$Path,
+        [string]$BasePath
+    )
+    if ([System.IO.Path]::IsPathRooted($Path)) {
+        return [System.IO.Path]::GetFullPath($Path)
+    }
+    return [System.IO.Path]::GetFullPath((Join-Path $BasePath $Path))
+}
+
+function Assert-ProfilePathOutsideRepo {
+    param(
+        [string]$Path,
+        [string]$RepoRoot
+    )
+    $profileFullPath = Resolve-LocalPath -Path $Path -BasePath $RepoRoot
+    $repoFullPath = [System.IO.Path]::GetFullPath($RepoRoot)
+    if (-not $repoFullPath.EndsWith([System.IO.Path]::DirectorySeparatorChar)) {
+        $repoFullPath = "$repoFullPath$([System.IO.Path]::DirectorySeparatorChar)"
+    }
+    if ($profileFullPath.StartsWith($repoFullPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "ProfilePath must stay outside the repo because browser profiles contain cookies/session cache. Keep only the runner config in the workspace."
+    }
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $backendDir = Join-Path $repoRoot "backend"
+
+if (-not $ConfigPath) {
+    $ConfigPath = Join-Path $repoRoot ".quikstrike-runner.local.env"
+}
+$ConfigPath = Resolve-LocalPath -Path $ConfigPath -BasePath $repoRoot
 
 New-DefaultRunnerConfig `
     -Path $ConfigPath `
@@ -128,6 +159,8 @@ if (-not $PSBoundParameters.ContainsKey("WaitSeconds") -and $runnerConfig.Contai
 if (-not $PSBoundParameters.ContainsKey("PollSeconds") -and $runnerConfig.ContainsKey("QUIKSTRIKE_POLL_SECONDS")) {
     $PollSeconds = [int]$runnerConfig["QUIKSTRIKE_POLL_SECONDS"]
 }
+
+Assert-ProfilePathOutsideRepo -Path $ProfilePath -RepoRoot $repoRoot
 
 Write-Host "Using QuikStrike runner config:"
 Write-Host "  $ConfigPath"
