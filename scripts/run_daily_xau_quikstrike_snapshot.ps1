@@ -13,7 +13,8 @@ param(
     [double]$RealizedVolatility = 0,
     [switch]$SkipBrowserLaunch,
     [switch]$ManualPrompts,
-    [switch]$ForceCreate
+    [switch]$ForceCreate,
+    [switch]$KeepBrowserOpen
 )
 
 $ErrorActionPreference = "Stop"
@@ -128,6 +129,56 @@ function Assert-ProfilePathOutsideRepo {
     }
 }
 
+function Get-QuikStrikeBrowserProcesses {
+    param(
+        [int]$Port,
+        [string]$ProfilePath
+    )
+    $profileFullPath = [System.IO.Path]::GetFullPath($ProfilePath).ToLowerInvariant()
+    $debugArg = "--remote-debugging-port=$Port".ToLowerInvariant()
+    Get-CimInstance Win32_Process | Where-Object {
+        if (-not $_.CommandLine) {
+            return $false
+        }
+        $commandLine = $_.CommandLine.ToLowerInvariant()
+        return $commandLine.Contains($debugArg) -and $commandLine.Contains($profileFullPath)
+    }
+}
+
+function Stop-QuikStrikeBrowser {
+    param(
+        [int]$Port,
+        [string]$ProfilePath
+    )
+    $processes = @(Get-QuikStrikeBrowserProcesses -Port $Port -ProfilePath $ProfilePath)
+    if (-not $processes.Count) {
+        Write-Host "No matching QuikStrike CDP browser process remained open."
+        return
+    }
+    foreach ($processInfo in $processes) {
+        try {
+            $process = Get-Process -Id $processInfo.ProcessId -ErrorAction Stop
+            if ($process.MainWindowHandle -ne 0) {
+                [void]$process.CloseMainWindow()
+            }
+        }
+        catch {
+            continue
+        }
+    }
+    Start-Sleep -Seconds 2
+    foreach ($processInfo in @(Get-QuikStrikeBrowserProcesses -Port $Port -ProfilePath $ProfilePath)) {
+        try {
+            Stop-Process -Id $processInfo.ProcessId -Force -ErrorAction Stop
+        }
+        catch {
+            continue
+        }
+    }
+    Write-Host "Closed QuikStrike CDP browser for profile:"
+    Write-Host "  $ProfilePath"
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $backendDir = Join-Path $repoRoot "backend"
 
@@ -177,7 +228,7 @@ if (-not $SkipBrowserLaunch -and -not (Test-CdpPort -Port $CdpPort)) {
         "--disable-sync",
         $StartUrl
     )
-    Start-Process -FilePath $browserPath -ArgumentList $browserArgs
+    Start-Process -FilePath $browserPath -ArgumentList $browserArgs | Out-Null
     Write-Host "Opened $Browser with local CDP on port $CdpPort and non-sync profile:"
     Write-Host "  $ProfilePath"
 }
@@ -218,4 +269,13 @@ try {
 }
 finally {
     Pop-Location
+    if (-not $SkipBrowserLaunch -and -not $KeepBrowserOpen) {
+        Stop-QuikStrikeBrowser -Port $CdpPort -ProfilePath $ProfilePath
+    }
+    elseif ($SkipBrowserLaunch) {
+        Write-Host "Leaving browser open because -SkipBrowserLaunch was used."
+    }
+    elseif ($KeepBrowserOpen) {
+        Write-Host "Leaving browser open because -KeepBrowserOpen was used."
+    }
 }

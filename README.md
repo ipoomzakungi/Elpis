@@ -28,6 +28,12 @@ product/view navigation after manual CME login. It does not save or print
 cookies, tokens, headers, HAR, screenshots, viewstate, private URLs, or
 credentials.
 
+The browser profile is reused, but CME/SSO can still expire or reject the saved
+browser session. If that happens, manual login is required again; the project
+must not persist or replay session cookies/tokens to bypass login. Normal runs
+close the dedicated CDP browser when extraction finishes. Pass `-KeepBrowserOpen`
+only for debugging.
+
 CME/QuikStrike content may lag the user's local midnight and update closer to
 local noon. The daily runner fingerprints sanitized Vol2Vol, Matrix, and Fusion
 content before creating a Forward Journal entry. If the latest previous entry
