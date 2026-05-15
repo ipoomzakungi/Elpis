@@ -1,4 +1,5 @@
 param(
+    [string]$ConfigPath = "$env:LOCALAPPDATA\Elpis\quikstrike-runner.env",
     [int]$CdpPort = 9222,
     [string]$Browser = "msedge",
     [string]$ProfilePath = "$env:LOCALAPPDATA\Elpis\quikstrike-browser-profile",
@@ -15,6 +16,60 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+function New-DefaultRunnerConfig {
+    param(
+        [string]$Path,
+        [int]$DefaultCdpPort,
+        [string]$DefaultBrowser,
+        [string]$DefaultProfilePath,
+        [int]$DefaultWaitSeconds,
+        [int]$DefaultPollSeconds
+    )
+    if (Test-Path -LiteralPath $Path) {
+        return
+    }
+    $parent = Split-Path -Parent $Path
+    if ($parent) {
+        New-Item -ItemType Directory -Force -Path $parent | Out-Null
+    }
+    $lines = @(
+        "# Local non-secret QuikStrike daily runner settings.",
+        "# Do not put credentials, cookies, headers, tokens, sessions, HAR, or viewstate here.",
+        "QUIKSTRIKE_CDP_PORT=$DefaultCdpPort",
+        "QUIKSTRIKE_BROWSER=$DefaultBrowser",
+        "QUIKSTRIKE_PROFILE_PATH=$DefaultProfilePath",
+        "QUIKSTRIKE_WAIT_SECONDS=$DefaultWaitSeconds",
+        "QUIKSTRIKE_POLL_SECONDS=$DefaultPollSeconds"
+    )
+    Set-Content -LiteralPath $Path -Value $lines -Encoding UTF8
+}
+
+function Read-RunnerConfig {
+    param([string]$Path)
+    $config = @{}
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $config
+    }
+    $forbiddenKeyPattern = "AUTH|COOKIE|CREDENTIAL|HEADER|HAR|PASSWORD|SECRET|SESSION|TOKEN|USERNAME|VIEWSTATE"
+    foreach ($line in Get-Content -LiteralPath $Path) {
+        $trimmed = $line.Trim()
+        if (-not $trimmed -or $trimmed.StartsWith("#")) {
+            continue
+        }
+        $parts = $trimmed -split "=", 2
+        if ($parts.Count -ne 2) {
+            continue
+        }
+        $key = $parts[0].Trim()
+        $value = $parts[1].Trim().Trim('"').Trim("'")
+        if ($key -match $forbiddenKeyPattern) {
+            throw "Runner config contains forbidden credential/session key: $key"
+        }
+        $config[$key] = $value
+    }
+    return $config
+}
 
 function Test-CdpPort {
     param([int]$Port)
@@ -49,6 +104,36 @@ function Resolve-BrowserPath {
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $backendDir = Join-Path $repoRoot "backend"
 
+New-DefaultRunnerConfig `
+    -Path $ConfigPath `
+    -DefaultCdpPort $CdpPort `
+    -DefaultBrowser $Browser `
+    -DefaultProfilePath $ProfilePath `
+    -DefaultWaitSeconds $WaitSeconds `
+    -DefaultPollSeconds $PollSeconds
+
+$runnerConfig = Read-RunnerConfig -Path $ConfigPath
+if (-not $PSBoundParameters.ContainsKey("CdpPort") -and $runnerConfig.ContainsKey("QUIKSTRIKE_CDP_PORT")) {
+    $CdpPort = [int]$runnerConfig["QUIKSTRIKE_CDP_PORT"]
+}
+if (-not $PSBoundParameters.ContainsKey("Browser") -and $runnerConfig.ContainsKey("QUIKSTRIKE_BROWSER")) {
+    $Browser = $runnerConfig["QUIKSTRIKE_BROWSER"]
+}
+if (-not $PSBoundParameters.ContainsKey("ProfilePath") -and $runnerConfig.ContainsKey("QUIKSTRIKE_PROFILE_PATH")) {
+    $ProfilePath = $runnerConfig["QUIKSTRIKE_PROFILE_PATH"]
+}
+if (-not $PSBoundParameters.ContainsKey("WaitSeconds") -and $runnerConfig.ContainsKey("QUIKSTRIKE_WAIT_SECONDS")) {
+    $WaitSeconds = [int]$runnerConfig["QUIKSTRIKE_WAIT_SECONDS"]
+}
+if (-not $PSBoundParameters.ContainsKey("PollSeconds") -and $runnerConfig.ContainsKey("QUIKSTRIKE_POLL_SECONDS")) {
+    $PollSeconds = [int]$runnerConfig["QUIKSTRIKE_POLL_SECONDS"]
+}
+
+Write-Host "Using QuikStrike runner config:"
+Write-Host "  $ConfigPath"
+Write-Host "Using local browser profile:"
+Write-Host "  $ProfilePath"
+
 if (-not $SkipBrowserLaunch -and -not (Test-CdpPort -Port $CdpPort)) {
     New-Item -ItemType Directory -Force -Path $ProfilePath | Out-Null
     $browserPath = Resolve-BrowserPath -BrowserName $Browser
@@ -61,6 +146,9 @@ if (-not $SkipBrowserLaunch -and -not (Test-CdpPort -Port $CdpPort)) {
     Start-Process -FilePath $browserPath -ArgumentList $browserArgs
     Write-Host "Opened $Browser with local CDP on port $CdpPort and non-sync profile:"
     Write-Host "  $ProfilePath"
+}
+elseif (Test-CdpPort -Port $CdpPort) {
+    Write-Host "Reusing existing local CDP browser on port $CdpPort."
 }
 
 Push-Location $backendDir
