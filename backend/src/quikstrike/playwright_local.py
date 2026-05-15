@@ -152,12 +152,18 @@ def extract_from_cdp(
     cdp_url: str = DEFAULT_CDP_URL,
     views: Sequence[QuikStrikeViewType | str] | None = None,
     drive_views: bool = False,
+    wait_seconds: int = 600,
+    poll_seconds: int = 5,
+    auto_prepare: bool = False,
+    target_url: str = DEFAULT_TARGET_URL,
+    debug_page_state: bool = False,
     store: QuikStrikeReportStore | None = None,
 ) -> QuikStrikeBrowserExtraction:
     """Attach to a user-controlled browser and persist a sanitized extraction report.
 
-    The user must start Chrome/Edge with a local debugging port, log in manually,
-    and navigate manually to Gold QUIKOPTIONS VOL2VOL before this function runs.
+    The user must start Chrome/Edge with a local debugging port and log in manually.
+    When auto_prepare is true, the adapter uses visible QuikStrike controls to move
+    from the authenticated QuikStrike page to Gold QUIKOPTIONS VOL2VOL.
     """
 
     try:
@@ -177,7 +183,22 @@ def extract_from_cdp(
                 "Chrome or Edge manually with --remote-debugging-port=9222, log in "
                 "manually, and navigate to Gold QUIKOPTIONS VOL2VOL."
             ) from exc
-        page = _find_gold_vol2vol_page(browser)
+        if auto_prepare:
+            page = _wait_for_gold_vol2vol_page(
+                browser,
+                wait_seconds=wait_seconds,
+                poll_seconds=poll_seconds,
+                target_url=target_url,
+                auto_prepare=True,
+                debug_page_state=debug_page_state,
+            )
+            if page is None:
+                raise QuikStrikeBrowserPageNotReadyError(
+                    "Timed out waiting for authenticated QuikStrike Gold Vol2Vol page. "
+                    "Log in manually in the CDP browser and keep it open."
+                )
+        else:
+            page = _find_gold_vol2vol_page(browser)
         request = build_request_from_page(page, normalized_views, drive_views=drive_views)
 
     extraction = build_extraction_from_request(request)
@@ -492,6 +513,10 @@ def _prepare_gold_vol2vol_from_mode(
                 current_url = page.url
             except Exception:
                 continue
+            is_quikstrike_view = (
+                "cmegroup-sso.quikstrike.net" in current_url
+                and "QuikStrikeView.aspx" in current_url
+            )
             if (
                 target_url
                 and "cmegroup-sso.quikstrike.net" in current_url
@@ -501,10 +526,7 @@ def _prepare_gold_vol2vol_from_mode(
                     page.goto(target_url)
                 except Exception:
                     continue
-            if (
-                "cmegroup-sso.quikstrike.net" in current_url
-                and "QuikStrikeView.aspx?mode=" in current_url
-            ):
+            if is_quikstrike_view:
                 if debug_page_state:
                     _print_page_state(page, "mode_page")
                 if not _page_is_vol2vol_surface(page):
@@ -850,17 +872,7 @@ def _continue_disclaimer_if_present(page: Any) -> bool:
 def _find_gold_vol2vol_page(browser: Any) -> Any:
     for context in browser.contexts:
         for page in context.pages:
-            try:
-                payload = collect_sanitized_page_payload(page)
-            except Exception:
-                continue
-            page_text = " ".join(
-                [
-                    str(payload.get("header_text") or ""),
-                    str(payload.get("selector_text") or ""),
-                ]
-            )
-            if "Gold" in page_text and "OG|GC" in page_text:
+            if page_has_gold_vol2vol_highcharts(page):
                 return page
     raise QuikStrikeBrowserPageNotReadyError(
         "Open QuikStrike manually, log in manually, navigate to QUIKOPTIONS VOL2VOL, "

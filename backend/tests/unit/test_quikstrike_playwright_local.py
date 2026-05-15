@@ -3,7 +3,10 @@ from datetime import date
 from scripts.quikstrike_playwright_extract import _load_env_file
 from src.models.quikstrike import QuikStrikeViewType
 from src.quikstrike.playwright_local import (
+    QuikStrikeBrowserPageNotReadyError,
     QuikStrikeCdpConnectionError,
+    _find_gold_vol2vol_page,
+    _prepare_gold_vol2vol_from_mode,
     build_request_from_browser_payloads,
     select_chart_payload,
 )
@@ -60,6 +63,56 @@ def test_cdp_connection_error_has_manual_browser_guidance():
 
     assert "Chrome" in str(error)
     assert "debugging port" in str(error)
+
+
+def test_find_gold_vol2vol_page_requires_ready_vol2vol_chart():
+    browser = _FakeBrowser(
+        [
+            _FakePage(
+                {
+                    "header_text": "Gold (OG|GC) Summary",
+                    "selector_text": "Gold (OG|GC)",
+                    "charts": [],
+                }
+            ),
+            _FakePage(_payload("Intraday Volume")),
+        ]
+    )
+
+    page = _find_gold_vol2vol_page(browser)
+
+    assert page.payload["header_text"].endswith("Intraday Volume")
+
+
+def test_find_gold_vol2vol_page_rejects_generic_gold_page():
+    browser = _FakeBrowser(
+        [
+            _FakePage(
+                {
+                    "header_text": "Gold (OG|GC) Summary",
+                    "selector_text": "Gold (OG|GC)",
+                    "charts": [],
+                }
+            )
+        ]
+    )
+
+    try:
+        _find_gold_vol2vol_page(browser)
+    except QuikStrikeBrowserPageNotReadyError as exc:
+        assert "QUIKOPTIONS VOL2VOL" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("generic Gold page was accepted as Vol2Vol-ready")
+
+
+def test_prepare_gold_vol2vol_clicks_nav_from_gold_summary_without_mode_query():
+    page = _GoldSummaryPage()
+    browser = _FakeBrowser([page])
+
+    _prepare_gold_vol2vol_from_mode(browser, "", debug_page_state=False)
+
+    assert "#ctl00_ucMenuBar_lvMenuBar_ctrl7_lbMenuItem" in page.clicked_selectors
+    assert page.ready is True
 
 
 def test_env_file_loader_accepts_non_secret_local_settings(tmp_path):
@@ -133,3 +186,54 @@ def _chart(title: str) -> dict:
             {"name": "Ranges", "data": [{"x": 4650, "x2": 4750, "Tag": {"Range": "1SD"}}]},
         ],
     }
+
+
+class _FakeBrowser:
+    def __init__(self, pages: list["_FakePage"]) -> None:
+        self.contexts = [_FakeContext(pages)]
+
+
+class _FakeContext:
+    def __init__(self, pages: list["_FakePage"]) -> None:
+        self.pages = pages
+
+
+class _FakePage:
+    def __init__(self, payload: dict) -> None:
+        self.payload = payload
+
+    def evaluate(self, _script: str, *_args: object) -> dict:
+        return self.payload
+
+
+class _GoldSummaryPage:
+    def __init__(self) -> None:
+        self.url = "https://cmegroup-sso.quikstrike.net//User/QuikStrikeView.aspx?pf=6&pid=40"
+        self.body_text = "Gold (OG|GC) Summary QUIKOPTIONS VOL2VOL"
+        self.clicked_selectors: list[str] = []
+        self.ready = False
+
+    def wait_for_timeout(self, _timeout_ms: int) -> None:
+        return None
+
+    def wait_for_load_state(self, _state: str) -> None:
+        return None
+
+    def evaluate(self, _script: str, *args: object) -> object:
+        if args and isinstance(args[0], list):
+            return any(str(item).lower() in self.body_text.lower() for item in args[0])
+        if args and isinstance(args[0], str):
+            selector = args[0]
+            if selector == "#ctl00_ucMenuBar_lvMenuBar_ctrl7_lbMenuItem":
+                self.clicked_selectors.append(selector)
+                self.ready = True
+                self.body_text = "Gold (OG|GC) Intraday Volume"
+                return True
+            return False
+        if self.ready:
+            return _payload("Intraday Volume")
+        return {
+            "header_text": "Gold (OG|GC) Summary",
+            "selector_text": "Gold (OG|GC)",
+            "charts": [],
+        }

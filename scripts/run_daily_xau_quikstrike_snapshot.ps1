@@ -10,7 +10,8 @@ param(
     [double]$GcFuturesReference = 0,
     [double]$SessionOpenPrice = 0,
     [double]$RealizedVolatility = 0,
-    [switch]$SkipBrowserLaunch
+    [switch]$SkipBrowserLaunch,
+    [switch]$ManualPrompts
 )
 
 $ErrorActionPreference = "Stop"
@@ -70,6 +71,9 @@ try {
         "--wait-seconds", "$WaitSeconds",
         "--poll-seconds", "$PollSeconds"
     )
+    if (-not $ManualPrompts) {
+        $pythonArgs += @("--no-prompt")
+    }
     if ($CaptureSession) {
         $pythonArgs += @("--capture-session", $CaptureSession)
     }

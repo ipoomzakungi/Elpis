@@ -1,8 +1,10 @@
 """Run the local daily XAU QuikStrike research snapshot workflow.
 
-The workflow is semi-automated. It attaches to a user-controlled browser over
-local CDP after manual login and page navigation. It never stores credentials,
-cookies, headers, HAR files, screenshots, viewstate values, or private URLs.
+The workflow attaches to a user-controlled browser over local CDP after manual
+login. It uses visible QuikStrike page controls to navigate the Gold Vol2Vol
+and Matrix views, then persists sanitized research reports. It never stores
+credentials, cookies, headers, HAR files, screenshots, viewstate values, or
+private URLs.
 """
 
 from __future__ import annotations
@@ -55,23 +57,28 @@ def main() -> int:
     try:
         if not args.no_prompt:
             _prompt(
-                "Log in manually, open Gold QUIKOPTIONS VOL2VOL, then press Enter "
-                "to capture Vol2Vol."
+                "Log in manually in the CDP browser, then press Enter. The runner "
+                "will navigate to Gold QUIKOPTIONS VOL2VOL."
             )
         vol2vol = extract_vol2vol_from_cdp(
             cdp_url=args.cdp_url,
             drive_views=True,
+            wait_seconds=args.wait_seconds,
+            poll_seconds=args.poll_seconds,
+            auto_prepare=True,
         )
 
         if not args.no_prompt:
             _prompt(
-                "Open Gold OPEN INTEREST Matrix. Select each requested Matrix view "
-                "when prompted by the page state, then press Enter to start waiting."
+                "Keep the same logged-in QuikStrike browser open, then press Enter. "
+                "The runner will navigate to Gold OPEN INTEREST Matrix."
             )
         matrix = extract_matrix_from_cdp(
             cdp_url=args.cdp_url,
-            manual_views=True,
-            view_prompt=None if args.no_prompt else _prompt_matrix_view,
+            drive_views=True,
+            manual_views=False,
+            auto_prepare=True,
+            view_prompt=None,
             wait_seconds=args.wait_seconds,
             poll_seconds=args.poll_seconds,
         )
@@ -182,7 +189,8 @@ def _summary(
         "journal_artifacts": [artifact.path for artifact in journal.artifacts] if journal else [],
         "limitations": [
             "Local-only research workflow.",
-            "Manual QuikStrike authentication is required.",
+            "Manual QuikStrike authentication is required; product and view navigation "
+            "is automated after login.",
             (
                 "No credentials, cookies, headers, HAR, screenshots, viewstate, "
                 "or private URLs are saved."
