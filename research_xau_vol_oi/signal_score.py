@@ -20,6 +20,17 @@ LONG_SIGNALS = {Signal.FADE_WALL_LONG.value, Signal.BREAK_WALL_LONG.value}
 SHORT_SIGNALS = {Signal.FADE_WALL_SHORT.value, Signal.BREAK_WALL_SHORT.value}
 DIRECTIONAL_SIGNALS = LONG_SIGNALS | SHORT_SIGNALS
 SIGNAL_VALUES = {signal.value for signal in Signal}
+SCORE_COMPONENTS = {
+    "sigma_position",
+    "distance_to_nearest_wall",
+    "wall_score",
+    "wall_freshness",
+    "dte_weight",
+    "iv_rv_vrp_regime",
+    "price_acceptance_rejection",
+    "session_open_side",
+    "data_quality",
+}
 
 
 @dataclass(frozen=True)
@@ -79,6 +90,7 @@ def score_signal_events(
     signal_events: pl.DataFrame,
     *,
     config: ResearchConfig | None = None,
+    disabled_components: set[str] | frozenset[str] | None = None,
 ) -> pl.DataFrame:
     """Score signal events using feature rows known at the source bar timestamp."""
 
@@ -107,6 +119,7 @@ def score_signal_events(
                 previous_bar=previous_by_timestamp.get(source_timestamp),
                 next_bar=next_by_timestamp.get(source_timestamp),
                 config=cfg,
+                disabled_components=disabled_components,
             ).as_dict()
         )
     return pl.DataFrame(rows) if rows else _empty_scores()
@@ -119,17 +132,19 @@ def score_signal_event(
     previous_bar: dict[str, Any] | None = None,
     next_bar: dict[str, Any] | None = None,
     config: ResearchConfig | None = None,
+    disabled_components: set[str] | frozenset[str] | None = None,
 ) -> SignalScoreResult:
     """Score one deterministic event under conservative research gates."""
 
     cfg = config or ResearchConfig()
+    disabled = frozenset(disabled_components or ())
     source = str(event.get("signal") or Signal.NO_TRADE.value)
     reason = str(event.get("reason") or "")
     bar = bar or event
     warnings = ["research-only; not a trade instruction"]
 
     quality_issue = _quality_issue(event, bar)
-    if quality_issue is not None:
+    if quality_issue is not None and "data_quality" not in disabled:
         warnings.append(quality_issue)
         return _result(
             event,
@@ -214,6 +229,7 @@ def score_signal_event(
         acceptance=acceptance,
         vol_expanded=vol_expanded,
         config=cfg,
+        disabled_components=disabled,
     )
 
     if label in {Signal.NO_TRADE.value, Signal.NO_TRADE_MIDDLE.value}:
@@ -309,25 +325,34 @@ def _score_components(
     acceptance: bool,
     vol_expanded: bool,
     config: ResearchConfig,
+    disabled_components: frozenset[str],
 ) -> int:
     score = 10.0
-    score += _sigma_component(_float(_field(event, bar, "sigma_position")))
-    score += _distance_component(
-        distance=_distance_to_wall(event, bar),
-        one_sd=_float(_field(event, bar, "one_sd_remaining")),
-        config=config,
-    )
-    score += _wall_component(_float(_field(event, bar, "wall_score")), config=config)
-    score += _freshness_component(_float(_field(event, bar, "freshness_weight")))
-    score += _dte_component(_float(_field(event, bar, "dte_weight")))
-    score += _vol_regime_component(str(_field(event, bar, "vol_regime") or ""), source_signal)
-    score += _reaction_component(
-        label=label,
-        rejection=rejection,
-        acceptance=acceptance,
-        vol_expanded=vol_expanded,
-    )
-    score += _session_component(event, bar, direction=direction)
+    if "sigma_position" not in disabled_components:
+        score += _sigma_component(_float(_field(event, bar, "sigma_position")))
+    if "distance_to_nearest_wall" not in disabled_components:
+        score += _distance_component(
+            distance=_distance_to_wall(event, bar),
+            one_sd=_float(_field(event, bar, "one_sd_remaining")),
+            config=config,
+        )
+    if "wall_score" not in disabled_components:
+        score += _wall_component(_float(_field(event, bar, "wall_score")), config=config)
+    if "wall_freshness" not in disabled_components:
+        score += _freshness_component(_float(_field(event, bar, "freshness_weight")))
+    if "dte_weight" not in disabled_components:
+        score += _dte_component(_float(_field(event, bar, "dte_weight")))
+    if "iv_rv_vrp_regime" not in disabled_components:
+        score += _vol_regime_component(str(_field(event, bar, "vol_regime") or ""), source_signal)
+    if "price_acceptance_rejection" not in disabled_components:
+        score += _reaction_component(
+            label=label,
+            rejection=rejection,
+            acceptance=acceptance,
+            vol_expanded=vol_expanded,
+        )
+    if "session_open_side" not in disabled_components:
+        score += _session_component(event, bar, direction=direction)
     if label in {Signal.NO_TRADE.value, Signal.NO_TRADE_MIDDLE.value}:
         score *= 0.55
     return int(round(max(0.0, min(100.0, score))))

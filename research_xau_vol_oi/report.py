@@ -24,6 +24,10 @@ from research_xau_vol_oi.data_loader import (
 )
 from research_xau_vol_oi.expected_move import add_expected_move_columns_asof_options
 from research_xau_vol_oi.oi_wall_engine import build_oi_walls
+from research_xau_vol_oi.score_calibration import (
+    ScoreCalibrationResult,
+    run_score_research_layer,
+)
 from research_xau_vol_oi.signal_score import score_signal_events, write_signal_dashboard
 from research_xau_vol_oi.volatility_engine import (
     add_bollinger_baseline,
@@ -82,6 +86,14 @@ def run_pipeline(
     trades, summary = backtest_all_scenarios(feature_table, signal_events, config=cfg)
     walk_forward = walk_forward_validate(feature_table, signal_events, config=cfg)
     cost_stress = run_cost_stress(feature_table, signal_events, config=cfg)
+    score_calibration = run_score_research_layer(
+        price_features=feature_table,
+        signal_events=signal_events,
+        signal_scores=signal_scores,
+        output_dir=output_root,
+        charts_dir=charts_dir,
+        config=cfg,
+    )
 
     feature_path = output_root / "xau_feature_table.parquet"
     events_path = output_root / "signal_events.csv"
@@ -116,6 +128,7 @@ def run_pipeline(
         summary=summary,
         walk_forward=walk_forward,
         cost_stress=cost_stress,
+        score_calibration=score_calibration,
         charts_dir=charts_dir,
     )
     audit_path = output_root / "leakage_audit_report.md"
@@ -131,6 +144,12 @@ def run_pipeline(
         "feature_table": feature_path,
         "signal_events": events_path,
         "signal_score_examples": output_root / "signal_score_examples.csv",
+        "score_decile_performance": output_root / "score_decile_performance.csv",
+        "score_threshold_performance": output_root / "score_threshold_performance.csv",
+        "score_calibration_report": output_root / "score_calibration_report.md",
+        "score_ablation_report": output_root / "score_ablation_report.md",
+        "signal_kill_list": output_root / "signal_kill_list.csv",
+        "threshold_policy_recommendation": output_root / "threshold_policy_recommendation.csv",
         "backtest_summary": summary_path,
         "research_report": report_path,
         "leakage_audit_report": audit_path,
@@ -276,6 +295,7 @@ def write_research_report(
     summary: pl.DataFrame,
     walk_forward: pl.DataFrame,
     cost_stress: pl.DataFrame,
+    score_calibration: ScoreCalibrationResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -323,6 +343,10 @@ def write_research_report(
         "## Transaction Cost Stress",
         "",
         _frame_markdown(cost_stress),
+        "",
+        "## Signal Score Calibration",
+        "",
+        *_score_calibration_lines(score_calibration),
         "",
         "## Required Questions",
         "",
@@ -436,6 +460,72 @@ def write_leakage_audit_report(
         "- Added walk-forward performance fields and transaction cost stress output.",
     ]
     path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _score_calibration_lines(score_calibration: ScoreCalibrationResult | None) -> list[str]:
+    if score_calibration is None:
+        return ["Score calibration was not run."]
+    policy = (
+        score_calibration.threshold_policy.to_dicts()[0]
+        if not score_calibration.threshold_policy.is_empty()
+        else {}
+    )
+    kill_rows = (
+        score_calibration.kill_list.select(
+            ["signal_label", "recommendation", "reason", "trade_count", "expectancy", "profit_factor"]
+        )
+        if not score_calibration.kill_list.is_empty()
+        else score_calibration.kill_list
+    )
+    threshold_rows = (
+        score_calibration.score_threshold_performance.filter(
+            (pl.col("scenario_type") == "vol_oi_score")
+            & (pl.col("cost_multiplier") == 1)
+        )
+        if not score_calibration.score_threshold_performance.is_empty()
+        else score_calibration.score_threshold_performance
+    )
+    decile_rows = (
+        score_calibration.score_decile_performance.filter(pl.col("group_type") == "score_decile")
+        if not score_calibration.score_decile_performance.is_empty()
+        else score_calibration.score_decile_performance
+    )
+    ablation_rows = score_calibration.ablation.select(
+        [
+            "removed_component",
+            "change_in_expectancy",
+            "change_in_profit_factor",
+            "change_in_trade_count",
+            "change_in_no_trade_count",
+            "impact",
+        ]
+    ) if not score_calibration.ablation.is_empty() else score_calibration.ablation
+    return [
+        f"- Final Research Decision: `{score_calibration.final_decision}`",
+        f"- Score monotonicity: `{score_calibration.monotonicity['monotonic_status']}`",
+        f"- Threshold policy: `{policy.get('policy', 'unknown')}`",
+        f"- Policy recommendation: {policy.get('recommendation', 'n/a')}",
+        "",
+        "### Score Decile Results",
+        "",
+        _frame_markdown(decile_rows),
+        "",
+        "### Threshold Results",
+        "",
+        _frame_markdown(threshold_rows),
+        "",
+        "### Walk-Forward Score Results",
+        "",
+        _frame_markdown(score_calibration.walk_forward_score),
+        "",
+        "### Feature Ablation Results",
+        "",
+        _frame_markdown(ablation_rows),
+        "",
+        "### Kill / Quarantine Recommendations",
+        "",
+        _frame_markdown(kill_rows),
+    ]
 
 
 def _reference_price(price: pl.DataFrame, options: pl.DataFrame) -> float:
