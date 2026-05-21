@@ -31,6 +31,7 @@ import {
 const FORWARD_JOURNAL_DASHBOARD_FIELDS = [
   'journal_id',
   'snapshot_time',
+  'data_date',
   'capture_session',
   'source_reports',
   'top_oi_walls',
@@ -708,6 +709,7 @@ function ForwardJournalInspection({
           {selectedSummary && (
             <p className="mt-2 text-sm text-gray-300">
               {selectedSummary.journal_id} | {selectedSummary.status} |{' '}
+              data {selectedSummary.data_date ?? 'n/a'} | fetched{' '}
               {formatDate(selectedSummary.snapshot_time)}
             </p>
           )}
@@ -772,6 +774,10 @@ function ForwardJournalInspection({
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <ContextPanel title="Snapshot">
               <dl className="grid grid-cols-1 gap-3 text-sm">
+                <Metric
+                  label="Data Date"
+                  value={entry?.snapshot.data_date ?? selectedSummary.data_date ?? 'n/a'}
+                />
                 <Metric label="Snapshot Time" value={formatDate(entry?.snapshot.snapshot_time ?? null)} />
                 <Metric
                   label="Capture Window"

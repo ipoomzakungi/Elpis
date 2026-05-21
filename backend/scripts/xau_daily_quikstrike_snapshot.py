@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from src.models.xau_forward_journal import (
     XauForwardJournalCreateRequest,
@@ -51,9 +52,32 @@ def main() -> int:
     parser.add_argument("--gc-futures-reference", type=float, default=None)
     parser.add_argument("--session-open-price", type=float, default=None)
     parser.add_argument("--realized-volatility", type=float, default=None)
+    parser.add_argument(
+        "--data-date",
+        default=None,
+        help=(
+            "CME/QuikStrike data date as YYYY-MM-DD. If omitted, the runner uses "
+            "the cme-bangkok-noon policy."
+        ),
+    )
+    parser.add_argument(
+        "--data-date-policy",
+        choices=["cme-bangkok-noon", "capture-date"],
+        default="cme-bangkok-noon",
+        help=(
+            "How to derive data_date when --data-date is omitted. "
+            "cme-bangkok-noon treats captures before 12:00 Asia/Bangkok as prior-day data."
+        ),
+    )
     parser.add_argument("--force-create", action="store_true")
     parser.add_argument("--no-prompt", action="store_true")
     args = parser.parse_args()
+    run_started_at = datetime.now(UTC)
+    data_date = _resolve_data_date(
+        explicit_data_date=args.data_date,
+        policy=args.data_date_policy,
+        capture_time=run_started_at,
+    )
 
     try:
         if not args.no_prompt:
@@ -101,9 +125,10 @@ def main() -> int:
             gc_futures_reference=args.gc_futures_reference,
             session_open_price=args.session_open_price,
             realized_volatility=args.realized_volatility,
+            session_date=data_date,
             create_xau_vol_oi_report=True,
             create_xau_reaction_report=True,
-            run_label="daily_snapshot",
+            run_label=f"data_{data_date.strftime('%Y%m%d')}_daily_snapshot",
             research_only_acknowledged=True,
         )
     )
@@ -120,6 +145,7 @@ def main() -> int:
         journal_result = create_xau_forward_journal_entry_result(
             XauForwardJournalCreateRequest(
                 snapshot_time=datetime.now(UTC),
+                data_date=data_date,
                 capture_window="daily_snapshot",
                 capture_session=args.capture_session,
                 vol2vol_report_id=vol2vol.report.extraction_id,
@@ -175,6 +201,22 @@ def _prompt_matrix_view(view: object) -> None:
     input(f"\nSelect QuikStrike Matrix view '{view.value}', then press Enter to capture.\n")
 
 
+def _resolve_data_date(
+    *,
+    explicit_data_date: str | None,
+    policy: str,
+    capture_time: datetime,
+) -> date:
+    if explicit_data_date:
+        return date.fromisoformat(explicit_data_date)
+    if policy == "capture-date":
+        return capture_time.astimezone(UTC).date()
+    bangkok_now = capture_time.astimezone(ZoneInfo("Asia/Bangkok"))
+    if bangkok_now.time() < time(hour=12):
+        return bangkok_now.date() - timedelta(days=1)
+    return bangkok_now.date()
+
+
 def _summary(
     vol2vol: object,
     matrix: object,
@@ -194,6 +236,7 @@ def _summary(
         "matrix_rows": matrix.row_count,
         "matrix_strikes": matrix.strike_count,
         "matrix_expirations": matrix.expiration_count,
+        "data_date": journal.snapshot.data_date.isoformat() if journal else None,
         "fusion_report_id": fusion.report_id,
         "fusion_rows": fusion.fused_row_count,
         "fused_xau_input_rows": fusion.xau_vol_oi_input_row_count,

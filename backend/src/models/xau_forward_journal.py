@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from enum import StrEnum
 from typing import Any
 
@@ -367,6 +367,7 @@ class XauForwardSourceReportRef(XauForwardJournalBaseModel):
 
 class XauForwardSnapshotContext(XauForwardJournalBaseModel):
     snapshot_time: datetime
+    data_date: date | None = None
     capture_window: str = "daily_snapshot"
     capture_session: str | None = None
     product: str | None = None
@@ -984,6 +985,7 @@ class XauForwardJournalArtifact(XauForwardJournalBaseModel):
 
 class XauForwardJournalCreateRequest(XauForwardJournalBaseModel):
     snapshot_time: datetime
+    data_date: date | None = None
     capture_window: str = "daily_snapshot"
     capture_session: str | None = None
     vol2vol_report_id: str
@@ -1142,6 +1144,7 @@ class XauForwardJournalSummary(XauForwardJournalBaseModel):
     source_kind: str = "operational"
     status: XauForwardJournalEntryStatus
     snapshot_time: datetime
+    data_date: date | None = None
     capture_window: str = "daily_snapshot"
     capture_session: str | None = None
     product: str | None = None

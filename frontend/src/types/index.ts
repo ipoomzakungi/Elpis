@@ -1902,6 +1902,7 @@ export interface XauForwardSourceReportRef {
 
 export interface XauForwardJournalCreateRequest {
   snapshot_time: string;
+  data_date?: string | null;
   capture_window?: string;
   capture_session?: string | null;
   vol2vol_report_id: string;
@@ -1921,6 +1922,7 @@ export interface XauForwardJournalCreateRequest {
 
 export interface XauForwardSnapshotContext {
   snapshot_time: string;
+  data_date: string | null;
   capture_window: string;
   capture_session: string | null;
   product: string | null;
@@ -2159,6 +2161,7 @@ export interface XauForwardJournalSummary {
   snapshot_key: string;
   status: XauForwardJournalEntryStatus;
   snapshot_time: string;
+  data_date: string | null;
   capture_window: string;
   capture_session: string | null;
   product: string | null;

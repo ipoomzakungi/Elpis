@@ -324,6 +324,7 @@ def build_snapshot_context(loaded: XauForwardLoadedSources) -> XauForwardSnapsho
 
     return XauForwardSnapshotContext(
         snapshot_time=request.snapshot_time,
+        data_date=request.data_date,
         capture_window=request.capture_window,
         capture_session=request.capture_session,
         product=_derive_product(loaded),
@@ -344,10 +345,12 @@ def derive_snapshot_key(
     snapshot: XauForwardSnapshotContext,
 ) -> str:
     capture_date = request.snapshot_time.date().strftime("%Y%m%d")
+    data_date = request.data_date.strftime("%Y%m%d") if request.data_date else None
     expiration_token = snapshot.expiration_code or snapshot.expiration or "no_expiration"
     raw_key = "|".join(
         [
             snapshot.product or "gold",
+            data_date or "",
             capture_date,
             snapshot.capture_window,
             expiration_token,
@@ -362,7 +365,8 @@ def derive_snapshot_key(
     key = "_".join(
         token
         for token in (
-            capture_date,
+            f"data_{data_date}" if data_date else capture_date,
+            f"fetched_{capture_date}" if data_date else None,
             _safe_slug(snapshot.capture_window),
             _safe_slug(expiration_token),
             digest,
