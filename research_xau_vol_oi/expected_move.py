@@ -122,6 +122,91 @@ def add_expected_move_columns(
     return pl.DataFrame(rows)
 
 
+def add_expected_move_columns_asof_options(
+    price: pl.DataFrame,
+    options: pl.DataFrame,
+    *,
+    config: ResearchConfig | None = None,
+) -> pl.DataFrame:
+    """Add IV bands using only the latest option IV snapshot known at each bar.
+
+    Bars before the first usable option IV snapshot are retained and marked as
+    ``MISSING_IV`` so no-trade periods remain visible instead of being dropped.
+    """
+
+    cfg = config or ResearchConfig()
+    if price.is_empty():
+        return price
+    iv_snapshots = _iv_snapshots(options)
+    session_open_by_date = _session_open_by_date(price)
+    rows: list[dict[str, Any]] = []
+    snapshot_index = -1
+    for raw in price.sort("timestamp").to_dicts():
+        timestamp = raw["timestamp"]
+        if not isinstance(timestamp, datetime):
+            raise ValueError("price timestamp must be a datetime")
+        while (
+            snapshot_index + 1 < len(iv_snapshots)
+            and iv_snapshots[snapshot_index + 1]["timestamp"] <= timestamp
+        ):
+            snapshot_index += 1
+
+        session_open = session_open_by_date.get(raw["session_date"], raw["open"])
+        if snapshot_index < 0:
+            rows.append(
+                {
+                    **raw,
+                    "session_open": float(session_open),
+                    "reference_price": float(raw["close"]),
+                    "annualized_iv_percent": None,
+                    "iv_available_timestamp": None,
+                    "time_remaining_fraction": time_remaining_fraction(timestamp, config=cfg),
+                    "one_sd_full_day": None,
+                    "one_sd_remaining": None,
+                    "two_sd_remaining": None,
+                    "three_sd_remaining": None,
+                    "sigma_position": None,
+                    "sigma_zone": "unknown",
+                    "upper_1sd": None,
+                    "lower_1sd": None,
+                    "upper_2sd": None,
+                    "lower_2sd": None,
+                    "upper_3sd": None,
+                    "lower_3sd": None,
+                    "data_quality_state": "MISSING_IV",
+                }
+            )
+            continue
+
+        snapshot = iv_snapshots[snapshot_index]
+        fraction = time_remaining_fraction(timestamp, config=cfg)
+        move = compute_expected_move(
+            reference_price=float(raw["close"]),
+            annualized_iv_percent=float(snapshot["iv_percent"]),
+            time_remaining_fraction=fraction,
+            spot_price=float(raw["close"]),
+            session_open=float(session_open),
+            trading_days=cfg.annual_trading_days,
+        )
+        rows.append(
+            {
+                **raw,
+                "session_open": float(session_open),
+                **move.as_dict(),
+                "iv_available_timestamp": snapshot["timestamp"],
+                "sigma_zone": sigma_zone(move.sigma_position),
+                "upper_1sd": float(session_open) + move.one_sd_remaining,
+                "lower_1sd": float(session_open) - move.one_sd_remaining,
+                "upper_2sd": float(session_open) + move.two_sd_remaining,
+                "lower_2sd": float(session_open) - move.two_sd_remaining,
+                "upper_3sd": float(session_open) + move.three_sd_remaining,
+                "lower_3sd": float(session_open) - move.three_sd_remaining,
+                "data_quality_state": "VALID",
+            }
+        )
+    return pl.DataFrame(rows)
+
+
 def time_remaining_fraction(
     timestamp: datetime,
     *,
@@ -169,3 +254,15 @@ def _session_open_by_date(price: pl.DataFrame) -> dict[str, float]:
         if session_date not in result:
             result[session_date] = float(raw["open"])
     return result
+
+
+def _iv_snapshots(options: pl.DataFrame) -> list[dict[str, Any]]:
+    if options.is_empty() or "iv_percent" not in options.columns:
+        return []
+    snapshots = (
+        options.filter(pl.col("iv_percent").is_not_null())
+        .group_by("timestamp")
+        .agg(pl.col("iv_percent").mean().alias("iv_percent"))
+        .sort("timestamp")
+    )
+    return snapshots.to_dicts()

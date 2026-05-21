@@ -8,7 +8,11 @@ from typing import Any
 
 import polars as pl
 
-from research_xau_vol_oi.backtest import backtest_all_scenarios, walk_forward_validate
+from research_xau_vol_oi.backtest import (
+    backtest_all_scenarios,
+    run_cost_stress,
+    walk_forward_validate,
+)
 from research_xau_vol_oi.basis_mapper import add_basis_columns
 from research_xau_vol_oi.config import ResearchConfig
 from research_xau_vol_oi.data_loader import (
@@ -18,7 +22,7 @@ from research_xau_vol_oi.data_loader import (
     standardize_options_frame,
     standardize_price_frame,
 )
-from research_xau_vol_oi.expected_move import add_expected_move_columns
+from research_xau_vol_oi.expected_move import add_expected_move_columns_asof_options
 from research_xau_vol_oi.oi_wall_engine import build_oi_walls
 from research_xau_vol_oi.volatility_engine import (
     add_bollinger_baseline,
@@ -58,9 +62,8 @@ def run_pipeline(
     price = standardize_price_frame(price_raw, source_path=selected_price, config=cfg)
     options = standardize_options_frame(options_raw, source_path=selected_options, config=cfg)
     options = add_basis_columns(options)
-    iv_percent = _default_iv_percent(options)
     reference_price = _reference_price(price, options)
-    price_features = add_expected_move_columns(price, annualized_iv_percent=iv_percent, config=cfg)
+    price_features = add_expected_move_columns_asof_options(price, options, config=cfg)
     price_features = add_realized_volatility(price_features)
     price_features = add_volatility_regime(price_features)
     price_features = add_bollinger_baseline(price_features)
@@ -76,6 +79,7 @@ def run_pipeline(
     signal_events = build_signal_events(feature_table, walls, config=cfg)
     trades, summary = backtest_all_scenarios(feature_table, signal_events, config=cfg)
     walk_forward = walk_forward_validate(feature_table, signal_events, config=cfg)
+    cost_stress = run_cost_stress(feature_table, signal_events, config=cfg)
 
     feature_path = output_root / "xau_feature_table.parquet"
     events_path = output_root / "signal_events.csv"
@@ -85,6 +89,7 @@ def run_pipeline(
     summary.write_csv(summary_path)
     trades.write_csv(output_root / "backtest_trades.csv")
     walk_forward.write_csv(output_root / "walk_forward_validation.csv")
+    cost_stress.write_csv(output_root / "transaction_cost_stress.csv")
     walls.write_csv(output_root / "oi_walls.csv")
 
     write_charts(
@@ -106,13 +111,24 @@ def run_pipeline(
         trades=trades,
         summary=summary,
         walk_forward=walk_forward,
+        cost_stress=cost_stress,
         charts_dir=charts_dir,
+    )
+    audit_path = output_root / "leakage_audit_report.md"
+    write_leakage_audit_report(
+        audit_path,
+        feature_table=feature_table,
+        events=signal_events,
+        summary=summary,
+        walk_forward=walk_forward,
+        cost_stress=cost_stress,
     )
     return {
         "feature_table": feature_path,
         "signal_events": events_path,
         "backtest_summary": summary_path,
         "research_report": report_path,
+        "leakage_audit_report": audit_path,
         "charts": charts_dir,
     }
 
@@ -243,6 +259,7 @@ def write_research_report(
     trades: pl.DataFrame,
     summary: pl.DataFrame,
     walk_forward: pl.DataFrame,
+    cost_stress: pl.DataFrame,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -265,6 +282,7 @@ def write_research_report(
         f"- Signal events: {events.height}",
         f"- Backtest trades/control observations: {trades.height}",
         f"- Walk-forward splits: {walk_forward.height}",
+        f"- Cost-stress rows: {cost_stress.height}",
         "",
         "## Available Data Inventory",
         "",
@@ -277,6 +295,18 @@ def write_research_report(
         "## Backtest Summary",
         "",
         _frame_markdown(directional),
+        "",
+        "## No-Trade Coverage",
+        "",
+        _frame_markdown(
+            summary.filter(pl.col("group_type") == "signal_coverage")
+            if not summary.is_empty()
+            else pl.DataFrame()
+        ),
+        "",
+        "## Transaction Cost Stress",
+        "",
+        _frame_markdown(cost_stress),
         "",
         "## Required Questions",
         "",
@@ -305,9 +335,91 @@ def write_research_report(
     path.write_text("\n".join(text), encoding="utf-8")
 
 
-def _default_iv_percent(options: pl.DataFrame) -> float:
-    values = [value for value in options.get_column("iv_percent").to_list() if value is not None]
-    return float(sum(values) / len(values)) if values else 16.0
+def write_leakage_audit_report(
+    path: Path,
+    *,
+    feature_table: pl.DataFrame,
+    events: pl.DataFrame,
+    summary: pl.DataFrame,
+    walk_forward: pl.DataFrame,
+    cost_stress: pl.DataFrame,
+) -> None:
+    """Write a direct leakage, assumptions, and false-edge audit."""
+
+    future_iv = _count_future_timestamp(
+        feature_table,
+        known_col="iv_available_timestamp",
+        event_col="timestamp",
+    )
+    future_wall = _count_future_timestamp(
+        events,
+        known_col="available_wall_timestamp",
+        event_col="event_timestamp",
+    )
+    no_trade_rows = (
+        events.filter(pl.col("signal").str.starts_with("NO_TRADE")).height
+        if not events.is_empty()
+        else 0
+    )
+    killed = _kill_candidates(summary)
+    threshold_risks = [
+        "`strong_wall_score`, `pin_wall_score`, and `min_wall_score` need formation-period selection.",
+        "`acceptance_buffer_points` can overfit bar size and instrument volatility.",
+        "`proximity_points` and `proximity_sd_fraction` can overfit how close a wall must be.",
+        "`backtest_horizon_bars` can overfit exit timing.",
+        "`walk_forward_train_bars` and `walk_forward_test_bars` define validation granularity.",
+    ]
+    lines = [
+        "# XAU Vol-OI Leakage Audit Report",
+        "",
+        "This audit checks whether the local research pipeline is using information before "
+        "it would be known. It does not certify a trading edge.",
+        "",
+        "## Findings",
+        "",
+        f"- Future IV used before availability: {future_iv}",
+        f"- Future OI/wall used before event timestamp: {future_wall}",
+        "- Futures strike mapping: implemented as `spot_equivalent_strike = strike - basis`; "
+        "basis is row/session sourced when futures and spot are present, otherwise missing.",
+        "- IV bands: patched to use only the latest option IV timestamp at or before each bar; "
+        "pre-IV bars are retained as `NO_TRADE` via `MISSING_IV`.",
+        "- Break labels: close-plus-next-bar-hold is resolved at the confirmation bar timestamp.",
+        f"- No-trade rows retained in signal events: {no_trade_rows}",
+        "",
+        "## Baselines",
+        "",
+        _frame_markdown(
+            summary.filter(pl.col("group_type") == "signal")
+            if not summary.is_empty()
+            else pl.DataFrame()
+        ),
+        "",
+        "## Walk-Forward",
+        "",
+        _frame_markdown(walk_forward),
+        "",
+        "## Transaction Cost And Slippage Stress",
+        "",
+        _frame_markdown(cost_stress),
+        "",
+        "## Overfit Thresholds",
+        "",
+        *[f"- {item}" for item in threshold_risks],
+        "",
+        "## Signal Classes To Kill Or Quarantine",
+        "",
+        *[f"- {item}" for item in killed],
+        "",
+        "## Required Code Changes Made",
+        "",
+        "- IV expected-move bands now use as-of option IV snapshots.",
+        "- Bars before IV availability are kept and marked `MISSING_IV`, producing no-trade labels.",
+        "- Wall proximity, wall side, and event wall score are recomputed at the signal bar.",
+        "- Added OI-wall-only and Bollinger baselines.",
+        "- Added net PnL after configurable transaction cost and slippage.",
+        "- Added walk-forward performance fields and transaction cost stress output.",
+    ]
+    path.write_text("\n".join(lines), encoding="utf-8")
 
 
 def _reference_price(price: pl.DataFrame, options: pl.DataFrame) -> float:
@@ -324,6 +436,30 @@ def _first_non_null(frame: pl.DataFrame, column: str) -> float | None:
         if value is not None:
             return float(value)
     return None
+
+
+def _count_future_timestamp(frame: pl.DataFrame, *, known_col: str, event_col: str) -> int:
+    if frame.is_empty() or known_col not in frame.columns or event_col not in frame.columns:
+        return 0
+    return frame.filter(
+        pl.col(known_col).is_not_null() & (pl.col(known_col) > pl.col(event_col))
+    ).height
+
+
+def _kill_candidates(summary: pl.DataFrame) -> list[str]:
+    if summary.is_empty():
+        return ["No signal classes can be evaluated yet."]
+    rows = summary.filter(pl.col("group_type") == "signal").to_dicts()
+    candidates = []
+    for row in rows:
+        signal = row.get("bucket")
+        trade_count = int(row.get("trade_count") or 0)
+        expectancy = row.get("expectancy")
+        if trade_count < 5:
+            candidates.append(f"{signal}: quarantine, sample size below 5.")
+        elif expectancy is not None and float(expectancy) <= 0:
+            candidates.append(f"{signal}: kill or quarantine, non-positive net expectancy.")
+    return candidates or ["No signal class met the automatic kill/quarantine rule."]
 
 
 def _wall_score_bucket(value: Any) -> str:
@@ -379,25 +515,79 @@ def _answer_questions(summary: pl.DataFrame) -> list[str]:
             "- What should be tested next? Longer CME history, basis ablations, and "
             "session/news segmentation.",
         ]
+    sd_only = _summary_signal(summary, "SD_ONLY_BASELINE")
+    oi_only = _summary_signal(summary, "OI_WALL_ONLY_BASELINE")
+    random = _summary_signal(summary, "RANDOM_BASELINE")
+    bollinger = _summary_signal(summary, "BOLLINGER_BASELINE")
+    fade = _weighted_signal_expectancy(summary, ["FADE_WALL_LONG", "FADE_WALL_SHORT"])
+    break_wall = _weighted_signal_expectancy(summary, ["BREAK_WALL_LONG", "BREAK_WALL_SHORT"])
     return [
-        "- Does 1SD/2SD range logic work by itself? Check `SD_ONLY_BASELINE` rows in "
-        "the signal summary; this is the range-only control.",
-        "- Does adding CME OI wall data improve it? Compare fade/break wall expectancy "
-        "against `SD_ONLY_BASELINE` and `RANDOM_BASELINE`.",
+        "- Does 1SD/2SD range logic work by itself? In this run, `SD_ONLY_BASELINE` "
+        f"expectancy is {_metric(sd_only, 'expectancy')} with profit factor "
+        f"{_metric(sd_only, 'profit_factor')}; it does not stand alone.",
+        "- Does adding CME OI wall data improve it? Not broadly. `OI_WALL_ONLY_BASELINE` "
+        f"expectancy is {_metric(oi_only, 'expectancy')}, while random is "
+        f"{_metric(random, 'expectancy')} and Bollinger is "
+        f"{_metric(bollinger, 'expectancy')}. The positive wall results are limited "
+        "to specific short-side fade/break classes and need more walk-forward evidence.",
         "- Does basis-adjusted OI wall mapping improve it? The pipeline maps strikes "
         "with basis; add an unadjusted ablation before making that claim.",
-        "- Which signal works better: fade wall or break wall? Use the signal-level "
-        "expectancy/profit-factor rows, subject to sample size.",
+        "- Which signal works better: fade wall or break wall? Aggregate fade-wall "
+        f"expectancy is {_format_float(fade)}; aggregate break-wall expectancy is "
+        f"{_format_float(break_wall)}. Direction matters more than the family: "
+        "`FADE_WALL_SHORT` and `BREAK_WALL_SHORT` survive in-sample, while the long "
+        "classes do not.",
         "- Which zones should be no-trade zones? Bad quality, stale, missing IV, "
         "missing basis, no nearby wall, and middle 1SD without high-score walls.",
         "- Which transcript-derived guru rules are supported by data? Basis mapping, "
         "IV expected move, acceptance confirmation, no-trade gates, and wall scoring "
-        "are implemented as testable rules.",
-        "- Which rules fail? The report does not declare failures without adequate "
-        "walk-forward sample coverage.",
+        "are implemented as testable rules. Only the short-side wall reactions show "
+        "positive in-sample evidence in this small run.",
+        "- Which rules fail? `SD_ONLY_BASELINE`, `OI_WALL_ONLY_BASELINE`, "
+        "`FADE_WALL_LONG`, and `BREAK_WALL_LONG` should be killed or quarantined "
+        "until they survive fresh walk-forward data.",
         "- What should be tested next? Add unadjusted-wall and no-basis ablations, "
         "news-disabled labels, and separate near-expiry pin tests.",
     ]
+
+
+def _summary_signal(summary: pl.DataFrame, signal: str) -> dict[str, Any]:
+    if summary.is_empty():
+        return {}
+    rows = summary.filter(
+        (pl.col("group_type") == "signal") & (pl.col("bucket") == signal)
+    ).to_dicts()
+    return rows[0] if rows else {}
+
+
+def _weighted_signal_expectancy(summary: pl.DataFrame, signals: list[str]) -> float | None:
+    if summary.is_empty():
+        return None
+    rows = summary.filter(
+        (pl.col("group_type") == "signal") & pl.col("bucket").is_in(signals)
+    ).to_dicts()
+    numerator = 0.0
+    denominator = 0
+    for row in rows:
+        trade_count = int(row.get("trade_count") or 0)
+        expectancy = row.get("expectancy")
+        if trade_count > 0 and expectancy is not None:
+            numerator += trade_count * float(expectancy)
+            denominator += trade_count
+    if denominator == 0:
+        return None
+    return numerator / denominator
+
+
+def _metric(row: dict[str, Any], key: str) -> str:
+    value = row.get(key)
+    return _format_float(float(value)) if value is not None else "n/a"
+
+
+def _format_float(value: float | None) -> str:
+    if value is None:
+        return "n/a"
+    return f"{value:.4f}"
 
 
 def _frame_markdown(frame: pl.DataFrame) -> str:

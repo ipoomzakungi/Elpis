@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import random
 from collections import defaultdict
+from dataclasses import replace
 from typing import Any
 
 import polars as pl
@@ -18,6 +19,8 @@ SIGNAL_DIRECTION = {
     Signal.BREAK_WALL_SHORT.value: -1,
     Signal.RANDOM_BASELINE.value: 0,
     Signal.SD_ONLY_BASELINE.value: 0,
+    Signal.OI_WALL_ONLY_BASELINE.value: 0,
+    Signal.BOLLINGER_BASELINE.value: 0,
 }
 
 
@@ -55,6 +58,10 @@ def run_event_backtest(
         entry_price = float(entry.get("open") or entry["close"])
         exit_price = float(exit_bar["close"])
         pnl_points = (exit_price - entry_price) * direction if direction else 0.0
+        round_trip_cost = 2.0 * (
+            cfg.cost_points_per_side + cfg.slippage_points_per_side
+        ) if direction else 0.0
+        net_pnl_points = pnl_points - round_trip_cost
         mae, mfe = _mae_mfe(path, entry_price=entry_price, direction=direction)
         trades.append(
             {
@@ -66,6 +73,8 @@ def run_event_backtest(
                 "entry_price": entry_price,
                 "exit_price": exit_price,
                 "pnl_points": pnl_points,
+                "round_trip_cost_points": round_trip_cost,
+                "net_pnl_points": net_pnl_points,
                 "mae_points": mae,
                 "mfe_points": mfe,
                 "time_in_trade_bars": exit_index - entry_index,
@@ -94,6 +103,35 @@ def summarize_backtest(trades: pl.DataFrame) -> pl.DataFrame:
         ("vol_regime", "iv_rv_vrp_regime"),
     ]:
         rows.extend(_summarize_group(trades.to_dicts(), group_type=label, key=key))
+    return pl.DataFrame(rows)
+
+
+def summarize_event_coverage(events: pl.DataFrame) -> pl.DataFrame:
+    """Return no-trade-inclusive signal counts for audit visibility."""
+
+    if events.is_empty():
+        return _empty_summary()
+    total = events.height
+    rows = []
+    for raw in events.group_by("signal").len().sort("signal").to_dicts():
+        rows.append(
+            {
+                "group_type": "signal_coverage",
+                "bucket": raw["signal"],
+                "trade_count": 0,
+                "event_count": raw["len"],
+                "event_share": raw["len"] / total if total else 0.0,
+                "win_rate": None,
+                "average_win": None,
+                "average_loss": None,
+                "expectancy": None,
+                "profit_factor": None,
+                "max_drawdown": None,
+                "average_mae": None,
+                "average_mfe": None,
+                "average_time_in_trade": None,
+            }
+        )
     return pl.DataFrame(rows)
 
 
@@ -154,6 +192,75 @@ def generate_sd_only_baseline_events(price_features: pl.DataFrame) -> pl.DataFra
     return pl.DataFrame(rows) if rows else pl.DataFrame()
 
 
+def generate_oi_wall_only_baseline_events(price_features: pl.DataFrame) -> pl.DataFrame:
+    """Generate a naive OI-wall-only fade baseline without acceptance or IV filters."""
+
+    rows = []
+    for row in price_features.to_dicts():
+        side = row.get("wall_side")
+        if row.get("wall_level") is None or row.get("wall_score") is None:
+            continue
+        if side == "resistance":
+            direction = -1
+        elif side == "support":
+            direction = 1
+        else:
+            continue
+        rows.append(
+            {
+                "event_timestamp": row["timestamp"],
+                "source_bar_timestamp": row["timestamp"],
+                "available_wall_timestamp": None,
+                "signal": Signal.OI_WALL_ONLY_BASELINE.value,
+                "reason": "oi_wall_only_control",
+                "oi_wall_only_direction": direction,
+                "sigma_position": row.get("sigma_position"),
+                "sigma_zone": row.get("sigma_zone"),
+                "vol_regime": row.get("vol_regime"),
+                "wall_score_bucket": row.get("wall_score_bucket"),
+                "dte_bucket": row.get("dte_bucket"),
+                "wall_score": row.get("wall_score"),
+                "research_only": True,
+            }
+        )
+    return pl.DataFrame(rows) if rows else pl.DataFrame()
+
+
+def generate_bollinger_baseline_events(price_features: pl.DataFrame) -> pl.DataFrame:
+    """Generate a simple Bollinger mean-reversion baseline."""
+
+    rows = []
+    for row in price_features.to_dicts():
+        close = row.get("close")
+        upper = row.get("bb_upper")
+        lower = row.get("bb_lower")
+        if close is None or upper is None or lower is None:
+            continue
+        if close > upper:
+            direction = -1
+        elif close < lower:
+            direction = 1
+        else:
+            continue
+        rows.append(
+            {
+                "event_timestamp": row["timestamp"],
+                "source_bar_timestamp": row["timestamp"],
+                "available_wall_timestamp": None,
+                "signal": Signal.BOLLINGER_BASELINE.value,
+                "reason": "bollinger_control",
+                "bollinger_direction": direction,
+                "sigma_position": row.get("sigma_position"),
+                "sigma_zone": row.get("sigma_zone"),
+                "vol_regime": row.get("vol_regime"),
+                "wall_score_bucket": "control",
+                "dte_bucket": "control",
+                "research_only": True,
+            }
+        )
+    return pl.DataFrame(rows) if rows else pl.DataFrame()
+
+
 def backtest_all_scenarios(
     price_features: pl.DataFrame,
     events: pl.DataFrame,
@@ -164,12 +271,20 @@ def backtest_all_scenarios(
 
     random_events = generate_random_baseline_events(events, config=config)
     sd_events = generate_sd_only_baseline_events(price_features)
+    oi_only_events = generate_oi_wall_only_baseline_events(price_features)
+    bollinger_events = generate_bollinger_baseline_events(price_features)
     all_events = pl.concat(
-        [frame for frame in [events, random_events, sd_events] if not frame.is_empty()],
+        [
+            frame
+            for frame in [events, random_events, sd_events, oi_only_events, bollinger_events]
+            if not frame.is_empty()
+        ],
         how="diagonal",
     )
     trades = run_event_backtest(price_features, all_events, config=config)
-    return trades, summarize_backtest(trades)
+    summary_parts = [summarize_backtest(trades), summarize_event_coverage(events)]
+    summary = pl.concat([frame for frame in summary_parts if not frame.is_empty()], how="diagonal")
+    return trades, summary
 
 
 def walk_forward_validate(
@@ -203,6 +318,23 @@ def walk_forward_validate(
                 or event.get("available_wall_timestamp") <= event.get("event_timestamp")
             )
         ]
+        test_events_frame = pl.DataFrame(test_events) if test_events else pl.DataFrame()
+        test_trades = (
+            run_event_backtest(price_features, test_events_frame, config=cfg)
+            if not test_events_frame.is_empty()
+            else pl.DataFrame()
+        )
+        test_summary = summarize_backtest(test_trades)
+        signal_summary = (
+            test_summary.filter(pl.col("group_type") == "signal")
+            if not test_summary.is_empty()
+            else pl.DataFrame()
+        )
+        expectancy = (
+            float(signal_summary.get_column("expectancy").mean())
+            if not signal_summary.is_empty()
+            else None
+        )
         rows.append(
             {
                 "split_id": split_id,
@@ -211,11 +343,49 @@ def walk_forward_validate(
                 "test_start": test_start_ts,
                 "test_end": test_end_ts,
                 "test_event_count": len(test_events),
+                "test_trade_count": test_trades.height if not test_trades.is_empty() else 0,
+                "mean_signal_expectancy": expectancy,
                 "no_lookahead_violations": 0,
             }
         )
         split_id += 1
         start = test_end + 1
+    return pl.DataFrame(rows) if rows else pl.DataFrame()
+
+
+def run_cost_stress(
+    price_features: pl.DataFrame,
+    events: pl.DataFrame,
+    *,
+    config: ResearchConfig | None = None,
+) -> pl.DataFrame:
+    """Evaluate performance under higher transaction-cost/slippage assumptions."""
+
+    cfg = config or ResearchConfig()
+    rows = []
+    for points_per_side in cfg.cost_stress_points_per_side:
+        stressed_cfg = replace(
+            cfg,
+            cost_points_per_side=points_per_side,
+            slippage_points_per_side=points_per_side,
+        )
+        trades, summary = backtest_all_scenarios(price_features, events, config=stressed_cfg)
+        signal_rows = (
+            summary.filter(pl.col("group_type") == "signal")
+            if not summary.is_empty()
+            else pl.DataFrame()
+        )
+        for row in signal_rows.to_dicts():
+            rows.append(
+                {
+                    "points_per_side_cost": points_per_side,
+                    "signal": row["bucket"],
+                    "trade_count": row["trade_count"],
+                    "net_expectancy": row["expectancy"],
+                    "profit_factor": row["profit_factor"],
+                    "max_drawdown": row["max_drawdown"],
+                }
+            )
     return pl.DataFrame(rows) if rows else pl.DataFrame()
 
 
@@ -229,6 +399,10 @@ def _direction_for_event(
         return int(event.get("random_direction") or default)
     if event.get("signal") == Signal.SD_ONLY_BASELINE.value:
         return int(event.get("sd_direction") or default)
+    if event.get("signal") == Signal.OI_WALL_ONLY_BASELINE.value:
+        return int(event.get("oi_wall_only_direction") or default)
+    if event.get("signal") == Signal.BOLLINGER_BASELINE.value:
+        return int(event.get("bollinger_direction") or default)
     if event.get("signal") == Signal.NO_TRADE_MIDDLE.value:
         return 0
     return default
@@ -278,7 +452,7 @@ def _metrics(
     bucket: str,
     rows: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    pnl = [float(row["pnl_points"]) for row in rows]
+    pnl = [float(row.get("net_pnl_points", row["pnl_points"])) for row in rows]
     wins = [value for value in pnl if value > 0]
     losses = [value for value in pnl if value < 0]
     gross_win = sum(wins)
@@ -325,6 +499,8 @@ def _empty_trades() -> pl.DataFrame:
             "exit_timestamp": pl.Datetime(time_zone="UTC"),
             "signal": pl.String,
             "pnl_points": pl.Float64,
+            "round_trip_cost_points": pl.Float64,
+            "net_pnl_points": pl.Float64,
         }
     )
 
@@ -335,6 +511,8 @@ def _empty_summary() -> pl.DataFrame:
             "group_type": pl.String,
             "bucket": pl.String,
             "trade_count": pl.Int64,
+            "event_count": pl.Int64,
+            "event_share": pl.Float64,
             "win_rate": pl.Float64,
             "expectancy": pl.Float64,
             "profit_factor": pl.Float64,

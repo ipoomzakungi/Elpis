@@ -7,6 +7,11 @@ from typing import Any
 import polars as pl
 
 from research_xau_vol_oi.config import ResearchConfig, Signal, WallSide
+from research_xau_vol_oi.oi_wall_engine import (
+    classify_wall_side,
+    compute_wall_score,
+    proximity_weight,
+)
 
 
 def acceptance_confirmed(
@@ -132,17 +137,64 @@ def choose_wall_for_bar(
     candidates = [
         wall
         for wall in walls
-        if wall.get("timestamp") <= timestamp and (_float(wall.get("wall_score")) or 0.0) >= cfg.min_wall_score
+        if wall.get("timestamp") <= timestamp
+        and (_float(wall.get("wall_score")) or 0.0) >= cfg.min_wall_score
     ]
     if not candidates:
         return None
+    dynamic_candidates = [_dynamic_wall_for_bar(wall, bar, config=cfg) for wall in candidates]
     return min(
-        candidates,
+        dynamic_candidates,
         key=lambda wall: (
             abs(close - (_float(wall.get("wall_level")) or close)),
             -(_float(wall.get("wall_score")) or 0.0),
         ),
     )
+
+
+def _dynamic_wall_for_bar(
+    wall: dict[str, Any],
+    bar: dict[str, Any],
+    *,
+    config: ResearchConfig,
+) -> dict[str, Any]:
+    """Recompute proximity-sensitive wall fields as of the signal bar."""
+
+    close = _float(bar.get("close"))
+    level = _float(wall.get("wall_level"))
+    dynamic = dict(wall)
+    if close is None or level is None:
+        return dynamic
+
+    dynamic["distance_to_spot"] = abs(level - close)
+    dynamic["wall_side"] = classify_wall_side(
+        call_oi=_float(wall.get("call_oi")) or 0.0,
+        put_oi=_float(wall.get("put_oi")) or 0.0,
+        wall_level=level,
+        spot_price=close,
+    ).value
+    if all(
+        wall.get(column) is not None
+        for column in (
+            "normalized_total_oi",
+            "dte_weight",
+            "freshness_weight",
+        )
+    ):
+        prox = proximity_weight(
+            wall_level=level,
+            spot_price=close,
+            one_sd_remaining=_float(bar.get("one_sd_remaining")),
+            config=config,
+        )
+        dynamic["proximity_weight"] = prox
+        dynamic["wall_score"] = compute_wall_score(
+            normalized_total_oi=float(wall["normalized_total_oi"]),
+            dte_component=float(wall["dte_weight"]),
+            freshness_component=float(wall["freshness_weight"]),
+            proximity_component=prox,
+        )
+    return dynamic
 
 
 def _hard_no_trade(

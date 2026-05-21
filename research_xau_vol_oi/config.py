@@ -21,6 +21,8 @@ class Signal(StrEnum):
     SQUEEZE_RISK = "SQUEEZE_RISK"
     RANDOM_BASELINE = "RANDOM_BASELINE"
     SD_ONLY_BASELINE = "SD_ONLY_BASELINE"
+    OI_WALL_ONLY_BASELINE = "OI_WALL_ONLY_BASELINE"
+    BOLLINGER_BASELINE = "BOLLINGER_BASELINE"
 
 
 class WallSide(StrEnum):
@@ -144,6 +146,9 @@ class ResearchConfig:
     vol_expansion_multiple: float = 1.10
     low_oi_gap_points: float = 20.0
     backtest_horizon_bars: int = 8
+    cost_points_per_side: float = 0.0
+    slippage_points_per_side: float = 0.0
+    cost_stress_points_per_side: tuple[float, ...] = (0.0, 0.5, 1.0, 2.0, 5.0)
     walk_forward_train_bars: int = 100
     walk_forward_test_bars: int = 50
     random_seed: int = 7
