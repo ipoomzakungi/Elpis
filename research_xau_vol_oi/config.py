@@ -145,6 +145,9 @@ class ResearchConfig:
     breakout_requires_vol_expansion: bool = False
     vol_expansion_multiple: float = 1.10
     low_oi_gap_points: float = 20.0
+    signal_score_directional_threshold: int = 60
+    signal_score_middle_override_wall_score: float = 0.30
+    signal_score_extreme_min_wall_score: float = 0.25
     backtest_horizon_bars: int = 8
     cost_points_per_side: float = 0.0
     slippage_points_per_side: float = 0.0

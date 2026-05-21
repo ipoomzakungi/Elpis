@@ -24,6 +24,7 @@ from research_xau_vol_oi.data_loader import (
 )
 from research_xau_vol_oi.expected_move import add_expected_move_columns_asof_options
 from research_xau_vol_oi.oi_wall_engine import build_oi_walls
+from research_xau_vol_oi.signal_score import score_signal_events, write_signal_dashboard
 from research_xau_vol_oi.volatility_engine import (
     add_bollinger_baseline,
     add_realized_volatility,
@@ -77,6 +78,7 @@ def run_pipeline(
     )
     feature_table = attach_wall_context(price_features, walls, config=cfg)
     signal_events = build_signal_events(feature_table, walls, config=cfg)
+    signal_scores = score_signal_events(feature_table, signal_events, config=cfg)
     trades, summary = backtest_all_scenarios(feature_table, signal_events, config=cfg)
     walk_forward = walk_forward_validate(feature_table, signal_events, config=cfg)
     cost_stress = run_cost_stress(feature_table, signal_events, config=cfg)
@@ -87,10 +89,12 @@ def run_pipeline(
     feature_table.write_parquet(feature_path)
     signal_events.write_csv(events_path)
     summary.write_csv(summary_path)
+    signal_scores.write_csv(output_root / "signal_score_examples.csv")
     trades.write_csv(output_root / "backtest_trades.csv")
     walk_forward.write_csv(output_root / "walk_forward_validation.csv")
     cost_stress.write_csv(output_root / "transaction_cost_stress.csv")
     walls.write_csv(output_root / "oi_walls.csv")
+    write_signal_dashboard(output_root / "signal_dashboard.html", signal_scores)
 
     write_charts(
         feature_table=feature_table,
@@ -126,9 +130,11 @@ def run_pipeline(
     return {
         "feature_table": feature_path,
         "signal_events": events_path,
+        "signal_score_examples": output_root / "signal_score_examples.csv",
         "backtest_summary": summary_path,
         "research_report": report_path,
         "leakage_audit_report": audit_path,
+        "signal_dashboard": output_root / "signal_dashboard.html",
         "charts": charts_dir,
     }
 
@@ -178,11 +184,21 @@ def attach_wall_context(
                 "wall_level": wall.get("wall_level") if wall else None,
                 "wall_score": wall.get("wall_score") if wall else None,
                 "wall_score_bucket": _wall_score_bucket(wall.get("wall_score") if wall else None),
+                "distance_to_nearest_wall": wall.get("distance_to_spot") if wall else None,
+                "freshness_weight": wall.get("freshness_weight") if wall else None,
+                "dte_weight": wall.get("dte_weight") if wall else None,
+                "proximity_weight": wall.get("proximity_weight") if wall else None,
                 "wall_side": wall.get("wall_side") if wall else None,
                 "dte": wall.get("dte") if wall else None,
                 "dte_bucket": _dte_bucket(wall.get("dte") if wall else None),
                 "basis": wall.get("basis") if wall else None,
                 "basis_source": wall.get("basis_source") if wall else None,
+                "basis_available": wall.get("basis_available", wall.get("basis") is not None)
+                if wall
+                else False,
+                "largest_near_expiry_wall": wall.get("largest_near_expiry_wall") if wall else False,
+                "low_oi_gap_to_next_wall": wall.get("low_oi_gap_to_next_wall") if wall else False,
+                "next_wall_distance": wall.get("next_wall_distance") if wall else None,
             }
         )
     return pl.DataFrame(rows) if rows else price_features
