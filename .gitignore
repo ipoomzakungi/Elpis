@@ -44,6 +44,7 @@ data/processed/
 data/reports/
 data/*.duckdb
 data/*.duckdb.wal
+outputs/
 backend/data/raw/
 backend/data/processed/
 backend/data/reports/xau_quikstrike_fusion/
