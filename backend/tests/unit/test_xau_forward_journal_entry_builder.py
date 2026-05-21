@@ -200,3 +200,20 @@ def test_build_journal_entry_includes_snapshot_key_and_pending_outcomes(tmp_path
     assert len(entry.outcomes) == 5
     assert {outcome.label for outcome in entry.outcomes} == {"pending"}
     assert any(item.context_key == "basis" for item in entry.missing_context)
+
+
+def test_snapshot_key_uses_data_date_when_provided(tmp_path):
+    reports_dir = tmp_path / "data" / "reports"
+    write_synthetic_source_reports(reports_dir)
+
+    entry = build_journal_entry(
+        _request(
+            snapshot_time="2026-05-21T01:00:00Z",
+            data_date="2026-05-20",
+        ),
+        reports_dir=reports_dir,
+    )
+
+    assert entry.snapshot.data_date.isoformat() == "2026-05-20"
+    assert entry.snapshot_key.startswith("data_20260520_fetched_20260521_daily_snapshot_")
+    assert entry.journal_id.startswith("xau_forward_journal_data_20260520_")

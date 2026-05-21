@@ -45,6 +45,20 @@ MATRIX_VIEW_CLICK_LABELS = {
     QuikStrikeMatrixViewType.VOLUME_MATRIX: ("Volume Matrix", "Volume"),
 }
 
+MATRIX_VIEW_LINK_SELECTORS = {
+    QuikStrikeMatrixViewType.OPEN_INTEREST_MATRIX: (
+        "#MainContent_ucViewControl_OpenInterestV2_lbOIMatrix"
+    ),
+    QuikStrikeMatrixViewType.OI_CHANGE_MATRIX: (
+        "#MainContent_ucViewControl_OpenInterestV2_lbOIChgMatrix"
+    ),
+    QuikStrikeMatrixViewType.VOLUME_MATRIX: (
+        "#MainContent_ucViewControl_OpenInterestV2_lbVolumeMatrix"
+    ),
+}
+
+OPEN_INTEREST_NAV_SELECTOR = "#ctl00_ucMenuBar_lvMenuBar_ctrl2_lbMenuItem"
+
 MATRIX_SANITIZER_SCRIPT = """
 () => {
   const cleanText = (value) => String(value || "").replace(/\\s+/g, " ").trim();
@@ -126,6 +140,7 @@ def extract_from_cdp(
     views: Sequence[QuikStrikeMatrixViewType | str] | None = None,
     drive_views: bool = False,
     manual_views: bool = True,
+    auto_prepare: bool = False,
     view_prompt: Callable[[QuikStrikeMatrixViewType], None] | None = None,
     wait_seconds: int = 600,
     poll_seconds: int = 5,
@@ -150,7 +165,20 @@ def extract_from_cdp(
                 "Chrome or Edge manually with --remote-debugging-port=9222, log in "
                 "manually, and navigate to Gold OPEN INTEREST Matrix."
             ) from exc
-        page = _find_gold_matrix_page(browser)
+        if auto_prepare:
+            page = _wait_for_gold_matrix_page(
+                browser,
+                wait_seconds=wait_seconds,
+                poll_seconds=poll_seconds,
+                auto_prepare=True,
+            )
+            if page is None:
+                raise QuikStrikeMatrixBrowserPageNotReadyError(
+                    "Timed out waiting for authenticated QuikStrike Gold Matrix page. "
+                    "Log in manually in the CDP browser and keep it open."
+                )
+        else:
+            page = _find_gold_matrix_page(browser)
         if view_prompt is not None:
             request = build_prompted_request_from_page(
                 page,
@@ -378,17 +406,129 @@ def _find_gold_matrix_page(browser: Any) -> Any:
     )
 
 
+def _wait_for_gold_matrix_page(
+    browser: Any,
+    *,
+    wait_seconds: int,
+    poll_seconds: int,
+    auto_prepare: bool,
+) -> Any | None:
+    deadline = time.monotonic() + max(wait_seconds, 1)
+    poll_ms = max(poll_seconds, 1) * 1000
+    last_page = None
+    while time.monotonic() < deadline:
+        for context in browser.contexts:
+            for page in context.pages:
+                last_page = page
+                if page_has_gold_matrix_table(page):
+                    return page
+        if auto_prepare:
+            _prepare_gold_matrix_from_quikstrike_page(browser)
+        if last_page is not None:
+            last_page.wait_for_timeout(poll_ms)
+        else:
+            time.sleep(max(poll_seconds, 1))
+    return None
+
+
+def _prepare_gold_matrix_from_quikstrike_page(browser: Any) -> None:
+    for context in browser.contexts:
+        for page in context.pages:
+            try:
+                title = page.title()
+            except Exception:
+                title = ""
+            if "QuikStrike" not in title and not _page_text_matches_any(page, ("QuikStrike",)):
+                continue
+            if not _page_text_matches_any(page, ("Gold", "OG|GC")):
+                continue
+            if page_has_gold_matrix_table(page):
+                return
+            if not _page_text_matches_any(page, ("Open Interest Chart", "Heatmap", "Matrix")):
+                _click_selector(page, OPEN_INTEREST_NAV_SELECTOR)
+                page.wait_for_timeout(2500)
+            try:
+                _click_view(page, QuikStrikeMatrixViewType.OPEN_INTEREST_MATRIX)
+            except QuikStrikeMatrixBrowserPageNotReadyError:
+                continue
+
+
 def _click_view(page: Any, view: QuikStrikeMatrixViewType) -> None:
+    if _page_payload_matches_view(page, view):
+        return
+    if _click_selector(page, MATRIX_VIEW_LINK_SELECTORS[view]) and _wait_for_view_match(page, view):
+        return
     for label in MATRIX_VIEW_CLICK_LABELS[view]:
         try:
             page.get_by_text(label, exact=True).click(timeout=1500)
-            page.wait_for_timeout(1500)
-            return
+            if _wait_for_view_match(page, view):
+                return
         except Exception:
             continue
     raise QuikStrikeMatrixBrowserPageNotReadyError(
         f"Could not click Matrix view {view.value}; use --manual-views and select it manually."
     )
+
+
+def _click_selector(page: Any, selector: str) -> bool:
+    try:
+        locator = page.locator(selector)
+        box = locator.bounding_box(timeout=3000)
+        if box:
+            page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+            page.wait_for_timeout(1000)
+            return True
+    except Exception:
+        pass
+    try:
+        return bool(
+            page.evaluate(
+                """
+                (selector) => {
+                  const item = document.querySelector(selector);
+                  if (!item) return false;
+                  item.click();
+                  return true;
+                }
+                """,
+                selector,
+            )
+        )
+    except Exception:
+        return False
+
+
+def _wait_for_view_match(
+    page: Any,
+    view: QuikStrikeMatrixViewType,
+    *,
+    timeout_ms: int = 10000,
+    poll_ms: int = 500,
+) -> bool:
+    deadline = time.monotonic() + (timeout_ms / 1000)
+    while time.monotonic() < deadline:
+        if _page_payload_matches_view(page, view):
+            return True
+        page.wait_for_timeout(poll_ms)
+    return False
+
+
+def _page_text_matches_any(page: Any, texts: Sequence[str]) -> bool:
+    try:
+        return bool(
+            page.evaluate(
+                """
+                (texts) => {
+                  const body = document.body ? document.body.innerText : "";
+                  const normalizedBody = body.toLowerCase();
+                  return texts.some((text) => normalizedBody.includes(String(text).toLowerCase()));
+                }
+                """,
+                list(texts),
+            )
+        )
+    except Exception:
+        return False
 
 
 def _normalize_views(

@@ -28,6 +28,7 @@ ENV/
 !.env.example
 .env.local
 .env.*.local
+.quikstrike-runner.local.env
 
 # Data files (large, not for git)
 data/raw/quikstrike/

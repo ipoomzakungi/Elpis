@@ -388,6 +388,7 @@ class XauForwardJournalReportStore:
             source_kind=entry.source_kind,
             status=entry.status,
             snapshot_time=entry.snapshot.snapshot_time,
+            data_date=entry.snapshot.data_date,
             capture_window=entry.snapshot.capture_window,
             capture_session=entry.snapshot.capture_session,
             product=entry.snapshot.product,

@@ -198,6 +198,7 @@ class XauQuikStrikeFusionRequest(XauFusionBaseModel):
     gc_futures_reference: float | None = Field(default=None, gt=0)
     session_open_price: float | None = Field(default=None, gt=0)
     realized_volatility: float | None = Field(default=None, gt=0)
+    session_date: dt_date | None = None
     candle_context: list[dict[str, Any]] | dict[str, Any] = Field(default_factory=list)
     create_xau_vol_oi_report: bool = False
     create_xau_reaction_report: bool = False

@@ -389,7 +389,7 @@ def _xau_report_request(
     volatility_snapshot = _volatility_snapshot(request, created_at=created_at, rows=rows)
     return XauVolOiReportRequest(
         options_oi_file_path=input_path,
-        session_date=created_at.date(),
+        session_date=request.session_date or created_at.date(),
         spot_reference=spot_reference,
         futures_reference=futures_reference,
         volatility_snapshot=volatility_snapshot,

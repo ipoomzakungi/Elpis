@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from enum import StrEnum
 from typing import Any
 
@@ -367,6 +367,7 @@ class XauForwardSourceReportRef(XauForwardJournalBaseModel):
 
 class XauForwardSnapshotContext(XauForwardJournalBaseModel):
     snapshot_time: datetime
+    data_date: date | None = None
     capture_window: str = "daily_snapshot"
     capture_session: str | None = None
     product: str | None = None
@@ -984,6 +985,7 @@ class XauForwardJournalArtifact(XauForwardJournalBaseModel):
 
 class XauForwardJournalCreateRequest(XauForwardJournalBaseModel):
     snapshot_time: datetime
+    data_date: date | None = None
     capture_window: str = "daily_snapshot"
     capture_session: str | None = None
     vol2vol_report_id: str
@@ -998,6 +1000,7 @@ class XauForwardJournalCreateRequest(XauForwardJournalBaseModel):
     event_news_flag: str | bool | None = None
     notes: list[XauForwardJournalNote] = Field(default_factory=list)
     persist_report: bool = True
+    force_create: bool = False
     research_only_acknowledged: bool
 
     @field_validator("snapshot_time")
@@ -1071,6 +1074,8 @@ class XauForwardJournalEntry(XauForwardJournalBaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     snapshot: XauForwardSnapshotContext
     source_reports: list[XauForwardSourceReportRef]
+    content_fingerprint: str | None = None
+    content_fingerprint_components: dict[str, str] = Field(default_factory=dict)
     top_oi_walls: list[XauForwardWallSummary] = Field(default_factory=list)
     top_oi_change_walls: list[XauForwardWallSummary] = Field(default_factory=list)
     top_volume_walls: list[XauForwardWallSummary] = Field(default_factory=list)
@@ -1091,6 +1096,23 @@ class XauForwardJournalEntry(XauForwardJournalBaseModel):
     @classmethod
     def validate_journal_id(cls, value: str) -> str:
         return validate_xau_forward_journal_safe_id(value, "journal_id")
+
+    @field_validator("content_fingerprint")
+    @classmethod
+    def validate_content_fingerprint(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return validate_xau_forward_journal_safe_id(value, "content_fingerprint")
+
+    @field_validator("content_fingerprint_components")
+    @classmethod
+    def validate_content_fingerprint_components(cls, values: dict[str, str]) -> dict[str, str]:
+        return {
+            validate_xau_forward_journal_safe_id(key, "content_fingerprint_component"): (
+                validate_xau_forward_journal_safe_id(value, "content_fingerprint")
+            )
+            for key, value in values.items()
+        }
 
     @field_validator("created_at", "updated_at")
     @classmethod
@@ -1122,6 +1144,7 @@ class XauForwardJournalSummary(XauForwardJournalBaseModel):
     source_kind: str = "operational"
     status: XauForwardJournalEntryStatus
     snapshot_time: datetime
+    data_date: date | None = None
     capture_window: str = "daily_snapshot"
     capture_session: str | None = None
     product: str | None = None
