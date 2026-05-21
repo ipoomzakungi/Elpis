@@ -431,7 +431,22 @@ def build_signal_kill_list(
         for row in deciles.filter(pl.col("group_type") == "signal_label").to_dicts()
     } if not deciles.is_empty() else {}
     baseline_rows = _threshold_baseline_rows(thresholds)
-    all_labels = sorted(set(signal_rows) | set(baseline_rows) | {Signal.RANDOM_BASELINE.value})
+    required_labels = {
+        Signal.NO_TRADE.value,
+        Signal.NO_TRADE_MIDDLE.value,
+        Signal.WATCH_WALL.value,
+        Signal.PIN_RISK.value,
+        Signal.SQUEEZE_RISK.value,
+        Signal.FADE_WALL_LONG.value,
+        Signal.FADE_WALL_SHORT.value,
+        Signal.BREAK_WALL_LONG.value,
+        Signal.BREAK_WALL_SHORT.value,
+        Signal.RANDOM_BASELINE.value,
+        Signal.SD_ONLY_BASELINE.value,
+        Signal.OI_WALL_ONLY_BASELINE.value,
+        Signal.BOLLINGER_BASELINE.value,
+    }
+    all_labels = sorted(set(signal_rows) | set(baseline_rows) | required_labels)
     bollinger_expectancy = _none_safe(
         baseline_rows.get(Signal.BOLLINGER_BASELINE.value, {}).get("expectancy")
     )
