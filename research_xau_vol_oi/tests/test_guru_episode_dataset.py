@@ -4,6 +4,7 @@ import polars as pl
 
 from research_xau_vol_oi.config import ResearchConfig, Signal
 from research_xau_vol_oi.guru_episode_dataset import (
+    build_guru_episode_review_decisions_template,
     build_guru_decision_episodes,
     build_guru_episode_outcomes,
     extract_guru_thesis,
@@ -211,8 +212,62 @@ def test_review_required_sample_and_outputs(tmp_path) -> None:
     assert result.review_sample.height == 3
     assert result.final_decision == "GURU_EPISODE_REVIEW_REQUIRED"
     assert result.approved_only_can_run is False
+    assert result.review_decisions_template.height == 3
     assert (tmp_path / "guru_decision_episodes.csv").exists()
+    assert (tmp_path / "guru_episode_review_dashboard.html").exists()
+    assert (tmp_path / "guru_episode_review_decisions_template.csv").exists()
+    assert (tmp_path / "guru_episode_review_guide.md").exists()
     assert (tmp_path / "charts" / "guru_episode_target_hit_rate.svg").exists()
+
+
+def test_review_dashboard_separates_transcript_snapshot_and_evaluation(tmp_path) -> None:
+    result = run_guru_episode_dataset_layer(
+        review_queue=_review_queue(),
+        feature_table=_features(),
+        signal_events=_signals(),
+        trades=pl.DataFrame(),
+        output_dir=tmp_path,
+        charts_dir=tmp_path / "charts",
+    )
+    dashboard = (tmp_path / "guru_episode_review_dashboard.html").read_text(encoding="utf-8")
+    guide = (tmp_path / "guru_episode_review_guide.md").read_text(encoding="utf-8")
+
+    assert "1. Transcript Section" in dashboard
+    assert "2. Market Snapshot Section" in dashboard
+    assert "3. Outcome Section · EVALUATION ONLY" in dashboard
+    assert "4. Reviewer Fields" in dashboard
+    assert "reviewer_decision" in dashboard
+    assert "do not use future outcomes" in guide.lower()
+    assert result.review_decisions_template.height == result.review_sample.height
+
+
+def test_review_decisions_template_schema_and_quality_flags() -> None:
+    episodes = build_guru_decision_episodes(
+        review_queue=_review_queue(),
+        feature_table=_features(),
+        signal_events=_signals(),
+    )
+    template = build_guru_episode_review_decisions_template(episodes)
+
+    assert {
+        "episode_id",
+        "reviewer_decision",
+        "corrected_thesis_type",
+        "corrected_expected_direction",
+        "corrected_from_level",
+        "corrected_target_level",
+        "corrected_invalidation_level",
+        "corrected_time_horizon",
+        "reviewer_notes",
+        "missing_target",
+        "missing_invalidation",
+        "post_event_risk",
+        "numeric_artifact_risk",
+        "likely_context_only",
+    }.issubset(template.columns)
+    post = template.filter(pl.col("transcript_id") == "t3").row(0, named=True)
+    assert post["post_event_risk"] is True
+    assert post["reviewer_decision"] == ""
 
 
 def test_approved_only_mode_uses_only_approved_records(tmp_path) -> None:

@@ -9,6 +9,7 @@ does not create trading signals.
 from __future__ import annotations
 
 import hashlib
+import html
 import math
 import re
 from dataclasses import dataclass
@@ -53,6 +54,7 @@ class GuruEpisodeDatasetResult:
     outcomes: pl.DataFrame
     performance: pl.DataFrame
     review_sample: pl.DataFrame
+    review_decisions_template: pl.DataFrame
     final_decision: str
     approved_only_can_run: bool
     no_trade_rows_retained: int
@@ -84,6 +86,7 @@ def run_guru_episode_dataset_layer(
     outcomes = build_guru_episode_outcomes(episodes, feature_table, config=cfg)
     performance = summarize_guru_episode_performance(episodes, outcomes)
     review_sample = build_guru_episode_review_sample(episodes)
+    decisions_template = build_guru_episode_review_decisions_template(review_sample)
     approved_only_can_run = episodes.filter(pl.col("reviewer_decision") == "APPROVE").height > 0
     final_decision = guru_episode_final_decision(
         episodes=episodes,
@@ -96,12 +99,25 @@ def run_guru_episode_dataset_layer(
     outcomes.write_csv(output_dir / "guru_episode_outcomes.csv")
     performance.write_csv(output_dir / "guru_episode_rule_performance.csv")
     review_sample.write_csv(output_dir / "guru_episode_review_sample.csv")
+    decisions_template.write_csv(output_dir / "guru_episode_review_decisions_template.csv")
+    write_guru_episode_review_dashboard(
+        output_dir / "guru_episode_review_dashboard.html",
+        episodes=review_sample,
+        outcomes=outcomes,
+        decisions_template=decisions_template,
+    )
+    write_guru_episode_review_guide(
+        output_dir / "guru_episode_review_guide.md",
+        episodes=review_sample,
+        decisions_template=decisions_template,
+    )
     write_guru_episode_report(
         output_dir / "guru_episode_report.md",
         episodes=episodes,
         outcomes=outcomes,
         performance=performance,
         review_sample=review_sample,
+        decisions_template=decisions_template,
         final_decision=final_decision,
         approved_only_can_run=approved_only_can_run,
         no_trade_rows_retained=no_trade_rows_retained,
@@ -112,6 +128,7 @@ def run_guru_episode_dataset_layer(
         outcomes=outcomes,
         performance=performance,
         review_sample=review_sample,
+        review_decisions_template=decisions_template,
         final_decision=final_decision,
         approved_only_can_run=approved_only_can_run,
         no_trade_rows_retained=no_trade_rows_retained,
@@ -138,6 +155,7 @@ def build_guru_decision_episodes(
         availability = _to_datetime(review.get("availability_timestamp"))
         snapshot = _market_snapshot(feature_rows, availability)
         thesis = extract_guru_thesis(review, snapshot)
+        quality_flags = episode_quality_flags(review=review, thesis=thesis, snapshot=snapshot)
         reviewed_status = _reviewed_status(review)
         session_usable = _same_session_predictive_allowed(availability, cfg)
         preview_status = (
@@ -151,6 +169,7 @@ def build_guru_decision_episodes(
         rows.append(
             {
                 "episode_id": episode_id,
+                "review_id": review.get("review_id"),
                 "transcript_id": review.get("transcript_id"),
                 "transcript_date": review.get("transcript_date"),
                 "availability_timestamp": availability,
@@ -161,6 +180,7 @@ def build_guru_decision_episodes(
                 "rule_tag": review.get("rule_tag"),
                 "rule_type": review.get("rule_type"),
                 "quality_label": review.get("quality_label"),
+                "suggested_review_priority": review.get("suggested_review_priority"),
                 "action_bias": review.get("action_bias"),
                 "condition_text": review.get("condition"),
                 "invalidation_rule": thesis["invalidation_rule"],
@@ -204,6 +224,7 @@ def build_guru_decision_episodes(
                 "confidence_score": _float_or_none(review.get("confidence_score")),
                 "testability_score": _float_or_none(review.get("testability_score")),
                 "leakage_risk_score": _float_or_none(review.get("leakage_risk_score")),
+                **quality_flags,
                 "episode_review_status": preview_status,
                 "predictive_claim_allowed": reviewed_status == "APPROVE" and session_usable,
                 "same_session_predictive_allowed": session_usable,
@@ -322,6 +343,82 @@ def build_guru_episode_review_sample(episodes: pl.DataFrame) -> pl.DataFrame:
     return sample.head(100)
 
 
+def build_guru_episode_review_decisions_template(episodes: pl.DataFrame) -> pl.DataFrame:
+    """Create the manual episode review CSV template."""
+
+    if episodes.is_empty():
+        return _empty_review_decisions_template()
+    rows = []
+    for row in episodes.to_dicts():
+        rows.append(
+            {
+                "episode_id": row.get("episode_id"),
+                "review_id": row.get("review_id"),
+                "transcript_id": row.get("transcript_id"),
+                "transcript_date": row.get("transcript_date"),
+                "availability_timestamp": row.get("availability_timestamp"),
+                "rule_tag": row.get("rule_tag"),
+                "rule_type": row.get("rule_type"),
+                "action_bias": row.get("action_bias"),
+                "thesis_type": row.get("thesis_type"),
+                "expected_direction": row.get("expected_direction"),
+                "mentioned_levels": row.get("mentioned_levels"),
+                "expected_from_level": row.get("expected_from_level"),
+                "expected_to_level": row.get("expected_to_level"),
+                "invalidation_level": row.get("invalidation_level"),
+                "missing_target": row.get("missing_target"),
+                "missing_invalidation": row.get("missing_invalidation"),
+                "vague_logic": row.get("vague_logic"),
+                "post_event_risk": row.get("post_event_risk"),
+                "numeric_artifact_risk": row.get("numeric_artifact_risk"),
+                "no_market_data_match": row.get("no_market_data_match"),
+                "likely_context_only": row.get("likely_context_only"),
+                "source_excerpt": row.get("source_excerpt"),
+                "normalized_english_summary": row.get("normalized_english_summary"),
+                "reviewer_decision": "",
+                "corrected_thesis_type": "",
+                "corrected_expected_direction": "",
+                "corrected_from_level": "",
+                "corrected_target_level": "",
+                "corrected_invalidation_level": "",
+                "corrected_time_horizon": "",
+                "reviewer_notes": "",
+            }
+        )
+    return _rows_frame(rows)
+
+
+def episode_quality_flags(
+    *,
+    review: dict[str, Any],
+    thesis: dict[str, Any],
+    snapshot: dict[str, Any],
+) -> dict[str, bool]:
+    """Flag review risks for manual triage."""
+
+    thesis_type = str(thesis.get("thesis_type") or "")
+    rule_type = str(review.get("rule_type") or "").upper()
+    quality_label = str(review.get("quality_label") or "").upper()
+    condition = str(review.get("condition") or "")
+    source_excerpt = str(review.get("source_excerpt") or "")
+    needs_target = thesis_type in {"REJECT_LEVEL", "BREAK_LEVEL", "SQUEEZE_CONTINUATION", "RANGE_ROTATION"}
+    needs_invalidation = thesis_type in {"REJECT_LEVEL", "BREAK_LEVEL"}
+    vague_logic = len(condition.strip()) < 15 or not re.search(r"\b(if|when|only if|requires|unless)\b|ถ้า|เมื่อ|หาก", condition, re.I)
+    return {
+        "missing_target": needs_target and thesis.get("expected_to_level") is None,
+        "missing_invalidation": needs_invalidation and thesis.get("invalidation_level") is None,
+        "vague_logic": vague_logic,
+        "post_event_risk": "POST_EVENT" in rule_type or "POST_EVENT" in quality_label,
+        "numeric_artifact_risk": bool(review.get("likely_srt_timestamp_artifact"))
+        or bool(str(review.get("timestamp_like_numeric_levels") or "").strip())
+        or _srt_timestamp_in_text(source_excerpt),
+        "no_market_data_match": snapshot.get("data_available_timestamp") is None
+        or snapshot.get("data_quality_status") in {None, "", "MISSING_SNAPSHOT"},
+        "likely_context_only": thesis_type in {"CONTEXT_ONLY", "WATCH_ONLY", "POST_EVENT_COMMENTARY", "UNTESTABLE"}
+        or str(review.get("action_bias") or "").upper() in {"WATCH_ONLY", "NONE"},
+    }
+
+
 def guru_episode_final_decision(
     *,
     episodes: pl.DataFrame,
@@ -357,6 +454,7 @@ def write_guru_episode_report(
     outcomes: pl.DataFrame,
     performance: pl.DataFrame,
     review_sample: pl.DataFrame,
+    decisions_template: pl.DataFrame,
     final_decision: str,
     approved_only_can_run: bool,
     no_trade_rows_retained: int,
@@ -392,6 +490,7 @@ def write_guru_episode_report(
         f"- Outcome rows: {outcomes.height}",
         f"- Approved-only episode validation can run: {approved_only_can_run}",
         f"- No-trade signal rows retained: {no_trade_rows_retained}",
+        f"- Review decisions template rows: {decisions_template.height}",
         "",
         "## What Data Guru Could See",
         "",
@@ -419,11 +518,187 @@ def write_guru_episode_report(
         "",
         _frame_markdown(_report_columns(review_sample)),
         "",
+        "## Episode Review Dashboard",
+        "",
+        "- Dashboard: `outputs/guru_episode_review_dashboard.html`",
+        "- Decisions template: `outputs/guru_episode_review_decisions_template.csv`",
+        "- Guide: `outputs/guru_episode_review_guide.md`",
+        "",
         "## Final Guru Logic Decision",
         "",
         "- `GURU_EPISODE_VALIDATED_FILTER` is blocked unless human-approved records exist, "
         "approved sample size is sufficient, walk-forward and placebo checks pass, "
         "target/invalidation logic is clear, future transcript leakage is zero, and no-trade rows are retained.",
+    ]
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def write_guru_episode_review_dashboard(
+    path: Path,
+    *,
+    episodes: pl.DataFrame,
+    outcomes: pl.DataFrame,
+    decisions_template: pl.DataFrame,
+) -> None:
+    """Write a static HTML dashboard for manual guru episode review."""
+
+    summary = _review_dashboard_summary(episodes)
+    outcomes_by_episode = _outcomes_by_episode(outcomes)
+    episode_cards = []
+    for index, episode in enumerate(episodes.to_dicts(), start=1):
+        episode_outcomes = outcomes_by_episode.get(str(episode.get("episode_id")), [])
+        episode_cards.append(_episode_card_html(index, episode, episode_outcomes))
+    body = "\n".join(episode_cards) if episode_cards else "<p>No reviewable episodes.</p>"
+    html_text = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Guru Episode Review Dashboard</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --bg: #f7f7f4;
+      --panel: #ffffff;
+      --ink: #1f2933;
+      --muted: #65727f;
+      --line: #d8ddd8;
+      --accent: #0f766e;
+      --warn: #b45309;
+      --bad: #b91c1c;
+      --soft: #eef5f2;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.45;
+    }}
+    header {{
+      padding: 24px 28px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }}
+    h1 {{ margin: 0 0 8px; font-size: 24px; }}
+    h2 {{ margin: 0 0 12px; font-size: 18px; }}
+    h3 {{ margin: 0 0 10px; font-size: 15px; color: var(--muted); text-transform: uppercase; }}
+    main {{ max-width: 1440px; margin: 0 auto; padding: 20px 24px 48px; }}
+    .summary {{ display: grid; grid-template-columns: repeat(6, minmax(120px, 1fr)); gap: 10px; margin-top: 14px; }}
+    .metric {{ border: 1px solid var(--line); background: var(--soft); padding: 10px; border-radius: 6px; }}
+    .metric strong {{ display: block; font-size: 20px; }}
+    .metric span {{ color: var(--muted); font-size: 12px; }}
+    .episode {{ background: var(--panel); border: 1px solid var(--line); border-radius: 8px; margin: 18px 0; overflow: hidden; }}
+    .episode-title {{ display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--line); background: #fbfcfb; }}
+    .badge {{ display: inline-block; border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; font-size: 12px; background: #fff; }}
+    .badge.warn {{ color: var(--warn); border-color: #f4c884; background: #fff8e8; }}
+    .badge.bad {{ color: var(--bad); border-color: #efb6b6; background: #fff1f1; }}
+    .grid {{ display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; padding: 14px 16px; }}
+    .section {{ border: 1px solid var(--line); border-radius: 6px; padding: 12px; min-width: 0; }}
+    .full {{ grid-column: 1 / -1; }}
+    .kv {{ display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 6px 10px; font-size: 13px; }}
+    .kv div:nth-child(odd) {{ color: var(--muted); }}
+    pre {{ margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family: Consolas, monospace; font-size: 12px; background: #f3f5f3; padding: 10px; border-radius: 4px; }}
+    table {{ width: 100%; border-collapse: collapse; font-size: 12px; }}
+    th, td {{ border-bottom: 1px solid var(--line); padding: 6px; text-align: left; vertical-align: top; }}
+    th {{ color: var(--muted); font-weight: 600; background: #f8faf8; }}
+    .evaluation {{ border-color: #f2c98d; background: #fffaf0; }}
+    .review-fields {{ display: grid; grid-template-columns: repeat(4, minmax(160px, 1fr)); gap: 10px; }}
+    label {{ display: grid; gap: 4px; font-size: 12px; color: var(--muted); }}
+    select, input, textarea {{ width: 100%; border: 1px solid var(--line); border-radius: 4px; padding: 7px; font: inherit; background: #fff; }}
+    textarea {{ min-height: 70px; grid-column: span 2; }}
+    .note {{ color: var(--muted); font-size: 13px; }}
+    @media (max-width: 980px) {{
+      .summary {{ grid-template-columns: repeat(2, minmax(120px, 1fr)); }}
+      .grid {{ grid-template-columns: 1fr; }}
+      .review-fields {{ grid-template-columns: 1fr; }}
+      textarea {{ grid-column: span 1; }}
+    }}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Guru Episode Review Dashboard</h1>
+    <p class="note">Research-only review queue. Approving an episode confirms extraction quality only; it does not validate predictive edge or create a trade signal.</p>
+    <p class="note">Use <code>outputs/guru_episode_review_decisions_template.csv</code> for saved decisions, then rerun <code>python -m research_xau_vol_oi.report</code>.</p>
+    <div class="summary">
+      {_metric_html("Total episodes", summary["total_episodes"])}
+      {_metric_html("High priority", summary["high_priority_episodes"])}
+      {_metric_html("Missing target", summary["missing_target_count"])}
+      {_metric_html("Missing invalidation", summary["missing_invalidation_count"])}
+      {_metric_html("Likely testable", summary["likely_testable_count"])}
+      {_metric_html("Likely context-only", summary["likely_context_only_count"])}
+    </div>
+  </header>
+  <main>
+    {body}
+  </main>
+  <footer style="padding: 18px 28px; color: #65727f; border-top: 1px solid #d8ddd8;">Template rows: {decisions_template.height}. Future outcomes are marked EVALUATION ONLY and must not be used to decide whether extraction matched the transcript.</footer>
+</body>
+</html>
+"""
+    path.write_text(html_text, encoding="utf-8")
+
+
+def write_guru_episode_review_guide(
+    path: Path,
+    *,
+    episodes: pl.DataFrame,
+    decisions_template: pl.DataFrame,
+) -> None:
+    """Write manual review instructions for guru episodes."""
+
+    summary = _review_dashboard_summary(episodes)
+    lines = [
+        "# Guru Episode Review Guide",
+        "",
+        "This workflow is research-only. The review confirms whether extracted guru logic matches the transcript. "
+        "It does not validate an edge or create a trade signal.",
+        "",
+        "## Files",
+        "",
+        "- Dashboard: `outputs/guru_episode_review_dashboard.html`",
+        "- Decisions template: `outputs/guru_episode_review_decisions_template.csv`",
+        "- Episode source rows: `outputs/guru_decision_episodes.csv`",
+        "- Evaluation-only outcomes: `outputs/guru_episode_outcomes.csv`",
+        "",
+        "## Summary",
+        "",
+        f"- Total reviewable episodes: {summary['total_episodes']}",
+        f"- High-priority episodes: {summary['high_priority_episodes']}",
+        f"- Missing target count: {summary['missing_target_count']}",
+        f"- Missing invalidation count: {summary['missing_invalidation_count']}",
+        f"- Likely testable count: {summary['likely_testable_count']}",
+        f"- Likely context-only count: {summary['likely_context_only_count']}",
+        f"- Decisions template rows: {decisions_template.height}",
+        "",
+        "## Review Steps",
+        "",
+        "1. Open `outputs/guru_episode_review_dashboard.html` in a browser.",
+        "2. For each episode, review what guru said first. Confirm the extracted rule tag, thesis, direction, levels, target, and invalidation match the transcript excerpt.",
+        "3. Use the market snapshot only to check whether required inputs existed at the transcript availability timestamp.",
+        "4. Treat the outcome section as `EVALUATION ONLY`; do not use future outcomes to decide if extraction was correct.",
+        "5. Fill `outputs/guru_episode_review_decisions_template.csv` with one reviewer decision per row.",
+        "6. Rerun `python -m research_xau_vol_oi.report`.",
+        "7. Check approved-only validation outputs before making any research claim.",
+        "",
+        "## Decision Labels",
+        "",
+        "- `APPROVE`: extracted conditional logic matches the transcript and is suitable as a reviewed research feature.",
+        "- `REJECT`: extraction is wrong or not supported by the excerpt.",
+        "- `NEEDS_MORE_CONTEXT`: excerpt is insufficient; inspect the source transcript before deciding.",
+        "- `POST_EVENT_ONLY`: the statement is commentary after the event and cannot be predictive.",
+        "- `DUPLICATE`: another episode already captures the same statement.",
+        "",
+        "## Required Corrections",
+        "",
+        "Use corrected fields when the extracted thesis is close but not exact: `corrected_thesis_type`, "
+        "`corrected_expected_direction`, `corrected_from_level`, `corrected_target_level`, "
+        "`corrected_invalidation_level`, and `corrected_time_horizon`.",
     ]
     path.write_text("\n".join(lines), encoding="utf-8")
 
@@ -452,6 +727,180 @@ def write_guru_episode_charts(*, charts_dir: Path, performance: pl.DataFrame) ->
         positive=[_float_or_zero(row.get("average_MFE")) for row in rows],
         negative=[_float_or_zero(row.get("average_MAE")) for row in rows],
     )
+
+
+def _review_dashboard_summary(episodes: pl.DataFrame) -> dict[str, int]:
+    if episodes.is_empty():
+        return {
+            "total_episodes": 0,
+            "high_priority_episodes": 0,
+            "missing_target_count": 0,
+            "missing_invalidation_count": 0,
+            "likely_testable_count": 0,
+            "likely_context_only_count": 0,
+        }
+    return {
+        "total_episodes": episodes.height,
+        "high_priority_episodes": _count_bool(episodes, "suggested_review_priority", value="HIGH"),
+        "missing_target_count": _count_bool(episodes, "missing_target"),
+        "missing_invalidation_count": _count_bool(episodes, "missing_invalidation"),
+        "likely_testable_count": episodes.filter(
+            ~pl.col("likely_context_only") & ~pl.col("post_event_risk") & ~pl.col("no_market_data_match")
+        ).height
+        if {"likely_context_only", "post_event_risk", "no_market_data_match"}.issubset(episodes.columns)
+        else 0,
+        "likely_context_only_count": _count_bool(episodes, "likely_context_only"),
+    }
+
+
+def _count_bool(frame: pl.DataFrame, column: str, *, value: Any = True) -> int:
+    if column not in frame.columns:
+        return 0
+    if value is True:
+        return frame.filter(pl.col(column)).height
+    return frame.filter(pl.col(column) == value).height
+
+
+def _outcomes_by_episode(outcomes: pl.DataFrame) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    if outcomes.is_empty():
+        return grouped
+    for row in outcomes.to_dicts():
+        grouped.setdefault(str(row.get("episode_id")), []).append(row)
+    return grouped
+
+
+def _episode_card_html(index: int, episode: dict[str, Any], outcomes: list[dict[str, Any]]) -> str:
+    flags = [
+        "missing_target",
+        "missing_invalidation",
+        "vague_logic",
+        "post_event_risk",
+        "numeric_artifact_risk",
+        "no_market_data_match",
+        "likely_context_only",
+    ]
+    active_flags = [flag for flag in flags if _bool_value(episode.get(flag))]
+    flag_html = " ".join(
+        f'<span class="badge {"bad" if flag in {"post_event_risk", "no_market_data_match"} else "warn"}">{_escape(flag)}</span>'
+        for flag in active_flags
+    ) or '<span class="badge">no quality flags</span>'
+    return f"""
+<article class="episode" id="{_escape(str(episode.get("episode_id") or ""))}">
+  <div class="episode-title">
+    <div>
+      <h2>{index}. {_escape(str(episode.get("rule_tag") or ""))} · {_escape(str(episode.get("thesis_type") or ""))}</h2>
+      <span class="badge">{_escape(str(episode.get("episode_id") or ""))}</span>
+      <span class="badge">{_escape(str(episode.get("episode_review_status") or ""))}</span>
+      {flag_html}
+    </div>
+    <div class="note">Review extraction quality only. Outcomes are evaluation-only.</div>
+  </div>
+  <div class="grid">
+    <section class="section">
+      <h3>1. Transcript Section</h3>
+      {_kv_html(episode, [
+          "transcript_id", "transcript_date", "availability_timestamp", "rule_tag", "rule_type",
+          "action_bias", "condition_text", "mentioned_levels", "target_text", "invalidation_rule",
+      ])}
+      <p class="note">Source excerpt</p>
+      <pre>{_escape(str(episode.get("source_excerpt") or ""))}</pre>
+      <p class="note">Normalized English summary</p>
+      <pre>{_escape(str(episode.get("normalized_english_summary") or ""))}</pre>
+    </section>
+    <section class="section">
+      <h3>2. Market Snapshot Section</h3>
+      {_kv_html(episode, [
+          "spot_price", "session_open", "open_side", "annualized_iv", "realized_vol", "vrp",
+          "one_sd_level_upper", "one_sd_level_lower", "two_sd_level_upper", "two_sd_level_lower",
+          "sigma_position", "nearest_wall_above", "nearest_wall_below", "nearest_wall_above_score",
+          "nearest_wall_below_score", "basis", "nearest_spot_equivalent_strike", "data_quality_status",
+      ])}
+    </section>
+    <section class="section full evaluation">
+      <h3>3. Outcome Section · EVALUATION ONLY</h3>
+      <p class="note">Future outcome rows are shown only after the transcript timestamp. Do not use this section to approve or reject whether extraction matched the transcript.</p>
+      {_outcome_table_html(outcomes)}
+    </section>
+    <section class="section full">
+      <h3>4. Reviewer Fields</h3>
+      <p class="note">Use these fields as a visual guide, then enter the saved decision in <code>guru_episode_review_decisions_template.csv</code>.</p>
+      <div class="review-fields">
+        <label>reviewer_decision
+          <select><option></option><option>APPROVE</option><option>REJECT</option><option>NEEDS_MORE_CONTEXT</option><option>POST_EVENT_ONLY</option><option>DUPLICATE</option></select>
+        </label>
+        <label>corrected_thesis_type
+          <input value="">
+        </label>
+        <label>corrected_expected_direction
+          <input value="">
+        </label>
+        <label>corrected_from_level
+          <input value="">
+        </label>
+        <label>corrected_target_level
+          <input value="">
+        </label>
+        <label>corrected_invalidation_level
+          <input value="">
+        </label>
+        <label>corrected_time_horizon
+          <input value="">
+        </label>
+        <label>reviewer_notes
+          <textarea></textarea>
+        </label>
+      </div>
+    </section>
+  </div>
+</article>
+"""
+
+
+def _kv_html(row: dict[str, Any], columns: list[str]) -> str:
+    items = []
+    for column in columns:
+        items.append(f"<div>{_escape(column)}</div><div>{_escape(_display_value(row.get(column)))}</div>")
+    return '<div class="kv">' + "\n".join(items) + "</div>"
+
+
+def _outcome_table_html(outcomes: list[dict[str, Any]]) -> str:
+    columns = [
+        "outcome_window",
+        "target_hit",
+        "invalidation_hit",
+        "direction_correct",
+        "max_favorable_excursion",
+        "max_adverse_excursion",
+        "outcome_label",
+    ]
+    if not outcomes:
+        return "<p>No evaluation rows.</p>"
+    header = "".join(f"<th>{_escape(column)}</th>" for column in columns)
+    rows = []
+    order = {name: index for index, name in enumerate(OUTCOME_WINDOWS)}
+    for row in sorted(outcomes, key=lambda item: order.get(str(item.get("outcome_window")), 99)):
+        cells = "".join(f"<td>{_escape(_display_value(row.get(column)))}</td>" for column in columns)
+        rows.append(f"<tr>{cells}</tr>")
+    return f"<table><thead><tr>{header}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
+
+
+def _metric_html(label: str, value: int) -> str:
+    return f'<div class="metric"><strong>{value}</strong><span>{_escape(label)}</span></div>'
+
+
+def _display_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, float):
+        if math.isnan(value):
+            return ""
+        return f"{value:.4f}".rstrip("0").rstrip(".")
+    return str(value)
+
+
+def _escape(value: str) -> str:
+    return html.escape(value, quote=True)
 
 
 def _selected_review_rows(review_queue: pl.DataFrame, *, approved_only: bool) -> list[dict[str, Any]]:
@@ -788,6 +1237,10 @@ def _parse_levels(value: Any) -> list[float]:
         if parsed is not None and 100 <= parsed <= 10_000:
             levels.append(parsed)
     return _unique_floats(levels, limit=8)
+
+
+def _srt_timestamp_in_text(text: str) -> bool:
+    return bool(re.search(r"\d{2}:\d{2}:\d{2}[,.]\d{3}\s*-->", text))
 
 
 def _window_end(availability: datetime, window: str, config: ResearchConfig) -> datetime | None:
@@ -1144,6 +1597,7 @@ def _empty_episodes() -> pl.DataFrame:
     return pl.DataFrame(
         schema={
             "episode_id": pl.String,
+            "review_id": pl.String,
             "transcript_id": pl.String,
             "transcript_date": pl.String,
             "availability_timestamp": pl.Datetime(time_zone="UTC"),
@@ -1153,6 +1607,7 @@ def _empty_episodes() -> pl.DataFrame:
             "rule_tag": pl.String,
             "rule_type": pl.String,
             "quality_label": pl.String,
+            "suggested_review_priority": pl.String,
             "action_bias": pl.String,
             "condition_text": pl.String,
             "invalidation_rule": pl.String,
@@ -1191,6 +1646,13 @@ def _empty_episodes() -> pl.DataFrame:
             "confidence_score": pl.Float64,
             "testability_score": pl.Float64,
             "leakage_risk_score": pl.Float64,
+            "missing_target": pl.Boolean,
+            "missing_invalidation": pl.Boolean,
+            "vague_logic": pl.Boolean,
+            "post_event_risk": pl.Boolean,
+            "numeric_artifact_risk": pl.Boolean,
+            "no_market_data_match": pl.Boolean,
+            "likely_context_only": pl.Boolean,
         }
     )
 
@@ -1241,6 +1703,44 @@ def _empty_performance() -> pl.DataFrame:
             "walk_forward_pass": pl.Boolean,
             "placebo_pass": pl.Boolean,
             "recommendation": pl.String,
+        }
+    )
+
+
+def _empty_review_decisions_template() -> pl.DataFrame:
+    return pl.DataFrame(
+        schema={
+            "episode_id": pl.String,
+            "review_id": pl.String,
+            "transcript_id": pl.String,
+            "transcript_date": pl.String,
+            "availability_timestamp": pl.Datetime(time_zone="UTC"),
+            "rule_tag": pl.String,
+            "rule_type": pl.String,
+            "action_bias": pl.String,
+            "thesis_type": pl.String,
+            "expected_direction": pl.String,
+            "mentioned_levels": pl.String,
+            "expected_from_level": pl.Float64,
+            "expected_to_level": pl.Float64,
+            "invalidation_level": pl.Float64,
+            "missing_target": pl.Boolean,
+            "missing_invalidation": pl.Boolean,
+            "vague_logic": pl.Boolean,
+            "post_event_risk": pl.Boolean,
+            "numeric_artifact_risk": pl.Boolean,
+            "no_market_data_match": pl.Boolean,
+            "likely_context_only": pl.Boolean,
+            "source_excerpt": pl.String,
+            "normalized_english_summary": pl.String,
+            "reviewer_decision": pl.String,
+            "corrected_thesis_type": pl.String,
+            "corrected_expected_direction": pl.String,
+            "corrected_from_level": pl.String,
+            "corrected_target_level": pl.String,
+            "corrected_invalidation_level": pl.String,
+            "corrected_time_horizon": pl.String,
+            "reviewer_notes": pl.String,
         }
     )
 

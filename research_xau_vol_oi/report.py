@@ -242,6 +242,9 @@ def run_pipeline(
         "guru_episode_outcomes": output_root / "guru_episode_outcomes.csv",
         "guru_episode_rule_performance": output_root / "guru_episode_rule_performance.csv",
         "guru_episode_review_sample": output_root / "guru_episode_review_sample.csv",
+        "guru_episode_review_dashboard": output_root / "guru_episode_review_dashboard.html",
+        "guru_episode_review_decisions_template": output_root / "guru_episode_review_decisions_template.csv",
+        "guru_episode_review_guide": output_root / "guru_episode_review_guide.md",
         "guru_episode_report": output_root / "guru_episode_report.md",
         "backtest_summary": summary_path,
         "research_report": report_path,
@@ -990,6 +993,7 @@ def _guru_episode_lines(guru_episode: GuruEpisodeDatasetResult | None) -> list[s
         f"- Episode count: {guru_episode.episodes.height}",
         f"- Outcome rows: {guru_episode.outcomes.height}",
         f"- High-priority review sample count: {guru_episode.review_sample.height}",
+        f"- Episode review decision template rows: {guru_episode.review_decisions_template.height}",
         f"- Approved-only episode validation can run: {guru_episode.approved_only_can_run}",
         f"- No-trade signal rows retained: {guru_episode.no_trade_rows_retained}",
         "",
@@ -1019,6 +1023,9 @@ def _guru_episode_lines(guru_episode: GuruEpisodeDatasetResult | None) -> list[s
         "- `GURU_EPISODE_VALIDATED_FILTER` remains blocked unless human-approved records, enough samples, "
         "walk-forward pass, placebo pass, clear target/invalidation logic, zero future transcript leakage, "
         "and retained no-trade rows are all present.",
+        "- Review dashboard: `outputs/guru_episode_review_dashboard.html`",
+        "- Review decisions template: `outputs/guru_episode_review_decisions_template.csv`",
+        "- Review guide: `outputs/guru_episode_review_guide.md`",
     ]
 
 

@@ -58,6 +58,9 @@ The runner writes:
 - `outputs/guru_decision_episodes.csv`
 - `outputs/guru_episode_outcomes.csv`
 - `outputs/guru_episode_rule_performance.csv`
+- `outputs/guru_episode_review_dashboard.html`
+- `outputs/guru_episode_review_decisions_template.csv`
+- `outputs/guru_episode_review_guide.md`
 - `outputs/guru_episode_report.md`
 - `outputs/charts/*.svg`
 - `outputs/research_report.md`
@@ -77,3 +80,10 @@ The runner writes:
   predictive claim.
 - Guru episode outcomes separate visible snapshot data from future evaluation windows;
   future rows never become episode inputs.
+
+## Guru Episode Review
+
+1. Open `outputs/guru_episode_review_dashboard.html`.
+2. Fill `outputs/guru_episode_review_decisions_template.csv`.
+3. Rerun `python -m research_xau_vol_oi.report`.
+4. Check approved-only validation before making any transcript-rule research claim.
