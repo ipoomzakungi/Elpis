@@ -155,3 +155,5 @@ class ResearchConfig:
     walk_forward_train_bars: int = 100
     walk_forward_test_bars: int = 50
     random_seed: int = 7
+    research_preview_mode: bool = True
+    guru_review_decisions_path: Path = Path("outputs/guru_rule_review_decisions.csv")

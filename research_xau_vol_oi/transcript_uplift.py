@@ -75,6 +75,13 @@ class TranscriptUpliftResult:
     walk_forward_uplift: pl.DataFrame
     placebo_tests: pl.DataFrame
     keep_kill: pl.DataFrame
+    approved_conditioned_events: pl.DataFrame
+    approved_rule_uplift: pl.DataFrame
+    approved_combination_uplift: pl.DataFrame
+    approved_walk_forward_uplift: pl.DataFrame
+    approved_placebo_tests: pl.DataFrame
+    approved_keep_kill: pl.DataFrame
+    approved_only_status: str
     final_decision: str
 
 
@@ -87,6 +94,8 @@ def run_transcript_uplift_layer(
     output_dir: Path,
     charts_dir: Path,
     config: ResearchConfig | None = None,
+    approved_rule_records: pl.DataFrame | None = None,
+    review_decisions_exist: bool = False,
 ) -> TranscriptUpliftResult:
     """Run transcript-conditioned uplift tests and write all requested outputs."""
 
@@ -94,9 +103,10 @@ def run_transcript_uplift_layer(
     output_dir.mkdir(parents=True, exist_ok=True)
     charts_dir.mkdir(parents=True, exist_ok=True)
 
+    preview_timeline = transcript_timeline if cfg.research_preview_mode else pl.DataFrame()
     conditioned = build_transcript_conditioned_events(
         signal_events,
-        transcript_timeline,
+        preview_timeline,
         config=cfg,
     )
     rule_uplift = transcript_rule_uplift(conditioned, trades)
@@ -109,7 +119,7 @@ def run_transcript_uplift_layer(
     )
     placebo = transcript_placebo_tests(
         signal_events,
-        transcript_timeline,
+        preview_timeline,
         trades,
         config=cfg,
     )
@@ -118,6 +128,14 @@ def run_transcript_uplift_layer(
         combination_uplift,
         walk_forward,
         placebo,
+    )
+    approved_result = approved_only_uplift(
+        feature_table=feature_table,
+        signal_events=signal_events,
+        trades=trades,
+        approved_rule_records=approved_rule_records,
+        review_decisions_exist=review_decisions_exist,
+        config=cfg,
     )
     final_decision = transcript_uplift_final_decision(
         rule_uplift,
@@ -133,6 +151,12 @@ def run_transcript_uplift_layer(
     walk_forward.write_csv(output_dir / "transcript_walk_forward_uplift.csv")
     placebo.write_csv(output_dir / "transcript_placebo_tests.csv")
     keep_kill.write_csv(output_dir / "transcript_rule_keep_kill.csv")
+    approved_result["conditioned_events"].write_csv(output_dir / "transcript_approved_conditioned_events.csv")
+    approved_result["rule_uplift"].write_csv(output_dir / "transcript_approved_rule_uplift.csv")
+    approved_result["combination_uplift"].write_csv(output_dir / "transcript_approved_rule_combination_uplift.csv")
+    approved_result["walk_forward"].write_csv(output_dir / "transcript_approved_walk_forward_uplift.csv")
+    approved_result["placebo"].write_csv(output_dir / "transcript_approved_placebo_tests.csv")
+    approved_result["keep_kill"].write_csv(output_dir / "transcript_approved_rule_keep_kill.csv")
     write_transcript_uplift_report(
         output_dir / "transcript_uplift_report.md",
         rule_uplift=rule_uplift,
@@ -142,6 +166,8 @@ def run_transcript_uplift_layer(
         keep_kill=keep_kill,
         final_decision=final_decision,
         conditioned_events=conditioned,
+        approved_result=approved_result,
+        research_preview_mode=cfg.research_preview_mode,
     )
     write_transcript_uplift_charts(
         charts_dir=charts_dir,
@@ -157,6 +183,13 @@ def run_transcript_uplift_layer(
         walk_forward_uplift=walk_forward,
         placebo_tests=placebo,
         keep_kill=keep_kill,
+        approved_conditioned_events=approved_result["conditioned_events"],
+        approved_rule_uplift=approved_result["rule_uplift"],
+        approved_combination_uplift=approved_result["combination_uplift"],
+        approved_walk_forward_uplift=approved_result["walk_forward"],
+        approved_placebo_tests=approved_result["placebo"],
+        approved_keep_kill=approved_result["keep_kill"],
+        approved_only_status=str(approved_result["status"]),
         final_decision=final_decision,
     )
 
@@ -167,6 +200,8 @@ def build_transcript_conditioned_events(
     *,
     config: ResearchConfig | None = None,
     allow_future_transcripts: bool = False,
+    approved_only: bool = False,
+    approved_rule_records: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
     """Attach as-of active transcript rule tags to every signal event.
 
@@ -179,7 +214,10 @@ def build_transcript_conditioned_events(
     if signal_events.is_empty():
         return _empty_conditioned_events()
 
-    transcripts = _timeline_rows(transcript_timeline)
+    if approved_only:
+        transcripts = _approved_timeline_rows(approved_rule_records)
+    else:
+        transcripts = _timeline_rows(transcript_timeline)
     rows: list[dict[str, Any]] = []
     for event in signal_events.sort("event_timestamp").to_dicts():
         event_ts = _to_utc_datetime(event.get("event_timestamp"))
@@ -415,6 +453,79 @@ def transcript_placebo_tests(
     return _rows_frame(finalized)
 
 
+def approved_only_uplift(
+    *,
+    feature_table: pl.DataFrame,
+    signal_events: pl.DataFrame,
+    trades: pl.DataFrame,
+    approved_rule_records: pl.DataFrame | None,
+    review_decisions_exist: bool,
+    config: ResearchConfig | None = None,
+) -> dict[str, Any]:
+    """Run the gated approved-only uplift path or return REVIEW_REQUIRED."""
+
+    cfg = config or ResearchConfig()
+    if not review_decisions_exist:
+        conditioned = build_transcript_conditioned_events(
+            signal_events,
+            pl.DataFrame(),
+            config=cfg,
+            approved_only=True,
+            approved_rule_records=pl.DataFrame(),
+        )
+        return {
+            "status": "REVIEW_REQUIRED",
+            "conditioned_events": conditioned,
+            "rule_uplift": _empty_uplift(),
+            "combination_uplift": _empty_uplift(),
+            "walk_forward": _empty_walk_forward(),
+            "placebo": _empty_placebo(),
+            "keep_kill": _empty_keep_kill(),
+        }
+    approved = approved_rule_records if approved_rule_records is not None else pl.DataFrame()
+    conditioned = build_transcript_conditioned_events(
+        signal_events,
+        pl.DataFrame(),
+        config=cfg,
+        approved_only=True,
+        approved_rule_records=approved,
+    )
+    if approved.is_empty():
+        return {
+            "status": "NO_APPROVED_RULES",
+            "conditioned_events": conditioned,
+            "rule_uplift": _empty_uplift(),
+            "combination_uplift": _empty_uplift(),
+            "walk_forward": _empty_walk_forward(),
+            "placebo": _empty_placebo(),
+            "keep_kill": _empty_keep_kill(),
+        }
+    rule_uplift = transcript_rule_uplift(conditioned, trades)
+    combination_uplift = transcript_rule_combination_uplift(conditioned, trades)
+    walk_forward = walk_forward_transcript_uplift(
+        feature_table,
+        conditioned,
+        trades,
+        config=cfg,
+    )
+    placebo = _empty_placebo()
+    keep_kill = build_transcript_rule_keep_kill(
+        rule_uplift,
+        combination_uplift,
+        walk_forward,
+        placebo,
+    )
+    return {
+        "status": "APPROVED_ONLY_RAN",
+        "conditioned_events": conditioned,
+        "rule_uplift": rule_uplift,
+        "combination_uplift": combination_uplift,
+        "walk_forward": walk_forward,
+        "placebo": placebo,
+        "keep_kill": keep_kill,
+    }
+
+
 def build_transcript_rule_keep_kill(
     rule_uplift: pl.DataFrame,
     combination_uplift: pl.DataFrame,
@@ -522,6 +633,8 @@ def write_transcript_uplift_report(
     keep_kill: pl.DataFrame,
     final_decision: str,
     conditioned_events: pl.DataFrame,
+    approved_result: dict[str, Any],
+    research_preview_mode: bool,
 ) -> None:
     """Write Markdown transcript uplift report."""
 
@@ -539,6 +652,10 @@ def write_transcript_uplift_report(
         f"- Conditioned signal events: {conditioned_events.height}",
         f"- No-trade rows retained: {no_trade_count}",
         f"- Placebo tests passed: {_placebo_passed(placebo)}",
+        f"- Approved-only uplift status: `{approved_result['status']}`",
+        f"- All-rule research preview mode enabled: `{research_preview_mode}`",
+        "- Approved-only uplift requires human review decisions. Unreviewed rules are not eligible "
+        "for approved-only performance claims.",
         "",
         "## Rule Tag Uplift",
         "",
@@ -559,6 +676,14 @@ def write_transcript_uplift_report(
         "## Transcript Rule Keep/Kill Decision",
         "",
         _frame_markdown(keep_kill),
+        "",
+        "## Approved-Only Uplift",
+        "",
+        _frame_markdown(_report_columns(approved_result["rule_uplift"])),
+        "",
+        "## Approved-Only Walk-Forward Uplift",
+        "",
+        _frame_markdown(approved_result["walk_forward"]),
         "",
         "## Final Decision",
         "",
@@ -789,6 +914,42 @@ def _timeline_rows(timeline: pl.DataFrame) -> list[dict[str, Any]]:
                 "availability_timestamp": availability,
                 "tags": _split_tags(row.get("detected_rule_tags")),
                 "confidence_score": float(row.get("confidence_score") or 0.0),
+            }
+        )
+    return sorted(rows, key=lambda row: row["availability_timestamp"])
+
+
+def _approved_timeline_rows(approved_rules: pl.DataFrame | None) -> list[dict[str, Any]]:
+    if approved_rules is None or approved_rules.is_empty():
+        return []
+    grouped: dict[tuple[Any, datetime], dict[str, Any]] = {}
+    for row in approved_rules.to_dicts():
+        availability = _to_utc_datetime(row.get("availability_timestamp"))
+        if availability is None:
+            continue
+        key = (row.get("transcript_id"), availability)
+        item = grouped.setdefault(
+            key,
+            {
+                "transcript_id": row.get("transcript_id"),
+                "availability_timestamp": availability,
+                "tags": set(),
+                "confidence_scores": [],
+            },
+        )
+        item["tags"].add(str(row.get("rule_tag") or ""))
+        item["confidence_scores"].append(float(row.get("confidence_score") or 0.0))
+    rows = []
+    for item in grouped.values():
+        tags = sorted(tag for tag in item["tags"] if tag)
+        if not tags:
+            continue
+        rows.append(
+            {
+                "transcript_id": item["transcript_id"],
+                "availability_timestamp": item["availability_timestamp"],
+                "tags": tags,
+                "confidence_score": _average(item["confidence_scores"]) or 0.0,
             }
         )
     return sorted(rows, key=lambda row: row["availability_timestamp"])
@@ -1124,6 +1285,23 @@ def _empty_walk_forward() -> pl.DataFrame:
             "bad_trade_rate_delta": pl.Float64,
             "pass_fail": pl.String,
             "no_lookahead": pl.Boolean,
+        }
+    )
+
+
+def _empty_placebo() -> pl.DataFrame:
+    return pl.DataFrame(
+        schema={
+            "placebo_type": pl.String,
+            "best_rule_id": pl.String,
+            "best_rule_type": pl.String,
+            "best_trade_count": pl.Int64,
+            "best_expectancy": pl.Float64,
+            "best_uplift_vs_no_tag": pl.Float64,
+            "real_best_uplift": pl.Float64,
+            "real_beats_placebo": pl.Boolean,
+            "used_future_transcripts": pl.Boolean,
+            "placebo_passed": pl.Boolean,
         }
     )
 

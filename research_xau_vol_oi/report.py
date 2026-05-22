@@ -23,6 +23,10 @@ from research_xau_vol_oi.data_loader import (
     standardize_price_frame,
 )
 from research_xau_vol_oi.expected_move import add_expected_move_columns_asof_options
+from research_xau_vol_oi.guru_review_queue import (
+    GuruReviewQueueResult,
+    run_guru_review_queue_layer,
+)
 from research_xau_vol_oi.llm_transcript_extractor import (
     LlmTranscriptExtractionResult,
     run_llm_transcript_extraction_layer,
@@ -114,6 +118,19 @@ def run_pipeline(
         charts_dir=charts_dir,
         config=cfg,
     )
+    llm_transcript_extraction = run_llm_transcript_extraction_layer(
+        transcript_timeline=transcript_timeline.timeline,
+        output_dir=output_root,
+        config=cfg,
+    )
+    guru_review = run_guru_review_queue_layer(
+        extracted_rules=llm_transcript_extraction.extracted_rules,
+        quality_audit=llm_transcript_extraction.quality_audit,
+        signal_events=signal_events,
+        feature_table=feature_table,
+        output_dir=output_root,
+        config=cfg,
+    )
     transcript_uplift = run_transcript_uplift_layer(
         feature_table=feature_table,
         signal_events=signal_events,
@@ -122,11 +139,8 @@ def run_pipeline(
         output_dir=output_root,
         charts_dir=charts_dir,
         config=cfg,
-    )
-    llm_transcript_extraction = run_llm_transcript_extraction_layer(
-        transcript_timeline=transcript_timeline.timeline,
-        output_dir=output_root,
-        config=cfg,
+        approved_rule_records=guru_review.approved_rules,
+        review_decisions_exist=guru_review.review_decisions_exist,
     )
 
     feature_path = output_root / "xau_feature_table.parquet"
@@ -166,6 +180,7 @@ def run_pipeline(
         transcript_timeline=transcript_timeline,
         transcript_uplift=transcript_uplift,
         llm_transcript_extraction=llm_transcript_extraction,
+        guru_review=guru_review,
         charts_dir=charts_dir,
     )
     audit_path = output_root / "leakage_audit_report.md"
@@ -200,9 +215,15 @@ def run_pipeline(
         "transcript_placebo_tests": output_root / "transcript_placebo_tests.csv",
         "transcript_rule_keep_kill": output_root / "transcript_rule_keep_kill.csv",
         "transcript_uplift_report": output_root / "transcript_uplift_report.md",
+        "transcript_approved_rule_uplift": output_root / "transcript_approved_rule_uplift.csv",
+        "transcript_approved_walk_forward_uplift": output_root / "transcript_approved_walk_forward_uplift.csv",
         "transcript_llm_extracted_rules": output_root / "transcript_llm_extracted_rules.csv",
         "transcript_rule_quality_audit": output_root / "transcript_rule_quality_audit.csv",
         "transcript_extraction_audit_report": output_root / "transcript_extraction_audit_report.md",
+        "guru_rule_review_queue": output_root / "guru_rule_review_queue.csv",
+        "guru_rule_review_sample": output_root / "guru_rule_review_sample.csv",
+        "guru_rule_review_decisions_template": output_root / "guru_rule_review_decisions_template.csv",
+        "guru_rule_review_report": output_root / "guru_rule_review_report.md",
         "backtest_summary": summary_path,
         "research_report": report_path,
         "leakage_audit_report": audit_path,
@@ -352,6 +373,7 @@ def write_research_report(
     transcript_timeline: TranscriptTimelineResult | None = None,
     transcript_uplift: TranscriptUpliftResult | None = None,
     llm_transcript_extraction: LlmTranscriptExtractionResult | None = None,
+    guru_review: GuruReviewQueueResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -415,6 +437,10 @@ def write_research_report(
         "## LLM Transcript Extraction Audit",
         "",
         *_llm_transcript_extraction_lines(llm_transcript_extraction),
+        "",
+        "## Guru Logic Review Queue",
+        "",
+        *_guru_review_lines(guru_review, transcript_uplift),
         "",
         "## Required Questions",
         "",
@@ -818,6 +844,58 @@ def _llm_transcript_extraction_lines(
         "### Which Guru Rules Are Rejected",
         "",
         _frame_markdown(rejected),
+    ]
+
+
+def _guru_review_lines(
+    guru_review: GuruReviewQueueResult | None,
+    transcript_uplift: TranscriptUpliftResult | None,
+) -> list[str]:
+    if guru_review is None:
+        return ["Guru logic review queue was not run."]
+    priority_counts = (
+        guru_review.review_queue.group_by("suggested_review_priority").len().sort("suggested_review_priority")
+        if not guru_review.review_queue.is_empty()
+        else guru_review.review_queue
+    )
+    approved_count = guru_review.approved_rules.height
+    approved_status = transcript_uplift.approved_only_status if transcript_uplift is not None else "UNKNOWN"
+    top_priorities = (
+        guru_review.review_queue.select(
+            [
+                "review_id",
+                "rule_tag",
+                "rule_type",
+                "quality_label",
+                "suggested_review_priority",
+                "leakage_risk_score",
+                "extracted_numeric_levels",
+                "likely_srt_timestamp_artifact",
+                "timestamp_like_numeric_levels",
+            ]
+        ).head(25)
+        if not guru_review.review_queue.is_empty()
+        else guru_review.review_queue
+    )
+    return [
+        f"- Final Decision: `{guru_review.final_decision}`",
+        f"- Review queue rows: {guru_review.review_queue.height}",
+        f"- Approved rules available: {approved_count}",
+        f"- Review decisions exist: {guru_review.review_decisions_exist}",
+        f"- Approved-only uplift status: `{approved_status}`",
+        "- Human approval is required before transcript rules can be used for predictive claims.",
+        "",
+        "### Reviewed vs Unreviewed Rule Status",
+        "",
+        _frame_markdown(priority_counts),
+        "",
+        "### Approved Rules Available",
+        "",
+        _frame_markdown(guru_review.approved_rules),
+        "",
+        "### Review Required Before Predictive Claim",
+        "",
+        _frame_markdown(top_priorities),
     ]
 
 

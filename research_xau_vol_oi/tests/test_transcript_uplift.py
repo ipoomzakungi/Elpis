@@ -6,6 +6,7 @@ from research_xau_vol_oi.config import ResearchConfig, Signal
 from research_xau_vol_oi.transcript_uplift import (
     build_transcript_conditioned_events,
     build_transcript_rule_keep_kill,
+    run_transcript_uplift_layer,
     transcript_placebo_tests,
     transcript_rule_combination_uplift,
     transcript_rule_uplift,
@@ -198,6 +199,32 @@ def test_no_trade_rows_retained() -> None:
     assert conditioned.height == _events().height
     assert conditioned.filter(pl.col("no_trade_row_retained")).height == 2
     assert oi["no_trade_count"] == 1
+
+
+def test_unreviewed_rules_blocked_when_preview_mode_disabled(tmp_path) -> None:
+    base = datetime(2026, 5, 21, 10, 0, tzinfo=UTC)
+    feature_table = pl.DataFrame(
+        [{"timestamp": base + timedelta(minutes=10 * index), "close": 2400.0 + index} for index in range(12)]
+    )
+    cfg = ResearchConfig(
+        research_preview_mode=False,
+        walk_forward_train_bars=4,
+        walk_forward_test_bars=4,
+    )
+
+    result = run_transcript_uplift_layer(
+        feature_table=feature_table,
+        signal_events=_events(),
+        trades=_trades(),
+        transcript_timeline=_timeline(),
+        output_dir=tmp_path,
+        charts_dir=tmp_path / "charts",
+        config=cfg,
+    )
+
+    assert result.conditioned_events.get_column("active_rule_count").sum() == 0
+    assert result.approved_only_status == "REVIEW_REQUIRED"
+    assert result.conditioned_events.filter(pl.col("no_trade_row_retained")).height == 2
 
 
 def test_uplift_calculation() -> None:

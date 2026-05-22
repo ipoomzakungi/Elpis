@@ -20,6 +20,7 @@ Sharpe, or claim that a signal is tradable.
 - `volatility_engine.py`: RV, VRP, IV/RV regime, and SD-only baseline fields.
 - `zone_classifier.py`: deterministic no-trade, wall, fade, break, pin, and squeeze labels.
 - `backtest.py`: event backtest, controls, grouped metrics, and walk-forward splits.
+- `guru_review_queue.py`: human review queue for noisy transcript rule extraction.
 - `report.py`: pipeline runner, output files, SVG charts, and Markdown report.
 
 ## Run
@@ -50,6 +51,9 @@ The runner writes:
 - `outputs/walk_forward_validation.csv`
 - `outputs/oi_walls.csv`
 - `outputs/data_inventory.csv`
+- `outputs/guru_rule_review_queue.csv`
+- `outputs/guru_rule_review_decisions_template.csv`
+- `outputs/guru_rule_review_report.md`
 - `outputs/charts/*.svg`
 - `outputs/research_report.md`
 
@@ -63,3 +67,6 @@ The runner writes:
 - Missing IV, missing basis, stale/bad data, or no nearby wall returns no-trade labels.
 - Walk-forward validation separates formation and test windows and checks that wall
   timestamps are not later than event timestamps.
+- Extracted transcript rules are research features only. Approved-only uplift requires
+  human review decisions; unreviewed rules are preview-only and cannot support a
+  predictive claim.
