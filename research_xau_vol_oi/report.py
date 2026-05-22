@@ -29,6 +29,10 @@ from research_xau_vol_oi.score_calibration import (
     run_score_research_layer,
 )
 from research_xau_vol_oi.signal_score import score_signal_events, write_signal_dashboard
+from research_xau_vol_oi.transcript_timeline import (
+    TranscriptTimelineResult,
+    run_transcript_timeline_layer,
+)
 from research_xau_vol_oi.volatility_engine import (
     add_bollinger_baseline,
     add_realized_volatility,
@@ -94,6 +98,14 @@ def run_pipeline(
         charts_dir=charts_dir,
         config=cfg,
     )
+    transcript_timeline = run_transcript_timeline_layer(
+        feature_table=feature_table,
+        signal_events=signal_events,
+        trades=trades,
+        output_dir=output_root,
+        charts_dir=charts_dir,
+        config=cfg,
+    )
 
     feature_path = output_root / "xau_feature_table.parquet"
     events_path = output_root / "signal_events.csv"
@@ -129,6 +141,7 @@ def run_pipeline(
         walk_forward=walk_forward,
         cost_stress=cost_stress,
         score_calibration=score_calibration,
+        transcript_timeline=transcript_timeline,
         charts_dir=charts_dir,
     )
     audit_path = output_root / "leakage_audit_report.md"
@@ -150,6 +163,12 @@ def run_pipeline(
         "score_ablation_report": output_root / "score_ablation_report.md",
         "signal_kill_list": output_root / "signal_kill_list.csv",
         "threshold_policy_recommendation": output_root / "threshold_policy_recommendation.csv",
+        "transcript_rule_timeline": output_root / "transcript_rule_timeline.csv",
+        "transcript_rule_coverage": output_root / "transcript_rule_coverage.csv",
+        "transcript_market_alignment": output_root / "transcript_market_alignment.csv",
+        "transcript_rule_performance": output_root / "transcript_rule_performance.csv",
+        "transcript_rule_ablation": output_root / "transcript_rule_ablation.csv",
+        "transcript_alignment_report": output_root / "transcript_alignment_report.md",
         "backtest_summary": summary_path,
         "research_report": report_path,
         "leakage_audit_report": audit_path,
@@ -296,6 +315,7 @@ def write_research_report(
     walk_forward: pl.DataFrame,
     cost_stress: pl.DataFrame,
     score_calibration: ScoreCalibrationResult | None = None,
+    transcript_timeline: TranscriptTimelineResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -347,6 +367,10 @@ def write_research_report(
         "## Signal Score Calibration",
         "",
         *_score_calibration_lines(score_calibration),
+        "",
+        "## Guru Transcript Timeline Alignment",
+        "",
+        *_transcript_timeline_lines(transcript_timeline),
         "",
         "## Required Questions",
         "",
@@ -525,6 +549,86 @@ def _score_calibration_lines(score_calibration: ScoreCalibrationResult | None) -
         "### Kill / Quarantine Recommendations",
         "",
         _frame_markdown(kill_rows),
+    ]
+
+
+def _transcript_timeline_lines(transcript_timeline: TranscriptTimelineResult | None) -> list[str]:
+    if transcript_timeline is None:
+        return ["Transcript timeline alignment was not run."]
+    supported = (
+        transcript_timeline.performance.filter(
+            pl.col("decision_label") == "TRANSCRIPT_RULE_SUPPORTED"
+        )
+        if not transcript_timeline.performance.is_empty()
+        else transcript_timeline.performance
+    )
+    failed = (
+        transcript_timeline.performance.filter(pl.col("decision_label") == "TRANSCRIPT_RULE_FAILED")
+        if not transcript_timeline.performance.is_empty()
+        else transcript_timeline.performance
+    )
+    coverage = (
+        transcript_timeline.coverage.sort("transcript_count", descending=True)
+        if not transcript_timeline.coverage.is_empty()
+        else transcript_timeline.coverage
+    )
+    performance = (
+        transcript_timeline.performance.filter(pl.col("window_label") == "5_session")
+        if not transcript_timeline.performance.is_empty()
+        else transcript_timeline.performance
+    )
+    ablation = (
+        transcript_timeline.ablation.select(
+            [
+                "rule_tag",
+                "change_in_expectancy",
+                "change_in_profit_factor",
+                "covered_event_count",
+                "decision_label",
+            ]
+        )
+        if not transcript_timeline.ablation.is_empty()
+        else transcript_timeline.ablation
+    )
+    leakage_violations = (
+        int(transcript_timeline.alignment.get_column("no_lookahead_violations").sum())
+        if not transcript_timeline.alignment.is_empty()
+        else 0
+    )
+    return [
+        f"- Final Decision: `{transcript_timeline.final_decision}`",
+        f"- Parsed transcripts: {transcript_timeline.timeline.height}",
+        f"- Transcript alignment no-lookahead violations: {leakage_violations}",
+        "- Rule performance uses unique post-availability event keys to avoid counting the same "
+        "trade multiple times across overlapping transcript windows.",
+        "- The transcript layer improves dated rule traceability; it has not proven independent "
+        "signal-quality improvement.",
+        "",
+        "### Rule Tag Coverage",
+        "",
+        _frame_markdown(coverage),
+        "",
+        "### Rule-by-Rule Performance",
+        "",
+        _frame_markdown(performance),
+        "",
+        "### Transcript Rule Ablation",
+        "",
+        _frame_markdown(ablation),
+        "",
+        "### Supported Guru Rules",
+        "",
+        _frame_markdown(supported),
+        "",
+        "### Failed Guru Rules",
+        "",
+        _frame_markdown(failed),
+        "",
+        "### Final Decision",
+        "",
+        "Transcript rules are treated as dated evidence only. They are not allowed to explain "
+        "events before their availability timestamp, no-trade rows are retained, and no "
+        "profitability claim is made from this alignment layer.",
     ]
 
 
