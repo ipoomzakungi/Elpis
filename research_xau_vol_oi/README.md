@@ -62,6 +62,11 @@ The runner writes:
 - `outputs/guru_episode_review_decisions_template.csv`
 - `outputs/guru_episode_review_guide.md`
 - `outputs/guru_episode_report.md`
+- `outputs/guru_llm_review_suggestions.csv`
+- `outputs/guru_llm_review_final_suggestions.csv`
+- `outputs/guru_llm_review_audit.md`
+- `outputs/guru_monte_carlo_validation.csv`
+- `outputs/guru_monte_carlo_report.md`
 - `outputs/charts/*.svg`
 - `outputs/research_report.md`
 
@@ -87,3 +92,7 @@ The runner writes:
 2. Fill `outputs/guru_episode_review_decisions_template.csv`.
 3. Rerun `python -m research_xau_vol_oi.report`.
 4. Check approved-only validation before making any transcript-rule research claim.
+
+The generated `guru_llm_review_suggestions.csv` file is a blind, deterministic
+review aid only. It uses no future outcome fields and still requires human
+approval before any approved-only validation.

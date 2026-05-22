@@ -27,6 +27,14 @@ from research_xau_vol_oi.guru_episode_dataset import (
     GuruEpisodeDatasetResult,
     run_guru_episode_dataset_layer,
 )
+from research_xau_vol_oi.guru_llm_review import (
+    GuruLlmReviewResult,
+    run_guru_llm_review_layer,
+)
+from research_xau_vol_oi.guru_monte_carlo_validation import (
+    GuruMonteCarloValidationResult,
+    run_guru_monte_carlo_validation_layer,
+)
 from research_xau_vol_oi.guru_review_queue import (
     GuruReviewQueueResult,
     run_guru_review_queue_layer,
@@ -155,6 +163,19 @@ def run_pipeline(
         charts_dir=charts_dir,
         config=cfg,
     )
+    guru_llm_review = run_guru_llm_review_layer(
+        episodes=guru_episode_dataset.review_sample,
+        output_dir=output_root,
+    )
+    guru_monte_carlo = run_guru_monte_carlo_validation_layer(
+        episodes=guru_episode_dataset.episodes,
+        outcomes=guru_episode_dataset.outcomes,
+        final_suggestions=guru_llm_review.final_suggestions,
+        signal_events=signal_events,
+        output_dir=output_root,
+        charts_dir=charts_dir,
+        config=cfg,
+    )
 
     feature_path = output_root / "xau_feature_table.parquet"
     events_path = output_root / "signal_events.csv"
@@ -195,6 +216,8 @@ def run_pipeline(
         llm_transcript_extraction=llm_transcript_extraction,
         guru_review=guru_review,
         guru_episode_dataset=guru_episode_dataset,
+        guru_llm_review=guru_llm_review,
+        guru_monte_carlo=guru_monte_carlo,
         charts_dir=charts_dir,
     )
     audit_path = output_root / "leakage_audit_report.md"
@@ -246,6 +269,12 @@ def run_pipeline(
         "guru_episode_review_decisions_template": output_root / "guru_episode_review_decisions_template.csv",
         "guru_episode_review_guide": output_root / "guru_episode_review_guide.md",
         "guru_episode_report": output_root / "guru_episode_report.md",
+        "guru_llm_review_suggestions": output_root / "guru_llm_review_suggestions.csv",
+        "guru_llm_adversarial_review": output_root / "guru_llm_adversarial_review.csv",
+        "guru_llm_review_final_suggestions": output_root / "guru_llm_review_final_suggestions.csv",
+        "guru_llm_review_audit": output_root / "guru_llm_review_audit.md",
+        "guru_monte_carlo_validation": output_root / "guru_monte_carlo_validation.csv",
+        "guru_monte_carlo_report": output_root / "guru_monte_carlo_report.md",
         "backtest_summary": summary_path,
         "research_report": report_path,
         "leakage_audit_report": audit_path,
@@ -397,6 +426,8 @@ def write_research_report(
     llm_transcript_extraction: LlmTranscriptExtractionResult | None = None,
     guru_review: GuruReviewQueueResult | None = None,
     guru_episode_dataset: GuruEpisodeDatasetResult | None = None,
+    guru_llm_review: GuruLlmReviewResult | None = None,
+    guru_monte_carlo: GuruMonteCarloValidationResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -468,6 +499,14 @@ def write_research_report(
         "## Guru Decision Episode Dataset",
         "",
         *_guru_episode_lines(guru_episode_dataset),
+        "",
+        "## Blind Guru Logic Review",
+        "",
+        *_guru_llm_review_lines(guru_llm_review),
+        "",
+        "## Monte Carlo Validation",
+        "",
+        *_guru_monte_carlo_lines(guru_monte_carlo),
         "",
         "## Required Questions",
         "",
@@ -1029,6 +1068,90 @@ def _guru_episode_lines(guru_episode: GuruEpisodeDatasetResult | None) -> list[s
     ]
 
 
+def _guru_llm_review_lines(guru_llm_review: GuruLlmReviewResult | None) -> list[str]:
+    if guru_llm_review is None:
+        return ["Blind guru logic review was not run."]
+    suggestion_counts = (
+        guru_llm_review.suggestions.group_by("suggested_review_decision").len().sort("suggested_review_decision")
+        if not guru_llm_review.suggestions.is_empty()
+        else guru_llm_review.suggestions
+    )
+    adversarial_counts = (
+        guru_llm_review.adversarial.group_by("adversarial_decision").len().sort("adversarial_decision")
+        if not guru_llm_review.adversarial.is_empty()
+        else guru_llm_review.adversarial
+    )
+    final_counts = (
+        guru_llm_review.final_suggestions.group_by("suggested_review_decision").len().sort("suggested_review_decision")
+        if not guru_llm_review.final_suggestions.is_empty()
+        else guru_llm_review.final_suggestions
+    )
+    final_preview = (
+        guru_llm_review.final_suggestions.select([
+            "episode_id",
+            "suggested_review_decision",
+            "corrected_thesis_type",
+            "corrected_expected_direction",
+            "adversarial_decision",
+            "confidence_score",
+            "review_risk_flags",
+        ]).head(20)
+        if not guru_llm_review.final_suggestions.is_empty()
+        else guru_llm_review.final_suggestions
+    )
+    return [
+        "- Blind review used only transcript text, timestamp-visible market snapshots, and quality flags.",
+        "- Future outcome fields are rejected before suggestion generation.",
+        "- Suggestions still require human final approval.",
+        "",
+        "### Suggested Rules vs Human Approval",
+        "",
+        _frame_markdown(suggestion_counts),
+        "",
+        "### Adversarial Review",
+        "",
+        _frame_markdown(adversarial_counts),
+        "",
+        "### Final Suggestions",
+        "",
+        _frame_markdown(final_counts),
+        "",
+        _frame_markdown(final_preview),
+        "",
+        "- Links: `outputs/guru_llm_review_suggestions.csv`, "
+        "`outputs/guru_llm_review_final_suggestions.csv`, `outputs/guru_llm_review_audit.md`.",
+    ]
+
+
+def _guru_monte_carlo_lines(guru_monte_carlo: GuruMonteCarloValidationResult | None) -> list[str]:
+    if guru_monte_carlo is None:
+        return ["Guru Monte Carlo validation was not run."]
+    validation = guru_monte_carlo.validation
+    return [
+        f"- Final Guru Logic Decision: `{guru_monte_carlo.final_decision}`",
+        f"- Validation rows: {validation.height}",
+        f"- Markov transition rows: {guru_monte_carlo.markov_transitions.height}",
+        "",
+        "### Permutation Test",
+        "",
+        _frame_markdown(_method_rows(validation, "PERMUTATION")),
+        "",
+        "### Date-Shift Placebo",
+        "",
+        _frame_markdown(_method_rows(validation, "DATE_SHIFT_PLACEBO")),
+        "",
+        "### Matched Market-State Placebo",
+        "",
+        _frame_markdown(_method_rows(validation, "MATCHED_MARKET_STATE_PLACEBO")),
+        "",
+        "### Markov Transition Test",
+        "",
+        _frame_markdown(guru_monte_carlo.markov_transitions),
+        "",
+        "- Links: `outputs/guru_monte_carlo_validation.csv`, `outputs/guru_monte_carlo_report.md`.",
+    ]
+
+
 def _reference_price(price: pl.DataFrame, options: pl.DataFrame) -> float:
     spot_values = [value for value in options.get_column("spot_price").to_list() if value is not None]
     if spot_values:
@@ -1205,6 +1328,12 @@ def _frame_markdown(frame: pl.DataFrame) -> str:
     for raw in frame.head(20).to_dicts():
         rows.append("| " + " | ".join(str(raw.get(column, "")) for column in columns) + " |")
     return "\n".join(rows)
+
+
+def _method_rows(frame: pl.DataFrame, method: str) -> pl.DataFrame:
+    if frame.is_empty() or "method" not in frame.columns:
+        return frame
+    return frame.filter(pl.col("method") == method)
 
 
 def _write_line_svg(path: Path, *, title: str, series: list[float]) -> None:
