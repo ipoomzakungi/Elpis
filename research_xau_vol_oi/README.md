@@ -21,6 +21,7 @@ Sharpe, or claim that a signal is tradable.
 - `zone_classifier.py`: deterministic no-trade, wall, fade, break, pin, and squeeze labels.
 - `backtest.py`: event backtest, controls, grouped metrics, and walk-forward splits.
 - `guru_review_queue.py`: human review queue for noisy transcript rule extraction.
+- `guru_episode_dataset.py`: timestamp-safe guru statement, visible-data, and outcome episodes.
 - `report.py`: pipeline runner, output files, SVG charts, and Markdown report.
 
 ## Run
@@ -54,6 +55,10 @@ The runner writes:
 - `outputs/guru_rule_review_queue.csv`
 - `outputs/guru_rule_review_decisions_template.csv`
 - `outputs/guru_rule_review_report.md`
+- `outputs/guru_decision_episodes.csv`
+- `outputs/guru_episode_outcomes.csv`
+- `outputs/guru_episode_rule_performance.csv`
+- `outputs/guru_episode_report.md`
 - `outputs/charts/*.svg`
 - `outputs/research_report.md`
 
@@ -70,3 +75,5 @@ The runner writes:
 - Extracted transcript rules are research features only. Approved-only uplift requires
   human review decisions; unreviewed rules are preview-only and cannot support a
   predictive claim.
+- Guru episode outcomes separate visible snapshot data from future evaluation windows;
+  future rows never become episode inputs.

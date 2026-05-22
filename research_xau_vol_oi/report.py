@@ -23,6 +23,10 @@ from research_xau_vol_oi.data_loader import (
     standardize_price_frame,
 )
 from research_xau_vol_oi.expected_move import add_expected_move_columns_asof_options
+from research_xau_vol_oi.guru_episode_dataset import (
+    GuruEpisodeDatasetResult,
+    run_guru_episode_dataset_layer,
+)
 from research_xau_vol_oi.guru_review_queue import (
     GuruReviewQueueResult,
     run_guru_review_queue_layer,
@@ -142,6 +146,15 @@ def run_pipeline(
         approved_rule_records=guru_review.approved_rules,
         review_decisions_exist=guru_review.review_decisions_exist,
     )
+    guru_episode_dataset = run_guru_episode_dataset_layer(
+        review_queue=guru_review.review_queue,
+        feature_table=feature_table,
+        signal_events=signal_events,
+        trades=trades,
+        output_dir=output_root,
+        charts_dir=charts_dir,
+        config=cfg,
+    )
 
     feature_path = output_root / "xau_feature_table.parquet"
     events_path = output_root / "signal_events.csv"
@@ -181,6 +194,7 @@ def run_pipeline(
         transcript_uplift=transcript_uplift,
         llm_transcript_extraction=llm_transcript_extraction,
         guru_review=guru_review,
+        guru_episode_dataset=guru_episode_dataset,
         charts_dir=charts_dir,
     )
     audit_path = output_root / "leakage_audit_report.md"
@@ -224,6 +238,11 @@ def run_pipeline(
         "guru_rule_review_sample": output_root / "guru_rule_review_sample.csv",
         "guru_rule_review_decisions_template": output_root / "guru_rule_review_decisions_template.csv",
         "guru_rule_review_report": output_root / "guru_rule_review_report.md",
+        "guru_decision_episodes": output_root / "guru_decision_episodes.csv",
+        "guru_episode_outcomes": output_root / "guru_episode_outcomes.csv",
+        "guru_episode_rule_performance": output_root / "guru_episode_rule_performance.csv",
+        "guru_episode_review_sample": output_root / "guru_episode_review_sample.csv",
+        "guru_episode_report": output_root / "guru_episode_report.md",
         "backtest_summary": summary_path,
         "research_report": report_path,
         "leakage_audit_report": audit_path,
@@ -374,6 +393,7 @@ def write_research_report(
     transcript_uplift: TranscriptUpliftResult | None = None,
     llm_transcript_extraction: LlmTranscriptExtractionResult | None = None,
     guru_review: GuruReviewQueueResult | None = None,
+    guru_episode_dataset: GuruEpisodeDatasetResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -441,6 +461,10 @@ def write_research_report(
         "## Guru Logic Review Queue",
         "",
         *_guru_review_lines(guru_review, transcript_uplift),
+        "",
+        "## Guru Decision Episode Dataset",
+        "",
+        *_guru_episode_lines(guru_episode_dataset),
         "",
         "## Required Questions",
         "",
@@ -896,6 +920,105 @@ def _guru_review_lines(
         "### Review Required Before Predictive Claim",
         "",
         _frame_markdown(top_priorities),
+    ]
+
+
+def _guru_episode_lines(guru_episode: GuruEpisodeDatasetResult | None) -> list[str]:
+    if guru_episode is None:
+        return ["Guru decision episode dataset was not run."]
+    snapshot_fields = [
+        "spot_price",
+        "session_open",
+        "open_side",
+        "distance_from_open",
+        "annualized_iv",
+        "realized_vol",
+        "vrp",
+        "one_sd_level_upper",
+        "one_sd_level_lower",
+        "two_sd_level_upper",
+        "two_sd_level_lower",
+        "sigma_position",
+        "nearest_wall_above",
+        "nearest_wall_below",
+        "nearest_wall_above_score",
+        "nearest_wall_below_score",
+        "basis",
+        "nearest_spot_equivalent_strike",
+        "intraday_volume_near_level",
+        "oi_change_near_level",
+        "data_quality_status",
+    ]
+    approval_counts = (
+        guru_episode.episodes.group_by("episode_review_status").len().sort("episode_review_status")
+        if not guru_episode.episodes.is_empty()
+        else guru_episode.episodes
+    )
+    episode_preview = (
+        guru_episode.episodes.select([
+            "episode_id",
+            "transcript_id",
+            "rule_tag",
+            "thesis_type",
+            "expected_direction",
+            "episode_review_status",
+            "spot_price",
+            "expected_from_level",
+            "expected_to_level",
+            "invalidation_level",
+        ]).head(20)
+        if not guru_episode.episodes.is_empty()
+        else guru_episode.episodes
+    )
+    outcome_preview = (
+        guru_episode.outcomes.select([
+            "episode_id",
+            "rule_tag",
+            "outcome_window",
+            "target_hit",
+            "invalidation_hit",
+            "direction_correct",
+            "max_favorable_excursion",
+            "max_adverse_excursion",
+            "outcome_label",
+        ]).head(20)
+        if not guru_episode.outcomes.is_empty()
+        else guru_episode.outcomes
+    )
+    return [
+        f"- Final Guru Logic Decision: `{guru_episode.final_decision}`",
+        f"- Episode count: {guru_episode.episodes.height}",
+        f"- Outcome rows: {guru_episode.outcomes.height}",
+        f"- High-priority review sample count: {guru_episode.review_sample.height}",
+        f"- Approved-only episode validation can run: {guru_episode.approved_only_can_run}",
+        f"- No-trade signal rows retained: {guru_episode.no_trade_rows_retained}",
+        "",
+        "### What Data Guru Could See",
+        "",
+        "- Snapshot fields created: " + ", ".join(f"`{field}`" for field in snapshot_fields),
+        "- Snapshots are built from rows with `timestamp <= availability_timestamp`; outcomes use later rows only.",
+        "",
+        "### Guru Thesis vs Market Outcome",
+        "",
+        _frame_markdown(episode_preview),
+        "",
+        "### Target / Invalidation Accuracy",
+        "",
+        _frame_markdown(outcome_preview),
+        "",
+        "### Approved vs Preview Episodes",
+        "",
+        _frame_markdown(approval_counts),
+        "",
+        "### Episode-Level Rule Performance",
+        "",
+        _frame_markdown(guru_episode.performance),
+        "",
+        "### Final Guru Logic Decision",
+        "",
+        "- `GURU_EPISODE_VALIDATED_FILTER` remains blocked unless human-approved records, enough samples, "
+        "walk-forward pass, placebo pass, clear target/invalidation logic, zero future transcript leakage, "
+        "and retained no-trade rows are all present.",
     ]
 
 
