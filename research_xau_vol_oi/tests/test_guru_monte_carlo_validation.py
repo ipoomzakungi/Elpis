@@ -69,6 +69,39 @@ def _suggestions() -> pl.DataFrame:
     )
 
 
+def _full_context_suggestions() -> pl.DataFrame:
+    decisions = [
+        "SUGGEST_APPROVE_MARKET_MAP",
+        "SUGGEST_APPROVE_FILTER",
+        "SUGGEST_APPROVE_TRADE_RULE",
+        "SUGGEST_APPROVE_CONTEXT",
+        "SUGGEST_APPROVE_FILTER",
+        "SUGGEST_NEEDS_MORE_CONTEXT",
+        "SUGGEST_REJECT",
+        "SUGGEST_POST_EVENT_ONLY",
+    ]
+    logic_types = [
+        "OI_WALL_ZONE",
+        "NO_TRADE_FILTER",
+        "ENTRY_TRIGGER",
+        "MARKET_MAP",
+        "NO_TRADE_FILTER",
+        "UNTESTABLE_OPINION",
+        "UNTESTABLE_OPINION",
+        "POST_EVENT_COMMENTARY",
+    ]
+    return pl.DataFrame(
+        [
+            {
+                "episode_id": f"e{index}",
+                "suggested_decision": decisions[index],
+                "suggested_guru_logic_type": logic_types[index],
+            }
+            for index in range(8)
+        ]
+    )
+
+
 def _signals() -> pl.DataFrame:
     return pl.DataFrame(
         [
@@ -128,6 +161,23 @@ def test_markov_transition_matrix_schema() -> None:
 
     assert {"group", "from_state", "to_state", "count", "probability"}.issubset(markov.columns)
     assert markov.height > 0
+
+
+def test_monte_carlo_separates_context_filter_market_map_trade_rules() -> None:
+    validation, _ = guru_monte_carlo_validation(
+        episodes=_episodes(),
+        outcomes=_outcomes(),
+        final_suggestions=_full_context_suggestions(),
+        signal_events=_signals(),
+        config=ResearchConfig(random_seed=22),
+        iterations=40,
+    )
+
+    rule_sets = set(validation.get_column("rule_set").to_list())
+    assert "MARKET_MAP_APPROVED_PREVIEW" in rule_sets
+    assert "FILTER_APPROVED_PREVIEW" in rule_sets
+    assert "TRADE_RULE_APPROVED_PREVIEW" in rule_sets
+    assert {"avoided_trade_count", "zone_touch_count", "map_hit_rate"}.issubset(validation.columns)
 
 
 def test_monte_carlo_reproducibility_with_fixed_seed() -> None:

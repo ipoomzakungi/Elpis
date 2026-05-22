@@ -22,6 +22,8 @@ Sharpe, or claim that a signal is tradable.
 - `backtest.py`: event backtest, controls, grouped metrics, and walk-forward splits.
 - `guru_review_queue.py`: human review queue for noisy transcript rule extraction.
 - `guru_episode_dataset.py`: timestamp-safe guru statement, visible-data, and outcome episodes.
+- `guru_full_context_review.py`: full-context review pack and context/map/filter/trade-rule taxonomy.
+- `guru_monte_carlo_validation.py`: post-review Monte Carlo, placebo, filter, and market-map diagnostics.
 - `report.py`: pipeline runner, output files, SVG charts, and Markdown report.
 
 ## Run
@@ -65,6 +67,14 @@ The runner writes:
 - `outputs/guru_llm_review_suggestions.csv`
 - `outputs/guru_llm_review_final_suggestions.csv`
 - `outputs/guru_llm_review_audit.md`
+- `outputs/guru_full_context_review_pack.csv`
+- `outputs/guru_full_context_review_pack.md`
+- `outputs/guru_full_context_review_suggestions.csv`
+- `outputs/guru_full_context_review_decisions_template.csv`
+- `outputs/guru_logic_classification_summary.csv`
+- `outputs/guru_filter_value_report.csv`
+- `outputs/guru_market_map_validation.csv`
+- `outputs/guru_full_context_review_report.md`
 - `outputs/guru_monte_carlo_validation.csv`
 - `outputs/guru_monte_carlo_report.md`
 - `outputs/charts/*.svg`
@@ -89,10 +99,23 @@ The runner writes:
 ## Guru Episode Review
 
 1. Open `outputs/guru_episode_review_dashboard.html`.
-2. Fill `outputs/guru_episode_review_decisions_template.csv`.
-3. Rerun `python -m research_xau_vol_oi.report`.
-4. Check approved-only validation before making any transcript-rule research claim.
+2. Open `outputs/guru_full_context_review_pack.md` for transcript context around each extracted episode.
+3. Fill `outputs/guru_full_context_review_decisions_template.csv`.
+4. Use `APPROVE_CONTEXT`, `APPROVE_MARKET_MAP`, `APPROVE_FILTER`, or `APPROVE_TRADE_RULE` only when the excerpt/context supports that class.
+5. Rerun `python -m research_xau_vol_oi.report`.
+6. Check approved-only validation before making any transcript-rule research claim.
+
+Legacy episode review is still available:
+
+1. Fill `outputs/guru_episode_review_decisions_template.csv`.
+2. Rerun `python -m research_xau_vol_oi.report`.
+3. Check approved-only validation before making any transcript-rule research claim.
 
 The generated `guru_llm_review_suggestions.csv` file is a blind, deterministic
 review aid only. It uses no future outcome fields and still requires human
 approval before any approved-only validation.
+
+The generated `guru_full_context_review_suggestions.csv` file is broader: it
+may suggest context, market-map, filter, or trade-rule candidates. These are
+review classes only; future outcomes are used only in the separate filter,
+market-map, and Monte Carlo validation reports after suggestions are frozen.

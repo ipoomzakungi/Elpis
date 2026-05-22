@@ -61,6 +61,12 @@ LOGICAL_CONTEXT_TAGS = {
     "NEWS_EVENT_WARNING",
     "STALE_DATA_WARNING",
 }
+FULL_CONTEXT_APPROVED_DECISIONS = {
+    "APPROVE_CONTEXT",
+    "APPROVE_MARKET_MAP",
+    "APPROVE_FILTER",
+    "APPROVE_TRADE_RULE",
+}
 MIN_SAMPLE_SIZE = 20
 PLACEBO_TYPES = ("REAL", "SHUFFLED_TAGS", "SHIFTED_AVAILABILITY", "LEAKAGE_PLACEBO")
 
@@ -924,6 +930,8 @@ def _approved_timeline_rows(approved_rules: pl.DataFrame | None) -> list[dict[st
         return []
     grouped: dict[tuple[Any, datetime], dict[str, Any]] = {}
     for row in approved_rules.to_dicts():
+        if not _is_approved_rule_row(row):
+            continue
         availability = _to_utc_datetime(row.get("availability_timestamp"))
         if availability is None:
             continue
@@ -953,6 +961,18 @@ def _approved_timeline_rows(approved_rules: pl.DataFrame | None) -> list[dict[st
             }
         )
     return sorted(rows, key=lambda row: row["availability_timestamp"])
+
+
+def _is_approved_rule_row(row: dict[str, Any]) -> bool:
+    """Accept legacy approvals and revised full-context human approvals only."""
+
+    full_context_decision = str(row.get("reviewer_final_decision") or "").strip().upper()
+    if full_context_decision:
+        return full_context_decision in FULL_CONTEXT_APPROVED_DECISIONS
+    legacy_decision = str(row.get("reviewer_decision") or "").strip().upper()
+    if legacy_decision:
+        return legacy_decision == "APPROVE"
+    return True
 
 
 def _shuffle_timeline_tags(timeline: pl.DataFrame, rng: random.Random) -> pl.DataFrame:

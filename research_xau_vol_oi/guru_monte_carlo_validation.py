@@ -22,12 +22,20 @@ from research_xau_vol_oi.config import ResearchConfig
 PRIMARY_WINDOW = "4h"
 DEFAULT_MONTE_CARLO_ITERATIONS = 5_000
 VALIDATION_DECISIONS = (
-    "GURU_RULE_VALIDATION_NOT_READY",
-    "GURU_RULE_CONTEXT_ONLY",
-    "GURU_RULE_PROMISING",
-    "GURU_RULE_PASSED_MONTE_CARLO",
-    "GURU_RULE_FAILED_MONTE_CARLO",
+    "GURU_LOGIC_CONTEXT_ONLY",
+    "GURU_LOGIC_MARKET_MAP_CANDIDATE",
+    "GURU_LOGIC_FILTER_CANDIDATE",
+    "GURU_LOGIC_TRADE_RULE_CANDIDATE",
+    "GURU_LOGIC_VALIDATED_FILTER",
+    "GURU_LOGIC_VALIDATED_TRADE_RULE",
+    "GURU_LOGIC_REVIEW_REQUIRED",
 )
+REVISED_APPROVAL_DECISIONS = {
+    "SUGGEST_APPROVE_CONTEXT": "CONTEXT_APPROVED_PREVIEW",
+    "SUGGEST_APPROVE_MARKET_MAP": "MARKET_MAP_APPROVED_PREVIEW",
+    "SUGGEST_APPROVE_FILTER": "FILTER_APPROVED_PREVIEW",
+    "SUGGEST_APPROVE_TRADE_RULE": "TRADE_RULE_APPROVED_PREVIEW",
+}
 
 
 @dataclass(frozen=True)
@@ -130,6 +138,30 @@ def build_validation_set_masks(joined: pl.DataFrame) -> dict[str, set[str]]:
             for row in rows
             if str(row.get("reviewer_decision") or "").upper() == "APPROVE"
         },
+        "CONTEXT_APPROVED_PREVIEW": {
+            str(row["episode_id"])
+            for row in rows
+            if str(row.get("suggested_decision") or row.get("suggested_review_decision") or "")
+            == "SUGGEST_APPROVE_CONTEXT"
+        },
+        "MARKET_MAP_APPROVED_PREVIEW": {
+            str(row["episode_id"])
+            for row in rows
+            if str(row.get("suggested_decision") or row.get("suggested_review_decision") or "")
+            == "SUGGEST_APPROVE_MARKET_MAP"
+        },
+        "FILTER_APPROVED_PREVIEW": {
+            str(row["episode_id"])
+            for row in rows
+            if str(row.get("suggested_decision") or row.get("suggested_review_decision") or "")
+            == "SUGGEST_APPROVE_FILTER"
+        },
+        "TRADE_RULE_APPROVED_PREVIEW": {
+            str(row["episode_id"])
+            for row in rows
+            if str(row.get("suggested_decision") or row.get("suggested_review_decision") or "")
+            == "SUGGEST_APPROVE_TRADE_RULE"
+        },
         "CODEX_SUGGEST_APPROVE_PREVIEW": {
             str(row["episode_id"])
             for row in rows
@@ -160,7 +192,8 @@ def markov_transition_matrix(joined: pl.DataFrame) -> pl.DataFrame:
     for row in joined.to_dicts():
         from_state = _from_state(row)
         to_state = _to_state(row)
-        group = "with_guru_rule" if row.get("suggested_review_decision") == "SUGGEST_APPROVE" else "without_guru_rule"
+        decision = str(row.get("suggested_decision") or row.get("suggested_review_decision") or "")
+        group = "with_guru_rule" if decision in {"SUGGEST_APPROVE", *REVISED_APPROVAL_DECISIONS} else "without_guru_rule"
         counts[(group, from_state, to_state)] = counts.get((group, from_state, to_state), 0) + 1
     totals: dict[tuple[str, str], int] = {}
     for (group, from_state, _), count in counts.items():
@@ -184,18 +217,45 @@ def guru_rule_validation_decision(validation: pl.DataFrame) -> str:
     """Return conservative final validation label."""
 
     if validation.is_empty():
-        return "GURU_RULE_VALIDATION_NOT_READY"
-    directional = validation.filter(pl.col("rule_set") == "HUMAN_APPROVED")
-    preview = validation.filter(pl.col("rule_set") == "CODEX_SUGGEST_APPROVE_PREVIEW")
-    candidate = directional if not directional.is_empty() else preview
-    if candidate.is_empty() or candidate.get_column("episode_count").max() == 0:
-        context = validation.filter(pl.col("rule_set") == "CONTEXT_ONLY_CONTROL")
-        return "GURU_RULE_CONTEXT_ONLY" if not context.is_empty() else "GURU_RULE_VALIDATION_NOT_READY"
-    pass_rows = candidate.filter(pl.col("monte_carlo_pass"))
-    if pass_rows.is_empty():
-        failed = candidate.filter(pl.col("episode_count") >= 20)
-        return "GURU_RULE_FAILED_MONTE_CARLO" if not failed.is_empty() else "GURU_RULE_PROMISING"
-    return "GURU_RULE_PASSED_MONTE_CARLO"
+        return "GURU_LOGIC_REVIEW_REQUIRED"
+    trade_candidate = validation.filter(pl.col("rule_set").is_in(["HUMAN_APPROVED", "TRADE_RULE_APPROVED_PREVIEW"]))
+    filter_candidate = validation.filter(pl.col("rule_set") == "FILTER_APPROVED_PREVIEW")
+    map_candidate = validation.filter(pl.col("rule_set") == "MARKET_MAP_APPROVED_PREVIEW")
+    context_candidate = validation.filter(pl.col("rule_set").is_in(["CONTEXT_APPROVED_PREVIEW", "CONTEXT_ONLY_CONTROL"]))
+    trade_ready = not trade_candidate.is_empty() and trade_candidate.get_column("episode_count").max() > 0
+    filter_ready = not filter_candidate.is_empty() and filter_candidate.get_column("episode_count").max() > 0
+    trade_sufficient = trade_ready and not bool(trade_candidate.get_column("sample_size_warning").min())
+    filter_sufficient = filter_ready and not bool(filter_candidate.get_column("sample_size_warning").min())
+    if trade_sufficient:
+        return (
+            "GURU_LOGIC_VALIDATED_TRADE_RULE"
+            if _rule_set_passed(validation, "TRADE_RULE_APPROVED_PREVIEW")
+            else "GURU_LOGIC_TRADE_RULE_CANDIDATE"
+        )
+    if filter_sufficient:
+        return (
+            "GURU_LOGIC_VALIDATED_FILTER"
+            if _rule_set_passed(validation, "FILTER_APPROVED_PREVIEW")
+            else "GURU_LOGIC_FILTER_CANDIDATE"
+        )
+    if trade_ready and not filter_ready:
+        return "GURU_LOGIC_TRADE_RULE_CANDIDATE"
+    if filter_ready:
+        return "GURU_LOGIC_FILTER_CANDIDATE"
+    if not map_candidate.is_empty() and map_candidate.get_column("episode_count").max() > 0:
+        return "GURU_LOGIC_MARKET_MAP_CANDIDATE"
+    if not context_candidate.is_empty():
+        return "GURU_LOGIC_CONTEXT_ONLY"
+    return "GURU_LOGIC_REVIEW_REQUIRED"
+
+
+def _rule_set_passed(validation: pl.DataFrame, rule_set: str) -> bool:
+    required_methods = {"PERMUTATION", "DATE_SHIFT_PLACEBO", "MATCHED_MARKET_STATE_PLACEBO", "BOOTSTRAP_CI"}
+    rows = validation.filter(pl.col("rule_set") == rule_set)
+    if rows.is_empty():
+        return False
+    by_method = {row.get("method"): bool(row.get("monte_carlo_pass")) for row in rows.to_dicts()}
+    return all(by_method.get(method, False) for method in required_methods)
 
 
 def write_guru_monte_carlo_report(
@@ -242,9 +302,9 @@ def write_guru_monte_carlo_report(
         "",
         "## Final Guru Logic Decision",
         "",
-        "- `GURU_RULE_PASSED_MONTE_CARLO` is blocked unless reviewed or clearly preview-labeled suggested rules pass "
-        "permutation/placebo checks, have sufficient samples, have a stable bootstrap interval, use no future data "
-        "in review, and exclude post-event commentary.",
+        "- Validated filter/trade-rule labels remain blocked unless reviewed or clearly preview-labeled suggested rules "
+        "pass permutation/placebo checks, have sufficient samples, have a stable bootstrap interval, use no future "
+        "data in review, and exclude post-event commentary.",
     ]
     path.write_text("\n".join(lines), encoding="utf-8")
 
@@ -292,6 +352,8 @@ def _validation_rows_for_set(
     bootstrap = _bootstrap_distribution(selected, rng, iterations)
     base = {
         **selected_metrics,
+        **_filter_value_metrics(selected),
+        **_market_map_metrics(selected),
         "rule_set": set_name,
         "no_trade_rows_retained": no_trade_rows_retained,
         "sample_size_warning": len(selected) < 20,
@@ -371,6 +433,8 @@ def _markov_validation_rows(
         rows.append(
             {
                 **metrics,
+                **_filter_value_metrics(selected),
+                **_market_map_metrics(selected),
                 "rule_set": set_name,
                 "method": "MARKOV_TRANSITION",
                 "observed_metric": transition_prob,
@@ -416,6 +480,67 @@ def _metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "target_hit_rate": _mean_bool(target_values),
         "invalidation_hit_rate": _mean_bool(invalidation_values),
         "expectancy_proxy": _mean_float(expectancy_values),
+    }
+
+
+def _filter_value_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Return filter-specific diagnostics for no-trade/filter rule sets."""
+
+    filter_rows = [
+        row
+        for row in rows
+        if str(row.get("suggested_decision") or row.get("suggested_review_decision") or "")
+        == "SUGGEST_APPROVE_FILTER"
+        or str(row.get("suggested_guru_logic_type") or "") == "NO_TRADE_FILTER"
+    ]
+    count = len(filter_rows)
+    supported = [row for row in filter_rows if row.get("outcome_label") == "THESIS_SUPPORTED"]
+    failed = [row for row in filter_rows if row.get("outcome_label") == "THESIS_FAILED"]
+    avoided_loss = sum(abs(_float_or_zero(row.get("max_adverse_excursion"))) for row in supported)
+    opportunity_cost = sum(abs(_float_or_zero(row.get("max_favorable_excursion"))) for row in failed)
+    return {
+        "avoided_trade_count": count,
+        "avoided_losing_trade_count": len(supported),
+        "avoided_winning_trade_count": len(failed),
+        "avoided_loss_amount": avoided_loss if count else None,
+        "opportunity_cost": opportunity_cost if count else None,
+        "net_filter_value": avoided_loss - opportunity_cost if count else None,
+        "bad_trade_reduction_rate": len(supported) / count if count else None,
+        "false_block_rate": len(failed) / count if count else None,
+    }
+
+
+def _market_map_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Return market-map diagnostics for zone/range rule sets."""
+
+    map_rows = [
+        row
+        for row in rows
+        if str(row.get("suggested_decision") or row.get("suggested_review_decision") or "")
+        == "SUGGEST_APPROVE_MARKET_MAP"
+        or str(row.get("suggested_guru_logic_type") or "") in {"MARKET_MAP", "VOLATILITY_RANGE", "OI_WALL_ZONE", "BASIS_MAPPING"}
+    ]
+    count = len(map_rows)
+    touch = [
+        row
+        for row in map_rows
+        if _bool(row.get("wall_rejected")) or _bool(row.get("wall_accepted")) or _bool(row.get("broke_1sd"))
+    ]
+    return {
+        "zone_touch_count": len(touch),
+        "zone_rejection_count": sum(1 for row in map_rows if _bool(row.get("wall_rejected"))),
+        "zone_acceptance_count": sum(1 for row in map_rows if _bool(row.get("wall_accepted"))),
+        "pin_count": sum(
+            1 for row in map_rows if "PIN" in str(row.get("rule_tag") or "") and _bool(row.get("stayed_inside_1sd"))
+        ),
+        "squeeze_count": sum(
+            1
+            for row in map_rows
+            if "SQUEEZE" in str(row.get("rule_tag") or "") and (_bool(row.get("broke_1sd")) or _bool(row.get("broke_2sd")))
+        ),
+        "map_hit_rate": len(touch) / count if count else None,
+        "average_distance_to_zone": _mean_float([_distance_to_zone(row) for row in map_rows]),
+        "average_time_to_zone_touch": 4.0 if touch else None,
     }
 
 
@@ -480,7 +605,7 @@ def _state_key(row: dict[str, Any]) -> tuple[Any, ...]:
 
 
 def _from_state(row: dict[str, Any]) -> str:
-    thesis = str(row.get("corrected_thesis_type") or row.get("thesis_type") or "")
+    thesis = str(row.get("corrected_thesis_type") or row.get("suggested_guru_logic_type") or row.get("thesis_type") or "")
     sigma = _float_or_none(row.get("sigma_position"))
     wall_bucket = str(row.get("wall_score_bucket") or "")
     if thesis == "NO_TRADE":
@@ -511,7 +636,16 @@ def _to_state(row: dict[str, Any]) -> str:
 
 
 def _expected_transition(row: dict[str, Any]) -> str | tuple[str, ...]:
-    thesis = str(row.get("corrected_thesis_type") or row.get("thesis_type") or "")
+    thesis = str(row.get("corrected_thesis_type") or row.get("suggested_guru_logic_type") or row.get("thesis_type") or "")
+    tag = str(row.get("rule_tag") or "")
+    if thesis in {"MARKET_MAP", "VOLATILITY_RANGE", "OI_WALL_ZONE", "BASIS_MAPPING"}:
+        if "PIN" in tag:
+            return ("PIN", "MIDDLE_1SD")
+        if "SQUEEZE" in tag:
+            return ("SQUEEZE", "BREAK_ACCEPT", "EDGE_1SD")
+        return ("REJECT_WALL", "BREAK_ACCEPT", "MIDDLE_1SD", "EDGE_1SD")
+    if thesis == "NO_TRADE_FILTER":
+        return ("NO_TRADE", "MIDDLE_1SD")
     if thesis == "REJECT_LEVEL":
         return "REJECT_WALL"
     if thesis == "BREAK_LEVEL":
@@ -619,6 +753,17 @@ def _float_or_zero(value: Any) -> float:
     return parsed if parsed is not None else 0.0
 
 
+def _distance_to_zone(row: dict[str, Any]) -> float | None:
+    spot = _float_or_none(row.get("spot_price"))
+    candidates = [
+        _float_or_none(row.get("nearest_spot_equivalent_strike")),
+        _float_or_none(row.get("nearest_wall_above")),
+        _float_or_none(row.get("nearest_wall_below")),
+    ]
+    values = [abs(spot - value) for value in candidates if spot is not None and value is not None]
+    return min(values) if values else None
+
+
 def _frame_markdown(frame: pl.DataFrame) -> str:
     if frame.is_empty():
         return "_No rows._"
@@ -646,6 +791,22 @@ def _empty_validation() -> pl.DataFrame:
             "target_hit_rate": pl.Float64,
             "invalidation_hit_rate": pl.Float64,
             "expectancy_proxy": pl.Float64,
+            "avoided_trade_count": pl.Int64,
+            "avoided_losing_trade_count": pl.Int64,
+            "avoided_winning_trade_count": pl.Int64,
+            "avoided_loss_amount": pl.Float64,
+            "opportunity_cost": pl.Float64,
+            "net_filter_value": pl.Float64,
+            "bad_trade_reduction_rate": pl.Float64,
+            "false_block_rate": pl.Float64,
+            "zone_touch_count": pl.Int64,
+            "zone_rejection_count": pl.Int64,
+            "zone_acceptance_count": pl.Int64,
+            "pin_count": pl.Int64,
+            "squeeze_count": pl.Int64,
+            "map_hit_rate": pl.Float64,
+            "average_distance_to_zone": pl.Float64,
+            "average_time_to_zone_touch": pl.Float64,
             "observed_metric": pl.Float64,
             "placebo_mean": pl.Float64,
             "placebo_std": pl.Float64,

@@ -27,6 +27,10 @@ from research_xau_vol_oi.guru_episode_dataset import (
     GuruEpisodeDatasetResult,
     run_guru_episode_dataset_layer,
 )
+from research_xau_vol_oi.guru_full_context_review import (
+    GuruFullContextReviewResult,
+    run_guru_full_context_review_layer,
+)
 from research_xau_vol_oi.guru_llm_review import (
     GuruLlmReviewResult,
     run_guru_llm_review_layer,
@@ -167,10 +171,18 @@ def run_pipeline(
         episodes=guru_episode_dataset.review_sample,
         output_dir=output_root,
     )
+    guru_full_context_review = run_guru_full_context_review_layer(
+        episodes=guru_episode_dataset.review_sample,
+        transcript_timeline=transcript_timeline.timeline,
+        outcomes=guru_episode_dataset.outcomes,
+        signal_events=signal_events,
+        trades=trades,
+        output_dir=output_root,
+    )
     guru_monte_carlo = run_guru_monte_carlo_validation_layer(
         episodes=guru_episode_dataset.episodes,
         outcomes=guru_episode_dataset.outcomes,
-        final_suggestions=guru_llm_review.final_suggestions,
+        final_suggestions=guru_full_context_review.suggestions,
         signal_events=signal_events,
         output_dir=output_root,
         charts_dir=charts_dir,
@@ -217,6 +229,7 @@ def run_pipeline(
         guru_review=guru_review,
         guru_episode_dataset=guru_episode_dataset,
         guru_llm_review=guru_llm_review,
+        guru_full_context_review=guru_full_context_review,
         guru_monte_carlo=guru_monte_carlo,
         charts_dir=charts_dir,
     )
@@ -273,6 +286,13 @@ def run_pipeline(
         "guru_llm_adversarial_review": output_root / "guru_llm_adversarial_review.csv",
         "guru_llm_review_final_suggestions": output_root / "guru_llm_review_final_suggestions.csv",
         "guru_llm_review_audit": output_root / "guru_llm_review_audit.md",
+        "guru_full_context_review_pack": output_root / "guru_full_context_review_pack.csv",
+        "guru_full_context_review_suggestions": output_root / "guru_full_context_review_suggestions.csv",
+        "guru_full_context_review_decisions_template": output_root / "guru_full_context_review_decisions_template.csv",
+        "guru_logic_classification_summary": output_root / "guru_logic_classification_summary.csv",
+        "guru_filter_value_report": output_root / "guru_filter_value_report.csv",
+        "guru_market_map_validation": output_root / "guru_market_map_validation.csv",
+        "guru_full_context_review_report": output_root / "guru_full_context_review_report.md",
         "guru_monte_carlo_validation": output_root / "guru_monte_carlo_validation.csv",
         "guru_monte_carlo_report": output_root / "guru_monte_carlo_report.md",
         "backtest_summary": summary_path,
@@ -427,6 +447,7 @@ def write_research_report(
     guru_review: GuruReviewQueueResult | None = None,
     guru_episode_dataset: GuruEpisodeDatasetResult | None = None,
     guru_llm_review: GuruLlmReviewResult | None = None,
+    guru_full_context_review: GuruFullContextReviewResult | None = None,
     guru_monte_carlo: GuruMonteCarloValidationResult | None = None,
     charts_dir: Path,
 ) -> None:
@@ -503,6 +524,10 @@ def write_research_report(
         "## Blind Guru Logic Review",
         "",
         *_guru_llm_review_lines(guru_llm_review),
+        "",
+        "## Full-Context Guru Logic Review",
+        "",
+        *_guru_full_context_review_lines(guru_full_context_review),
         "",
         "## Monte Carlo Validation",
         "",
@@ -1120,6 +1145,69 @@ def _guru_llm_review_lines(guru_llm_review: GuruLlmReviewResult | None) -> list[
         "",
         "- Links: `outputs/guru_llm_review_suggestions.csv`, "
         "`outputs/guru_llm_review_final_suggestions.csv`, `outputs/guru_llm_review_audit.md`.",
+    ]
+
+
+def _guru_full_context_review_lines(guru_review: GuruFullContextReviewResult | None) -> list[str]:
+    if guru_review is None:
+        return ["Full-context guru logic review was not run."]
+    suggestions = guru_review.suggestions
+    suggestion_counts = (
+        suggestions.group_by("suggested_decision").len().sort("suggested_decision")
+        if not suggestions.is_empty()
+        else suggestions
+    )
+    logic_counts = (
+        suggestions.group_by("suggested_guru_logic_type").len().sort("suggested_guru_logic_type")
+        if not suggestions.is_empty()
+        else suggestions
+    )
+    review_preview = (
+        suggestions.select([
+            "episode_id",
+            "rule_tag",
+            "suggested_decision",
+            "suggested_guru_logic_type",
+            "usable_as_context",
+            "usable_as_market_map",
+            "usable_as_filter",
+            "usable_as_trade_rule",
+            "reason_for_decision",
+        ]).head(20)
+        if not suggestions.is_empty()
+        else suggestions
+    )
+    return [
+        f"- Revised Guru Logic Decision: `{guru_review.final_decision}`",
+        f"- Full-context review pack rows: {guru_review.review_pack.height}",
+        f"- Human review template rows: {guru_review.decisions_template.height}",
+        "- This layer separates faithful extraction from later quantitative usefulness.",
+        "- Future outcomes are excluded from the review pack and joined only for post-review metrics.",
+        "",
+        "### Review Taxonomy Counts",
+        "",
+        _frame_markdown(suggestion_counts),
+        "",
+        "### Logic Type Counts",
+        "",
+        _frame_markdown(logic_counts),
+        "",
+        "### Classification Preview",
+        "",
+        _frame_markdown(review_preview),
+        "",
+        "### Filter Value Results",
+        "",
+        _frame_markdown(guru_review.filter_value),
+        "",
+        "### Market-Map Validation Results",
+        "",
+        _frame_markdown(guru_review.market_map_validation),
+        "",
+        "- Links: `outputs/guru_full_context_review_pack.csv`, "
+        "`outputs/guru_full_context_review_suggestions.csv`, "
+        "`outputs/guru_full_context_review_decisions_template.csv`, "
+        "`outputs/guru_full_context_review_report.md`.",
     ]
 
 
