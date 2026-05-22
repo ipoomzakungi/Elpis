@@ -33,6 +33,10 @@ from research_xau_vol_oi.transcript_timeline import (
     TranscriptTimelineResult,
     run_transcript_timeline_layer,
 )
+from research_xau_vol_oi.transcript_uplift import (
+    TranscriptUpliftResult,
+    run_transcript_uplift_layer,
+)
 from research_xau_vol_oi.volatility_engine import (
     add_bollinger_baseline,
     add_realized_volatility,
@@ -106,6 +110,15 @@ def run_pipeline(
         charts_dir=charts_dir,
         config=cfg,
     )
+    transcript_uplift = run_transcript_uplift_layer(
+        feature_table=feature_table,
+        signal_events=signal_events,
+        trades=trades,
+        transcript_timeline=transcript_timeline.timeline,
+        output_dir=output_root,
+        charts_dir=charts_dir,
+        config=cfg,
+    )
 
     feature_path = output_root / "xau_feature_table.parquet"
     events_path = output_root / "signal_events.csv"
@@ -142,6 +155,7 @@ def run_pipeline(
         cost_stress=cost_stress,
         score_calibration=score_calibration,
         transcript_timeline=transcript_timeline,
+        transcript_uplift=transcript_uplift,
         charts_dir=charts_dir,
     )
     audit_path = output_root / "leakage_audit_report.md"
@@ -169,6 +183,13 @@ def run_pipeline(
         "transcript_rule_performance": output_root / "transcript_rule_performance.csv",
         "transcript_rule_ablation": output_root / "transcript_rule_ablation.csv",
         "transcript_alignment_report": output_root / "transcript_alignment_report.md",
+        "transcript_conditioned_events": output_root / "transcript_conditioned_events.csv",
+        "transcript_rule_uplift": output_root / "transcript_rule_uplift.csv",
+        "transcript_rule_combination_uplift": output_root / "transcript_rule_combination_uplift.csv",
+        "transcript_walk_forward_uplift": output_root / "transcript_walk_forward_uplift.csv",
+        "transcript_placebo_tests": output_root / "transcript_placebo_tests.csv",
+        "transcript_rule_keep_kill": output_root / "transcript_rule_keep_kill.csv",
+        "transcript_uplift_report": output_root / "transcript_uplift_report.md",
         "backtest_summary": summary_path,
         "research_report": report_path,
         "leakage_audit_report": audit_path,
@@ -316,6 +337,7 @@ def write_research_report(
     cost_stress: pl.DataFrame,
     score_calibration: ScoreCalibrationResult | None = None,
     transcript_timeline: TranscriptTimelineResult | None = None,
+    transcript_uplift: TranscriptUpliftResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -371,6 +393,10 @@ def write_research_report(
         "## Guru Transcript Timeline Alignment",
         "",
         *_transcript_timeline_lines(transcript_timeline),
+        "",
+        "## Transcript-Conditioned Uplift Test",
+        "",
+        *_transcript_uplift_lines(transcript_uplift),
         "",
         "## Required Questions",
         "",
@@ -629,6 +655,86 @@ def _transcript_timeline_lines(transcript_timeline: TranscriptTimelineResult | N
         "Transcript rules are treated as dated evidence only. They are not allowed to explain "
         "events before their availability timestamp, no-trade rows are retained, and no "
         "profitability claim is made from this alignment layer.",
+    ]
+
+
+def _transcript_uplift_lines(transcript_uplift: TranscriptUpliftResult | None) -> list[str]:
+    if transcript_uplift is None:
+        return ["Transcript-conditioned uplift testing was not run."]
+    rule_rows = (
+        transcript_uplift.rule_uplift.select(
+            [
+                "rule_id",
+                "rule_type",
+                "event_count",
+                "directional_trade_count",
+                "no_trade_count",
+                "expectancy",
+                "profit_factor",
+                "sample_size_warning",
+                "uplift_vs_no_tag",
+                "uplift_vs_base_score",
+                "uplift_vs_bollinger_baseline",
+                "uplift_vs_random_baseline",
+            ]
+        )
+        if not transcript_uplift.rule_uplift.is_empty()
+        else transcript_uplift.rule_uplift
+    )
+    combination_rows = (
+        transcript_uplift.combination_uplift.select(
+            [
+                "rule_id",
+                "rule_type",
+                "event_count",
+                "directional_trade_count",
+                "no_trade_count",
+                "expectancy",
+                "profit_factor",
+                "sample_size_warning",
+                "uplift_vs_no_tag",
+                "uplift_vs_base_score",
+            ]
+        )
+        if not transcript_uplift.combination_uplift.is_empty()
+        else transcript_uplift.combination_uplift
+    )
+    no_trade_count = (
+        transcript_uplift.conditioned_events.filter(pl.col("no_trade_row_retained")).height
+        if not transcript_uplift.conditioned_events.is_empty()
+        else 0
+    )
+    return [
+        f"- Final Decision: `{transcript_uplift.final_decision}`",
+        f"- Conditioned signal events: {transcript_uplift.conditioned_events.height}",
+        f"- No-trade rows retained: {no_trade_count}",
+        "- Same market events are deduplicated before uplift metrics are calculated.",
+        "- Placebo and walk-forward checks must pass before transcript rules can become filters.",
+        "",
+        "### Rule Tag Uplift",
+        "",
+        _frame_markdown(rule_rows),
+        "",
+        "### Rule Combination Uplift",
+        "",
+        _frame_markdown(combination_rows),
+        "",
+        "### Walk-Forward Transcript Uplift",
+        "",
+        _frame_markdown(transcript_uplift.walk_forward_uplift),
+        "",
+        "### Placebo Tests",
+        "",
+        _frame_markdown(transcript_uplift.placebo_tests),
+        "",
+        "### Transcript Rule Keep/Kill Decision",
+        "",
+        _frame_markdown(transcript_uplift.keep_kill),
+        "",
+        "### Final Decision",
+        "",
+        "Transcript-conditioned uplift is treated as a filter-validation problem, not a "
+        "profitability claim. `LEAKAGE_PLACEBO` is an intentionally invalid negative control.",
     ]
 
 
