@@ -23,6 +23,10 @@ from research_xau_vol_oi.data_loader import (
     standardize_price_frame,
 )
 from research_xau_vol_oi.expected_move import add_expected_move_columns_asof_options
+from research_xau_vol_oi.llm_transcript_extractor import (
+    LlmTranscriptExtractionResult,
+    run_llm_transcript_extraction_layer,
+)
 from research_xau_vol_oi.oi_wall_engine import build_oi_walls
 from research_xau_vol_oi.score_calibration import (
     ScoreCalibrationResult,
@@ -119,6 +123,11 @@ def run_pipeline(
         charts_dir=charts_dir,
         config=cfg,
     )
+    llm_transcript_extraction = run_llm_transcript_extraction_layer(
+        transcript_timeline=transcript_timeline.timeline,
+        output_dir=output_root,
+        config=cfg,
+    )
 
     feature_path = output_root / "xau_feature_table.parquet"
     events_path = output_root / "signal_events.csv"
@@ -156,6 +165,7 @@ def run_pipeline(
         score_calibration=score_calibration,
         transcript_timeline=transcript_timeline,
         transcript_uplift=transcript_uplift,
+        llm_transcript_extraction=llm_transcript_extraction,
         charts_dir=charts_dir,
     )
     audit_path = output_root / "leakage_audit_report.md"
@@ -190,6 +200,9 @@ def run_pipeline(
         "transcript_placebo_tests": output_root / "transcript_placebo_tests.csv",
         "transcript_rule_keep_kill": output_root / "transcript_rule_keep_kill.csv",
         "transcript_uplift_report": output_root / "transcript_uplift_report.md",
+        "transcript_llm_extracted_rules": output_root / "transcript_llm_extracted_rules.csv",
+        "transcript_rule_quality_audit": output_root / "transcript_rule_quality_audit.csv",
+        "transcript_extraction_audit_report": output_root / "transcript_extraction_audit_report.md",
         "backtest_summary": summary_path,
         "research_report": report_path,
         "leakage_audit_report": audit_path,
@@ -338,6 +351,7 @@ def write_research_report(
     score_calibration: ScoreCalibrationResult | None = None,
     transcript_timeline: TranscriptTimelineResult | None = None,
     transcript_uplift: TranscriptUpliftResult | None = None,
+    llm_transcript_extraction: LlmTranscriptExtractionResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -397,6 +411,10 @@ def write_research_report(
         "## Transcript-Conditioned Uplift Test",
         "",
         *_transcript_uplift_lines(transcript_uplift),
+        "",
+        "## LLM Transcript Extraction Audit",
+        "",
+        *_llm_transcript_extraction_lines(llm_transcript_extraction),
         "",
         "## Required Questions",
         "",
@@ -735,6 +753,71 @@ def _transcript_uplift_lines(transcript_uplift: TranscriptUpliftResult | None) -
         "",
         "Transcript-conditioned uplift is treated as a filter-validation problem, not a "
         "profitability claim. `LEAKAGE_PLACEBO` is an intentionally invalid negative control.",
+    ]
+
+
+def _llm_transcript_extraction_lines(
+    extraction: LlmTranscriptExtractionResult | None,
+) -> list[str]:
+    if extraction is None:
+        return ["LLM transcript extraction audit was not run."]
+    quality_counts = (
+        extraction.quality_audit.group_by("rule_quality").len().sort("rule_quality")
+        if not extraction.quality_audit.is_empty()
+        else extraction.quality_audit
+    )
+    testable = (
+        extraction.quality_audit.filter(
+            pl.col("rule_quality").is_in(
+                ["TESTABLE_AND_OBSERVABLE", "TESTABLE_BUT_NEEDS_DATA"]
+            )
+        )
+        if not extraction.quality_audit.is_empty()
+        else extraction.quality_audit
+    )
+    context = (
+        extraction.quality_audit.filter(
+            pl.col("rule_quality").is_in(
+                ["CONTEXT_ONLY", "POST_EVENT_COMMENTARY", "UNTESTABLE_OPINION"]
+            )
+        )
+        if not extraction.quality_audit.is_empty()
+        else extraction.quality_audit
+    )
+    rejected = (
+        extraction.quality_audit.filter(pl.col("rule_quality") == "REJECT_LEAKAGE_RISK")
+        if not extraction.quality_audit.is_empty()
+        else extraction.quality_audit
+    )
+    return [
+        f"- Final Decision: `{extraction.final_decision}`",
+        f"- Extraction mode: `{extraction.extraction_mode}`",
+        f"- Extracted structured records: {extraction.extracted_rules.height}",
+        "- Current production transcript tagging is deterministic keyword/rule based, not semantic LLM extraction.",
+        "- The optional LLM-style path accepts JSON/JSONL records only and treats them as research features.",
+        "- LLM output is not allowed to create direct trade signals; it must pass backtest, walk-forward, and placebo validation.",
+        "",
+        "### Guru Rule Testability",
+        "",
+        _frame_markdown(quality_counts),
+        "",
+        "### Keyword vs LLM Extraction Risk",
+        "",
+        "- Thai ASR noise can miss distorted forms of IV/RV/VRP, skew, gamma, acceptance, rejection, and basis language.",
+        "- Simple keywords can falsely trigger broad tags such as OI wall, volume, no-trade, open-price, news, and gamma.",
+        "- Source excerpts are now stored with each structured record for audit review.",
+        "",
+        "### Which Guru Rules Are Testable",
+        "",
+        _frame_markdown(testable),
+        "",
+        "### Which Guru Rules Are Context Only",
+        "",
+        _frame_markdown(context),
+        "",
+        "### Which Guru Rules Are Rejected",
+        "",
+        _frame_markdown(rejected),
     ]
 
 
