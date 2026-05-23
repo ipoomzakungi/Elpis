@@ -63,6 +63,10 @@ from research_xau_vol_oi.market_map_proof_pack import (
     MarketMapProofPackResult,
     run_market_map_proof_pack,
 )
+from research_xau_vol_oi.research_decision_gate import (
+    ResearchDecisionGateResult,
+    run_research_decision_gate,
+)
 from research_xau_vol_oi.oi_wall_engine import build_oi_walls
 from research_xau_vol_oi.score_calibration import (
     ScoreCalibrationResult,
@@ -248,6 +252,19 @@ def run_pipeline(
         chart_dir=charts_dir,
     )
     data_recovery = run_data_recovery_audit_layer(output_dir=output_root, config=cfg)
+    audit_path = output_root / "leakage_audit_report.md"
+    write_leakage_audit_report(
+        audit_path,
+        feature_table=feature_table,
+        events=signal_events,
+        summary=summary,
+        walk_forward=walk_forward,
+        cost_stress=cost_stress,
+    )
+    research_decision_gate = run_research_decision_gate(
+        output_dir=output_root,
+        charts_dir=charts_dir,
+    )
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -273,16 +290,8 @@ def run_pipeline(
         cme_history_normalizer=cme_history_normalizer,
         market_map_proof_pack=market_map_proof_pack,
         data_recovery=data_recovery,
+        research_decision_gate=research_decision_gate,
         charts_dir=charts_dir,
-    )
-    audit_path = output_root / "leakage_audit_report.md"
-    write_leakage_audit_report(
-        audit_path,
-        feature_table=feature_table,
-        events=signal_events,
-        summary=summary,
-        walk_forward=walk_forward,
-        cost_stress=cost_stress,
     )
     return {
         "feature_table": feature_path,
@@ -351,6 +360,11 @@ def run_pipeline(
         "filter_avoided_pnl_report": output_root / "filter_avoided_pnl_report.csv",
         "expiry_pin_test_report": output_root / "expiry_pin_test_report.csv",
         "proof_pack": output_root / "proof_pack.md",
+        "research_decision_gate": output_root / "research_decision_gate.csv",
+        "research_readiness_scorecard": output_root / "research_readiness_scorecard.csv",
+        "money_readiness_report": output_root / "money_readiness_report.md",
+        "next_research_tasks_ranked": output_root / "next_research_tasks_ranked.csv",
+        "research_gate_status_chart": charts_dir / "research_gate_status.svg",
         "transcript_corpus_manifest": output_root / "transcript_corpus_manifest.csv",
         "transcript_corpus_manifest_report": output_root / "transcript_corpus_manifest.md",
         "market_data_coverage_manifest": output_root / "market_data_coverage_manifest.csv",
@@ -520,6 +534,7 @@ def write_research_report(
     cme_history_normalizer: CmeHistoryNormalizerResult | None = None,
     market_map_proof_pack: MarketMapProofPackResult | None = None,
     data_recovery: DataRecoveryAuditResult | None = None,
+    research_decision_gate: ResearchDecisionGateResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -619,6 +634,10 @@ def write_research_report(
         "## Gold Baseline And Uplift Lab",
         "",
         *_gold_baseline_lab_lines(gold_baseline_lab),
+        "",
+        "## Research Decision Gate",
+        "",
+        *_research_decision_gate_lines(research_decision_gate),
         "",
         "## Required Questions",
         "",
@@ -980,6 +999,59 @@ def _market_map_proof_pack_lines(proof_pack: MarketMapProofPackResult | None) ->
         "### Expiry Pin Snapshot",
         "",
         _frame_markdown(pin_view),
+    ]
+
+
+def _research_decision_gate_lines(
+    decision_gate: ResearchDecisionGateResult | None,
+) -> list[str]:
+    if decision_gate is None:
+        return ["Research decision gate was not run."]
+    gate_rows = decision_gate.gate_report
+    scorecard = decision_gate.scorecard
+    tasks = decision_gate.next_tasks
+    failed = gate_rows.filter(pl.col("status") != "PASS") if not gate_rows.is_empty() else gate_rows
+    passed = gate_rows.filter(pl.col("status") == "PASS") if not gate_rows.is_empty() else gate_rows
+    shadow_ready = decision_gate.final_label in {
+        "READY_FOR_SHADOW_MODE",
+        "READY_FOR_PAPER_TRADING",
+        "READY_FOR_SMALL_CAPITAL_TEST",
+    }
+    paper_ready = decision_gate.final_label in {"READY_FOR_PAPER_TRADING", "READY_FOR_SMALL_CAPITAL_TEST"}
+    return [
+        f"- Final decision: `{decision_gate.final_label}`",
+        f"- Money-readiness score: `{decision_gate.readiness_score:.1f}/100`",
+        f"- Ready for shadow mode: `{shadow_ready}`",
+        f"- Ready for paper trading: `{paper_ready}`",
+        f"- Ready for real money: `{decision_gate.final_label == 'READY_FOR_SMALL_CAPITAL_TEST'}`",
+        "- This gate is intentionally conservative: a promising no-trade filter or market map "
+        "does not become a trade rule without data coverage, walk-forward, placebo, and cost gates.",
+        "",
+        "### Passed Gates",
+        "",
+        _frame_markdown(passed.select(["gate_name", "status", "evidence"]) if not passed.is_empty() else passed),
+        "",
+        "### Failed Gates And Blocking Issues",
+        "",
+        _frame_markdown(
+            failed.select(["gate_name", "status", "blocking_issues", "evidence"])
+            if not failed.is_empty()
+            else failed
+        ),
+        "",
+        "### Money Readiness Score",
+        "",
+        _frame_markdown(scorecard),
+        "",
+        "### Top Next Research Tasks",
+        "",
+        _frame_markdown(tasks.head(10) if not tasks.is_empty() else tasks),
+        "",
+        "- Links: `outputs/research_decision_gate.csv`, "
+        "`outputs/research_readiness_scorecard.csv`, "
+        "`outputs/money_readiness_report.md`, "
+        "`outputs/next_research_tasks_ranked.csv`, "
+        "`outputs/charts/research_gate_status.svg`.",
     ]
 
 
