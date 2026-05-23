@@ -67,6 +67,11 @@ from research_xau_vol_oi.session_alignment_resolution import (
     run_session_alignment_resolution_layer,
     session_alignment_resolution_report_lines,
 )
+from research_xau_vol_oi.transcript_identity_session_remap import (
+    TranscriptIdentitySessionRemapResult,
+    run_transcript_identity_session_remap_layer,
+    transcript_identity_session_remap_report_lines,
+)
 from research_xau_vol_oi.gold_baseline_lab import (
     GoldBaselineLabResult,
     run_gold_baseline_lab,
@@ -311,6 +316,9 @@ def run_pipeline(
     session_alignment_resolution = run_session_alignment_resolution_layer(
         output_dir=output_root,
     )
+    transcript_identity_session_remap = run_transcript_identity_session_remap_layer(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -343,6 +351,7 @@ def run_pipeline(
         current_week_replay=current_week_replay,
         guru_transcript_alignment_debug=guru_transcript_alignment_debug,
         session_alignment_resolution=session_alignment_resolution,
+        transcript_identity_session_remap=transcript_identity_session_remap,
         charts_dir=charts_dir,
     )
     return {
@@ -494,6 +503,23 @@ def run_pipeline(
         / "refined_missing_data_action_plan.md",
         "current_week_replay_resolved": output_root / "current_week_replay_resolved.csv",
         "current_week_replay_resolved_report": output_root / "current_week_replay_resolved.md",
+        "transcript_identity_audit": output_root / "transcript_identity_audit.csv",
+        "transcript_identity_audit_report": output_root / "transcript_identity_audit.md",
+        "clean_transcript_set": output_root / "clean_transcript_set.csv",
+        "clean_transcript_set_report": output_root / "clean_transcript_set.md",
+        "transcript_session_availability": output_root / "transcript_session_availability.csv",
+        "transcript_session_availability_report": output_root / "transcript_session_availability.md",
+        "session_remap_suggestions": output_root / "session_remap_suggestions.csv",
+        "session_remap_decisions_template": output_root / "session_remap_decisions_template.csv",
+        "session_remap_policy": output_root / "session_remap_policy.md",
+        "current_week_replay_after_approved_remap": output_root
+        / "current_week_replay_after_approved_remap.csv",
+        "current_week_replay_after_approved_remap_report": output_root
+        / "current_week_replay_after_approved_remap.md",
+        "same_day_guru_reinterpretation_after_identity": output_root
+        / "same_day_guru_reinterpretation_after_identity.csv",
+        "same_day_guru_reinterpretation_after_identity_report": output_root
+        / "same_day_guru_reinterpretation_after_identity.md",
         "research_gate_status_chart": charts_dir / "research_gate_status.svg",
         "transcript_corpus_manifest": output_root / "transcript_corpus_manifest.csv",
         "transcript_corpus_manifest_report": output_root / "transcript_corpus_manifest.md",
@@ -671,6 +697,7 @@ def write_research_report(
     current_week_replay: CurrentWeekReplayResult | None = None,
     guru_transcript_alignment_debug: GuruTranscriptAlignmentDebugResult | None = None,
     session_alignment_resolution: SessionAlignmentResolutionResult | None = None,
+    transcript_identity_session_remap: TranscriptIdentitySessionRemapResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -718,6 +745,8 @@ def write_research_report(
         *guru_transcript_alignment_report_lines(guru_transcript_alignment_debug),
         "",
         *session_alignment_resolution_report_lines(session_alignment_resolution),
+        "",
+        *transcript_identity_session_remap_report_lines(transcript_identity_session_remap),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
