@@ -16,7 +16,9 @@ from typing import Any
 import polars as pl
 
 
-MIN_VALIDATION_DATES = 20
+MIN_VALIDATION_DATES = 60
+SERIOUS_VALIDATION_DATES = 120
+ROBUST_VALIDATION_DATES = 250
 MIN_SAMPLE_SIZE = 20
 MAX_ACCEPTABLE_FALSE_BLOCK_RATE = 0.45
 READY_LABELS = {
@@ -94,6 +96,10 @@ def load_decision_gate_inputs(output_dir: str | Path) -> dict[str, pl.DataFrame 
         "market_map_precision_report",
         "expiry_pin_test_report",
         "cme_history_coverage_report",
+        "cme_validation_grade_days",
+        "cme_validation_grade_uplift",
+        "cme_data_requirements_checklist",
+        "basis_adjustment_precision_report",
     ]
     md_names = [
         "gold_ablation_report",
@@ -287,6 +293,9 @@ def money_readiness_markdown(result: ResearchDecisionGateResult) -> str:
         "",
         f"- Final readiness label: `{result.final_label}`",
         f"- Money-readiness score: `{result.readiness_score:.1f}/100`",
+        f"- Minimum preliminary complete validation-grade days: `{MIN_VALIDATION_DATES}`",
+        f"- Serious validation target: `{SERIOUS_VALIDATION_DATES}`",
+        f"- Robust validation target: `{ROBUST_VALIDATION_DATES}`",
         f"- Ready for shadow mode: `{result.final_label in READY_LABELS}`",
         f"- Ready for paper trading: `{result.final_label in {'READY_FOR_PAPER_TRADING', 'READY_FOR_SMALL_CAPITAL_TEST'}}`",
         f"- Ready for real money: `{result.final_label == 'READY_FOR_SMALL_CAPITAL_TEST'}`",
@@ -349,20 +358,47 @@ def _data_coverage_gate(
     *,
     min_validation_dates: int,
 ) -> dict[str, Any]:
+    validation_days = _frame(inputs, "cme_validation_grade_days")
     alignment = _frame(inputs, "transcript_market_coverage_alignment")
     market = _frame(inputs, "market_data_coverage_manifest")
     cme_coverage = _frame(inputs, "cme_history_coverage_report")
+    complete_validation_grade_days = _true_count(validation_days, "complete_validation_grade")
     full_validation_dates = _true_count(alignment, "can_run_full_vol_oi_validation")
     complete_cme_days = _true_count(cme_coverage, "complete_validation_day")
-    enough_dates = max(full_validation_dates, complete_cme_days) >= min_validation_dates
-    xau_align = _any_true(alignment, "has_xau_price_data") or _any_true(
-        cme_coverage,
-        "has_xau_spot_or_proxy_price",
+    primary_complete_days = (
+        complete_validation_grade_days
+        if not validation_days.is_empty()
+        else max(full_validation_dates, complete_cme_days)
     )
-    basis = _any_true(alignment, "has_basis_data") or _any_true(cme_coverage, "has_basis")
-    iv = _any_true(alignment, "has_cme_iv_data") or _any_true(cme_coverage, "has_iv_context")
-    oi = _any_true(alignment, "has_cme_options_oi_data") or _any_true(cme_coverage, "has_cme_options_oi")
+    enough_dates = primary_complete_days >= min_validation_dates
+    xau_align = (
+        _any_true(validation_days, "has_xau_spot_price")
+        or _any_true(alignment, "has_xau_price_data")
+        or _any_true(cme_coverage, "has_xau_spot_or_proxy_price")
+    )
+    futures = _any_true(validation_days, "has_gc_futures_price") or _any_true(
+        cme_coverage,
+        "has_futures_reference_price",
+    )
+    basis = (
+        _any_true(validation_days, "has_basis")
+        or _any_true(alignment, "has_basis_data")
+        or _any_true(cme_coverage, "has_basis")
+    )
+    iv = (
+        _any_true(validation_days, "has_option_iv")
+        or _any_true(alignment, "has_cme_iv_data")
+        or _any_true(cme_coverage, "has_iv_context")
+    )
+    oi = (
+        _any_true(validation_days, "has_option_oi_by_strike")
+        or _any_true(alignment, "has_cme_options_oi_data")
+        or _any_true(cme_coverage, "has_cme_options_oi")
+    )
     oi_change_volume = (
+        _any_true(validation_days, "has_option_oi_change")
+        or _any_true(validation_days, "has_option_volume")
+        or
         _any_true(cme_coverage, "has_oi_change")
         or _any_true(cme_coverage, "has_intraday_volume")
         or _market_has_any(market, ["oi_change", "volume"])
@@ -370,6 +406,7 @@ def _data_coverage_gate(
     conditions = {
         "enough_cme_validation_dates": enough_dates,
         "xau_price_aligns_with_cme": xau_align,
+        "gc_futures_price_exists": futures,
         "basis_data_exists": basis,
         "iv_data_exists": iv,
         "oi_by_strike_expiry_exists": oi,
@@ -381,7 +418,9 @@ def _data_coverage_gate(
         20,
         evidence=(
             f"full_validation_dates={full_validation_dates}; "
-            f"complete_cme_days={complete_cme_days}; market_files={market.height}"
+            f"complete_cme_days={complete_cme_days}; "
+            f"complete_validation_grade_days={complete_validation_grade_days}; "
+            f"market_files={market.height}"
         ),
     )
 
@@ -410,6 +449,29 @@ def _baseline_gate(inputs: dict[str, pl.DataFrame | str]) -> dict[str, Any]:
 
 
 def _cme_uplift_gate(inputs: dict[str, pl.DataFrame | str]) -> dict[str, Any]:
+    validation_uplift = _frame(inputs, "cme_validation_grade_uplift")
+    if not validation_uplift.is_empty():
+        full = validation_uplift.filter(pl.col("stage") == "FULL_CME_VOL_OI")
+        cme_rows = validation_uplift.filter(pl.col("stage").is_in(["CME_OI_ONLY", "CME_IV_ONLY", "FULL_CME_VOL_OI"]))
+        conditions = {
+            "validation_grade_uplift_rows_exist": not cme_rows.is_empty(),
+            "beats_price_baseline_out_of_sample": _any_positive(cme_rows, "uplift_vs_price_only")
+            and _any_true(cme_rows, "walk_forward_pass"),
+            "walk_forward_passes": _any_true(cme_rows, "walk_forward_pass"),
+            "permutation_or_placebo_not_explained": _any_true(cme_rows, "placebo_pass"),
+            "sample_size_sufficient": _max_numeric(full, "event_count") >= MIN_SAMPLE_SIZE
+            and _any_false(full, "sample_size_warning"),
+            "cost_stress_survives": _any_true(cme_rows, "cost_stress_survival"),
+        }
+        return _gate_row(
+            "CME_UPLIFT_GATE",
+            conditions,
+            20,
+            evidence=(
+                f"validation_grade_uplift_rows={validation_uplift.height}; "
+                f"full_cme_vol_oi_events={_max_numeric(full, 'event_count')}"
+            ),
+        )
     gold = _frame(inputs, "gold_baseline_metrics")
     cme = gold.filter(pl.col("scenario_family") == "cme_feature_stage") if _has_columns(gold, ["scenario_family"]) else pl.DataFrame()
     full = cme.filter(pl.col("evaluation_type") == "full_sample") if _has_columns(cme, ["evaluation_type"]) else pl.DataFrame()

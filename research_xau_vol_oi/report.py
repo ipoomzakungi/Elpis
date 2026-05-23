@@ -18,6 +18,10 @@ from research_xau_vol_oi.cme_history_normalizer import (
     CmeHistoryNormalizerResult,
     run_cme_history_normalizer,
 )
+from research_xau_vol_oi.cme_history_importer import (
+    CmeHistoryImporterResult,
+    run_cme_history_importer,
+)
 from research_xau_vol_oi.config import ResearchConfig
 from research_xau_vol_oi.data_recovery_audit import (
     DataRecoveryAuditResult,
@@ -222,6 +226,9 @@ def run_pipeline(
         output_dir=output_root,
         config=cfg,
     )
+    cme_history_importer = run_cme_history_importer(
+        output_dir=output_root,
+    )
     market_map_proof_pack = run_market_map_proof_pack(
         feature_table=feature_table,
         walls=walls,
@@ -288,6 +295,7 @@ def run_pipeline(
         guru_monte_carlo=guru_monte_carlo,
         gold_baseline_lab=gold_baseline_lab,
         cme_history_normalizer=cme_history_normalizer,
+        cme_history_importer=cme_history_importer,
         market_map_proof_pack=market_map_proof_pack,
         data_recovery=data_recovery,
         research_decision_gate=research_decision_gate,
@@ -356,6 +364,17 @@ def run_pipeline(
         "cme_history_missing_field_report": output_root / "cme_history_missing_field_report.csv",
         "cme_history_duplicate_conflict_report": output_root / "cme_history_duplicate_conflict_report.csv",
         "cme_history_source_inventory": output_root / "cme_history_source_inventory.csv",
+        "cme_import_file_detection": output_root / "cme_import_file_detection.csv",
+        "cme_validation_grade_days": output_root / "cme_validation_grade_days.csv",
+        "cme_validation_grade_report": output_root / "cme_validation_grade_report.md",
+        "cme_validation_grade_uplift": output_root / "cme_validation_grade_uplift.csv",
+        "cme_validation_grade_uplift_report": output_root / "cme_validation_grade_uplift_report.md",
+        "cme_data_requirements_checklist": output_root / "cme_data_requirements_checklist.csv",
+        "cme_data_requirements_checklist_report": output_root / "cme_data_requirements_checklist.md",
+        "basis_adjustment_precision_report": output_root / "basis_adjustment_precision_report.csv",
+        "basis_adjustment_precision_markdown": output_root / "basis_adjustment_precision_report.md",
+        "xau_vol_oi_validation_dataset": output_root / "xau_vol_oi_validation_dataset.parquet",
+        "orchestrator_gpt_context": output_root / "orchestrator_gpt_context.md",
         "market_map_precision_report": output_root / "market_map_precision_report.csv",
         "filter_avoided_pnl_report": output_root / "filter_avoided_pnl_report.csv",
         "expiry_pin_test_report": output_root / "expiry_pin_test_report.csv",
@@ -532,6 +551,7 @@ def write_research_report(
     guru_monte_carlo: GuruMonteCarloValidationResult | None = None,
     gold_baseline_lab: GoldBaselineLabResult | None = None,
     cme_history_normalizer: CmeHistoryNormalizerResult | None = None,
+    cme_history_importer: CmeHistoryImporterResult | None = None,
     market_map_proof_pack: MarketMapProofPackResult | None = None,
     data_recovery: DataRecoveryAuditResult | None = None,
     research_decision_gate: ResearchDecisionGateResult | None = None,
@@ -570,6 +590,10 @@ def write_research_report(
         "## Validation-Grade CME History Normalizer",
         "",
         *_cme_history_normalizer_lines(cme_history_normalizer),
+        "",
+        "## CME Historical Data Import",
+        "",
+        *_cme_history_importer_lines(cme_history_importer),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
@@ -908,6 +932,90 @@ def _cme_history_normalizer_lines(cme_history: CmeHistoryNormalizerResult | None
         "### Missing Field Counts",
         "",
         _frame_markdown(missing_counts),
+    ]
+
+
+def _cme_history_importer_lines(importer: CmeHistoryImporterResult | None) -> list[str]:
+    if importer is None:
+        return ["CME history importer was not run."]
+    detection_counts = (
+        importer.file_detection.group_by("detected_type").len().sort("detected_type")
+        if not importer.file_detection.is_empty()
+        else importer.file_detection
+    )
+    grade_counts = (
+        importer.validation_grade_days.group_by("validation_grade").len().sort("validation_grade")
+        if not importer.validation_grade_days.is_empty()
+        else importer.validation_grade_days
+    )
+    complete_days = (
+        importer.validation_grade_days.filter(pl.col("complete_validation_grade")).height
+        if not importer.validation_grade_days.is_empty()
+        else 0
+    )
+    missing_critical = (
+        importer.data_requirements_checklist.filter(
+            (pl.col("priority") == "CRITICAL") & (pl.col("current_status") != "AVAILABLE")
+        )
+        if not importer.data_requirements_checklist.is_empty()
+        else importer.data_requirements_checklist
+    )
+    canonical_counts = pl.DataFrame(
+        [
+            {"table": "cme_option_oi_by_strike", "rows": importer.option_oi_by_strike.height},
+            {"table": "cme_option_iv_by_strike", "rows": importer.option_iv_by_strike.height},
+            {"table": "cme_futures_price", "rows": importer.futures_price.height},
+            {"table": "xau_spot_price", "rows": importer.xau_spot_price.height},
+            {"table": "xau_basis", "rows": importer.basis.height},
+            {"table": "macro_event_calendar", "rows": importer.macro_event_calendar.height},
+            {"table": "xau_vol_oi_validation_dataset", "rows": importer.validation_dataset.height},
+        ]
+    )
+    return [
+        "- Importer output is local-file only; it does not fetch protected CME data.",
+        "- Source paths are redacted and source hashes are used for reproducibility.",
+        f"- Files detected: {importer.file_detection.height}",
+        f"- Complete validation-grade days: {complete_days}",
+        "- Preliminary validation target: `60` complete validation-grade days.",
+        "- Serious validation target: `120` complete validation-grade days.",
+        "- Robust validation target: `250` complete validation-grade days.",
+        "- Orchestrator GPT context pack: `outputs/orchestrator_gpt_context.md`",
+        "",
+        "### Files Detected By CME Type",
+        "",
+        _frame_markdown(detection_counts),
+        "",
+        "### Canonical CME Schema Row Counts",
+        "",
+        _frame_markdown(canonical_counts),
+        "",
+        "### Validation-Grade Days",
+        "",
+        _frame_markdown(grade_counts),
+        "",
+        "### Missing Critical CME Components",
+        "",
+        _frame_markdown(missing_critical),
+        "",
+        "### Basis Adjustment Precision",
+        "",
+        _frame_markdown(importer.basis_precision_report.head(12)),
+        "",
+        "### CME Validation-Grade Uplift",
+        "",
+        _frame_markdown(importer.validation_grade_uplift),
+        "",
+        "### Data Requirements Checklist",
+        "",
+        _frame_markdown(importer.data_requirements_checklist),
+        "",
+        "- Links: `outputs/cme_import_file_detection.csv`, "
+        "`outputs/cme_validation_grade_days.csv`, "
+        "`outputs/cme_validation_grade_report.md`, "
+        "`outputs/basis_adjustment_precision_report.csv`, "
+        "`outputs/cme_validation_grade_uplift.csv`, "
+        "`outputs/cme_data_requirements_checklist.csv`, "
+        "`outputs/orchestrator_gpt_context.md`.",
     ]
 
 
