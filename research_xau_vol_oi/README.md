@@ -26,6 +26,9 @@ Sharpe, or claim that a signal is tradable.
 - `guru_episode_dataset.py`: timestamp-safe guru statement, visible-data, and outcome episodes.
 - `guru_full_context_review.py`: full-context review pack and context/map/filter/trade-rule taxonomy.
 - `guru_monte_carlo_validation.py`: post-review Monte Carlo, placebo, filter, and market-map diagnostics.
+- `gold_baseline_lab.py`: gold trend, IV/range, wall-reaction, staged CME/guru uplift lab.
+- `cme_history_normalizer.py`: read-only QuikStrike/CME history normalizer for daily strike-expiry and session panels.
+- `market_map_proof_pack.py`: market-map, no-trade filter, expiry pin, and acceptance-control proof pack.
 - `report.py`: pipeline runner, output files, SVG charts, and Markdown report.
 
 ## Run
@@ -88,6 +91,18 @@ The runner writes:
 - `outputs/guru_full_context_review_report.md`
 - `outputs/guru_monte_carlo_validation.csv`
 - `outputs/guru_monte_carlo_report.md`
+- `outputs/gold_baseline_metrics.csv`
+- `outputs/gold_ablation_report.md`
+- `outputs/charts/gold_baseline_vs_uplift.svg`
+- `outputs/cme_daily_strike_expiry_panel.parquet`
+- `outputs/cme_session_regime_panel.parquet`
+- `outputs/cme_history_coverage_report.csv`
+- `outputs/cme_history_missing_field_report.csv`
+- `outputs/cme_history_duplicate_conflict_report.csv`
+- `outputs/market_map_precision_report.csv`
+- `outputs/filter_avoided_pnl_report.csv`
+- `outputs/expiry_pin_test_report.csv`
+- `outputs/proof_pack.md`
 - `outputs/charts/*.svg`
 - `outputs/research_report.md`
 

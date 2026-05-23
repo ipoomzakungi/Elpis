@@ -14,6 +14,10 @@ from research_xau_vol_oi.backtest import (
     walk_forward_validate,
 )
 from research_xau_vol_oi.basis_mapper import add_basis_columns
+from research_xau_vol_oi.cme_history_normalizer import (
+    CmeHistoryNormalizerResult,
+    run_cme_history_normalizer,
+)
 from research_xau_vol_oi.config import ResearchConfig
 from research_xau_vol_oi.data_recovery_audit import (
     DataRecoveryAuditResult,
@@ -35,6 +39,10 @@ from research_xau_vol_oi.guru_full_context_review import (
     GuruFullContextReviewResult,
     run_guru_full_context_review_layer,
 )
+from research_xau_vol_oi.gold_baseline_lab import (
+    GoldBaselineLabResult,
+    run_gold_baseline_lab,
+)
 from research_xau_vol_oi.guru_llm_review import (
     GuruLlmReviewResult,
     run_guru_llm_review_layer,
@@ -50,6 +58,10 @@ from research_xau_vol_oi.guru_review_queue import (
 from research_xau_vol_oi.llm_transcript_extractor import (
     LlmTranscriptExtractionResult,
     run_llm_transcript_extraction_layer,
+)
+from research_xau_vol_oi.market_map_proof_pack import (
+    MarketMapProofPackResult,
+    run_market_map_proof_pack,
 )
 from research_xau_vol_oi.oi_wall_engine import build_oi_walls
 from research_xau_vol_oi.score_calibration import (
@@ -192,6 +204,27 @@ def run_pipeline(
         charts_dir=charts_dir,
         config=cfg,
     )
+    gold_baseline_lab = run_gold_baseline_lab(
+        feature_table=feature_table,
+        signal_events=signal_events,
+        transcript_conditioned_events=transcript_uplift.conditioned_events,
+        guru_context_records=guru_full_context_review.suggestions,
+        approved_rule_records=guru_review.approved_rules,
+        output_dir=output_root,
+        charts_dir=charts_dir,
+        config=cfg,
+    )
+    cme_history_normalizer = run_cme_history_normalizer(
+        output_dir=output_root,
+        config=cfg,
+    )
+    market_map_proof_pack = run_market_map_proof_pack(
+        feature_table=feature_table,
+        walls=walls,
+        signal_events=signal_events,
+        output_dir=output_root,
+        config=cfg,
+    )
 
     feature_path = output_root / "xau_feature_table.parquet"
     events_path = output_root / "signal_events.csv"
@@ -236,6 +269,9 @@ def run_pipeline(
         guru_llm_review=guru_llm_review,
         guru_full_context_review=guru_full_context_review,
         guru_monte_carlo=guru_monte_carlo,
+        gold_baseline_lab=gold_baseline_lab,
+        cme_history_normalizer=cme_history_normalizer,
+        market_map_proof_pack=market_map_proof_pack,
         data_recovery=data_recovery,
         charts_dir=charts_dir,
     )
@@ -301,6 +337,20 @@ def run_pipeline(
         "guru_full_context_review_report": output_root / "guru_full_context_review_report.md",
         "guru_monte_carlo_validation": output_root / "guru_monte_carlo_validation.csv",
         "guru_monte_carlo_report": output_root / "guru_monte_carlo_report.md",
+        "gold_baseline_metrics": output_root / "gold_baseline_metrics.csv",
+        "gold_ablation_report": output_root / "gold_ablation_report.md",
+        "gold_baseline_vs_uplift_chart": charts_dir / "gold_baseline_vs_uplift.svg",
+        "cme_daily_strike_expiry_panel": output_root / "cme_daily_strike_expiry_panel.parquet",
+        "cme_session_regime_panel": output_root / "cme_session_regime_panel.parquet",
+        "cme_history_coverage_report": output_root / "cme_history_coverage_report.csv",
+        "cme_history_coverage_markdown": output_root / "cme_history_coverage_report.md",
+        "cme_history_missing_field_report": output_root / "cme_history_missing_field_report.csv",
+        "cme_history_duplicate_conflict_report": output_root / "cme_history_duplicate_conflict_report.csv",
+        "cme_history_source_inventory": output_root / "cme_history_source_inventory.csv",
+        "market_map_precision_report": output_root / "market_map_precision_report.csv",
+        "filter_avoided_pnl_report": output_root / "filter_avoided_pnl_report.csv",
+        "expiry_pin_test_report": output_root / "expiry_pin_test_report.csv",
+        "proof_pack": output_root / "proof_pack.md",
         "transcript_corpus_manifest": output_root / "transcript_corpus_manifest.csv",
         "transcript_corpus_manifest_report": output_root / "transcript_corpus_manifest.md",
         "market_data_coverage_manifest": output_root / "market_data_coverage_manifest.csv",
@@ -466,6 +516,9 @@ def write_research_report(
     guru_llm_review: GuruLlmReviewResult | None = None,
     guru_full_context_review: GuruFullContextReviewResult | None = None,
     guru_monte_carlo: GuruMonteCarloValidationResult | None = None,
+    gold_baseline_lab: GoldBaselineLabResult | None = None,
+    cme_history_normalizer: CmeHistoryNormalizerResult | None = None,
+    market_map_proof_pack: MarketMapProofPackResult | None = None,
     data_recovery: DataRecoveryAuditResult | None = None,
     charts_dir: Path,
 ) -> None:
@@ -498,6 +551,14 @@ def write_research_report(
         "## Data Recovery and Coverage Audit",
         "",
         *_data_recovery_lines(data_recovery),
+        "",
+        "## Validation-Grade CME History Normalizer",
+        "",
+        *_cme_history_normalizer_lines(cme_history_normalizer),
+        "",
+        "## Market-Map And No-Trade Proof Pack",
+        "",
+        *_market_map_proof_pack_lines(market_map_proof_pack),
         "",
         "## Signal Counts",
         "",
@@ -554,6 +615,10 @@ def write_research_report(
         "## Monte Carlo Validation",
         "",
         *_guru_monte_carlo_lines(guru_monte_carlo),
+        "",
+        "## Gold Baseline And Uplift Lab",
+        "",
+        *_gold_baseline_lab_lines(gold_baseline_lab),
         "",
         "## Required Questions",
         "",
@@ -768,6 +833,153 @@ def _data_recovery_lines(data_recovery: DataRecoveryAuditResult | None) -> list[
         "`outputs/codex_session_search_report.md`, "
         "`outputs/source_recovery_action_plan.md`, "
         "`outputs/privacy_path_audit_report.md`.",
+    ]
+
+
+def _cme_history_normalizer_lines(cme_history: CmeHistoryNormalizerResult | None) -> list[str]:
+    if cme_history is None:
+        return ["CME history normalizer was not run."]
+    coverage = cme_history.coverage_report
+    missing_counts = (
+        cme_history.missing_field_report.group_by("missing_field").len().sort("missing_field")
+        if not cme_history.missing_field_report.is_empty()
+        else cme_history.missing_field_report
+    )
+    coverage_view = (
+        coverage.select(
+            [
+                column
+                for column in [
+                    "session_date",
+                    "complete_validation_day",
+                    "strike_expiry_rows",
+                    "expiry_count",
+                    "strike_count",
+                    "missing_fields",
+                    "reason_if_not_complete",
+                ]
+                if column in coverage.columns
+            ]
+        )
+        if not coverage.is_empty()
+        else coverage
+    )
+    return [
+        "- Canonical daily strike-expiry panel: `outputs/cme_daily_strike_expiry_panel.parquet`",
+        "- Canonical session-level regime panel: `outputs/cme_session_regime_panel.parquet`",
+        "- Coverage report: `outputs/cme_history_coverage_report.csv` and "
+        "`outputs/cme_history_coverage_report.md`",
+        "- Missing-field report: `outputs/cme_history_missing_field_report.csv`",
+        "- Duplicate/conflict report: `outputs/cme_history_duplicate_conflict_report.csv`",
+        f"- First validation-grade date: `{cme_history.first_validation_grade_date or 'n/a'}`",
+        f"- Last validation-grade date: `{cme_history.last_validation_grade_date or 'n/a'}`",
+        f"- Complete validation-grade days: {cme_history.complete_validation_days}",
+        f"- Daily strike-expiry rows: {cme_history.daily_panel.height}",
+        f"- Session rows: {cme_history.session_panel.height}",
+        f"- Source files inspected: {cme_history.source_inventory.height}",
+        "",
+        "### Fields Still Missing For Full Proof",
+        "",
+        *[f"- `{field}`" for field in cme_history.missing_fields_for_full_proof],
+        "",
+        "### Coverage By Session",
+        "",
+        _frame_markdown(coverage_view),
+        "",
+        "### Missing Field Counts",
+        "",
+        _frame_markdown(missing_counts),
+    ]
+
+
+def _market_map_proof_pack_lines(proof_pack: MarketMapProofPackResult | None) -> list[str]:
+    if proof_pack is None:
+        return ["Market-map proof pack was not run."]
+    market_map = proof_pack.market_map_precision
+    filters = proof_pack.filter_avoided_pnl
+    pins = proof_pack.expiry_pin_test
+    market_view = (
+        market_map.select(
+            [
+                column
+                for column in [
+                    "row_type",
+                    "test_name",
+                    "cohort",
+                    "control_type",
+                    "event_count",
+                    "touch_rate",
+                    "acceptance_rate",
+                    "touch_uplift_vs_control",
+                    "decision_label",
+                ]
+                if column in market_map.columns
+            ]
+        ).head(12)
+        if not market_map.is_empty()
+        else market_map
+    )
+    filter_view = (
+        filters.select(
+            [
+                column
+                for column in [
+                    "row_type",
+                    "cohort",
+                    "control_type",
+                    "no_trade_count",
+                    "avoided_losing_trade_count",
+                    "avoided_winning_trade_count",
+                    "net_filter_value",
+                    "uplift_vs_matched_state_placebo",
+                    "decision_label",
+                ]
+                if column in filters.columns
+            ]
+        ).head(12)
+        if not filters.is_empty()
+        else filters
+    )
+    pin_view = (
+        pins.select(
+            [
+                column
+                for column in [
+                    "test_name",
+                    "cohort",
+                    "control_type",
+                    "event_count",
+                    "pin_rate",
+                    "control_pin_rate",
+                    "pin_uplift_vs_control",
+                    "decision_label",
+                ]
+                if column in pins.columns
+            ]
+        ).head(12)
+        if not pins.is_empty()
+        else pins
+    )
+    return [
+        f"- Final decision: `{proof_pack.final_decision}`",
+        f"- Market-map decision: `{proof_pack.map_decision}`",
+        f"- No-trade filter decision: `{proof_pack.filter_decision}`",
+        f"- Trade-rule decision: `{proof_pack.trade_rule_decision}`",
+        "- Outputs: `outputs/market_map_precision_report.csv`, "
+        "`outputs/filter_avoided_pnl_report.csv`, "
+        "`outputs/expiry_pin_test_report.csv`, `outputs/proof_pack.md`.",
+        "",
+        "### Market-Map Precision Snapshot",
+        "",
+        _frame_markdown(market_view),
+        "",
+        "### Filter Avoided PnL Snapshot",
+        "",
+        _frame_markdown(filter_view),
+        "",
+        "### Expiry Pin Snapshot",
+        "",
+        _frame_markdown(pin_view),
     ]
 
 
@@ -1364,6 +1576,68 @@ def _guru_monte_carlo_lines(guru_monte_carlo: GuruMonteCarloValidationResult | N
     ]
 
 
+def _gold_baseline_lab_lines(gold_lab: GoldBaselineLabResult | None) -> list[str]:
+    if gold_lab is None:
+        return ["Gold baseline lab was not run."]
+    metrics = gold_lab.metrics
+    full = (
+        metrics.filter(pl.col("evaluation_type") == "full_sample")
+        .sort("expectancy", descending=True)
+        if not metrics.is_empty()
+        else metrics
+    )
+    placebo = (
+        metrics.filter(pl.col("evaluation_type").is_in(["permutation_test", "matched_state_placebo"]))
+        if not metrics.is_empty()
+        else metrics
+    )
+    columns = [
+        "stage",
+        "scenario",
+        "scenario_family",
+        "edge_type",
+        "event_count",
+        "trade_count",
+        "expectancy",
+        "profit_factor",
+        "uplift_vs_best_baseline",
+        "sample_size_warning",
+    ]
+    placebo_columns = [
+        "stage",
+        "scenario",
+        "evaluation_type",
+        "trade_count",
+        "expectancy",
+        "placebo_expectancy",
+        "uplift_vs_placebo",
+        "p_value",
+        "permutation_pass",
+        "matched_placebo_pass",
+    ]
+    return [
+        f"- Final decision: `{gold_lab.final_decision}`",
+        f"- Statistically credible uplift stage: `{gold_lab.credible_uplift_stage}`",
+        f"- Guru uplift beyond non-guru CME baselines: `{gold_lab.guru_uplift_decision}`",
+        f"- Best edge type: `{gold_lab.best_edge_type}`",
+        "",
+        "### Full-Sample Gold Baselines And Stages",
+        "",
+        _frame_markdown(full.select([column for column in columns if column in full.columns]) if not full.is_empty() else full),
+        "",
+        "### Placebo / Permutation Checks",
+        "",
+        _frame_markdown(
+            placebo.select([column for column in placebo_columns if column in placebo.columns])
+            if not placebo.is_empty()
+            else placebo
+        ),
+        "",
+        "- Links: `outputs/gold_baseline_metrics.csv`, `outputs/gold_ablation_report.md`, "
+        "`outputs/charts/gold_baseline_vs_uplift.svg`.",
+    ]
+
+
 def _reference_price(price: pl.DataFrame, options: pl.DataFrame) -> float:
     spot_values = [value for value in options.get_column("spot_price").to_list() if value is not None]
     if spot_values:
@@ -1538,8 +1812,12 @@ def _frame_markdown(frame: pl.DataFrame) -> str:
     columns = frame.columns
     rows = ["| " + " | ".join(columns) + " |", "|" + "|".join(["---"] * len(columns)) + "|"]
     for raw in frame.head(20).to_dicts():
-        rows.append("| " + " | ".join(str(raw.get(column, "")) for column in columns) + " |")
+        rows.append("| " + " | ".join(_markdown_cell(raw.get(column, "")) for column in columns) + " |")
     return "\n".join(rows)
+
+
+def _markdown_cell(value: Any) -> str:
+    return str(value).replace("|", "\\|").replace("\n", " ")
 
 
 def _method_rows(frame: pl.DataFrame, method: str) -> pl.DataFrame:
