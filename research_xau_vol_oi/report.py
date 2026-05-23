@@ -28,6 +28,11 @@ from research_xau_vol_oi.current_data_usability_audit import (
     current_data_usability_report_lines,
     run_current_data_usability_audit,
 )
+from research_xau_vol_oi.current_week_replay import (
+    CurrentWeekReplayResult,
+    current_week_replay_report_lines,
+    run_current_week_replay_layer,
+)
 from research_xau_vol_oi.data_recovery_audit import (
     DataRecoveryAuditResult,
     run_data_recovery_audit_layer,
@@ -287,6 +292,9 @@ def run_pipeline(
     current_data_usability = run_current_data_usability_audit(
         output_dir=output_root,
     )
+    current_week_replay = run_current_week_replay_layer(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -316,6 +324,7 @@ def run_pipeline(
         research_decision_gate=research_decision_gate,
         guru_logic_knowledge_base=guru_logic_knowledge_base,
         current_data_usability=current_data_usability,
+        current_week_replay=current_week_replay,
         charts_dir=charts_dir,
     )
     return {
@@ -418,6 +427,23 @@ def run_pipeline(
         "one_week_cme_pilot_summary": output_root / "one_week_cme_pilot_summary.csv",
         "ohlc_guru_price_only_pilot": output_root / "ohlc_guru_price_only_pilot.csv",
         "cme_fetch_tool_gap_audit": output_root / "cme_fetch_tool_gap_audit.csv",
+        "spot_basis_backfill_audit": output_root / "spot_basis_backfill_audit.csv",
+        "spot_basis_backfill_report": output_root / "spot_basis_backfill_report.md",
+        "xau_spot_backfilled": output_root / "xau_spot_backfilled.parquet",
+        "xau_basis_backfilled": output_root / "xau_basis_backfilled.parquet",
+        "spot_basis_join_preview": output_root / "spot_basis_join_preview.csv",
+        "current_week_cme_guru_replay": output_root / "current_week_cme_guru_replay.csv",
+        "current_week_cme_guru_replay_report": output_root / "current_week_cme_guru_replay.md",
+        "current_week_guru_filter_replay": output_root / "current_week_guru_filter_replay.csv",
+        "current_week_guru_filter_replay_report": output_root / "current_week_guru_filter_replay.md",
+        "cme_validation_grade_days_after_backfill": output_root
+        / "cme_validation_grade_days_after_backfill.csv",
+        "cme_validation_upgrade_report": output_root / "cme_validation_upgrade_report.md",
+        "fetch_tool_next_changes": output_root / "fetch_tool_next_changes.md",
+        "current_week_wall_replay_chart": charts_dir / "current_week_wall_replay.svg",
+        "current_week_basis_replay_chart": charts_dir / "current_week_basis_replay.svg",
+        "current_week_guru_filter_overlay_chart": charts_dir
+        / "current_week_guru_filter_overlay.svg",
         "research_gate_status_chart": charts_dir / "research_gate_status.svg",
         "transcript_corpus_manifest": output_root / "transcript_corpus_manifest.csv",
         "transcript_corpus_manifest_report": output_root / "transcript_corpus_manifest.md",
@@ -592,6 +618,7 @@ def write_research_report(
     research_decision_gate: ResearchDecisionGateResult | None = None,
     guru_logic_knowledge_base: GuruLogicKnowledgeBaseResult | None = None,
     current_data_usability: CurrentDataUsabilityAuditResult | None = None,
+    current_week_replay: CurrentWeekReplayResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -633,6 +660,8 @@ def write_research_report(
         *_cme_history_importer_lines(cme_history_importer),
         "",
         *current_data_usability_report_lines(current_data_usability),
+        "",
+        *current_week_replay_report_lines(current_week_replay),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
