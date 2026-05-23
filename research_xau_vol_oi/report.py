@@ -43,6 +43,10 @@ from research_xau_vol_oi.guru_full_context_review import (
     GuruFullContextReviewResult,
     run_guru_full_context_review_layer,
 )
+from research_xau_vol_oi.guru_logic_knowledge_base import (
+    GuruLogicKnowledgeBaseResult,
+    run_guru_logic_knowledge_base_layer,
+)
 from research_xau_vol_oi.gold_baseline_lab import (
     GoldBaselineLabResult,
     run_gold_baseline_lab,
@@ -272,6 +276,9 @@ def run_pipeline(
         output_dir=output_root,
         charts_dir=charts_dir,
     )
+    guru_logic_knowledge_base = run_guru_logic_knowledge_base_layer(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -299,6 +306,7 @@ def run_pipeline(
         market_map_proof_pack=market_map_proof_pack,
         data_recovery=data_recovery,
         research_decision_gate=research_decision_gate,
+        guru_logic_knowledge_base=guru_logic_knowledge_base,
         charts_dir=charts_dir,
     )
     return {
@@ -383,6 +391,18 @@ def run_pipeline(
         "research_readiness_scorecard": output_root / "research_readiness_scorecard.csv",
         "money_readiness_report": output_root / "money_readiness_report.md",
         "next_research_tasks_ranked": output_root / "next_research_tasks_ranked.csv",
+        "guru_logic_knowledge_base": output_root / "guru_logic_knowledge_base.csv",
+        "guru_logic_knowledge_base_report": output_root / "guru_logic_knowledge_base.md",
+        "guru_logic_data_dependency_matrix": output_root / "guru_logic_data_dependency_matrix.csv",
+        "guru_logic_data_dependency_matrix_report": output_root
+        / "guru_logic_data_dependency_matrix.md",
+        "guru_logic_priority_rank": output_root / "guru_logic_priority_rank.csv",
+        "cme_collection_plan_for_guru_logic": output_root
+        / "cme_collection_plan_for_guru_logic.csv",
+        "cme_collection_plan_for_guru_logic_report": output_root
+        / "cme_collection_plan_for_guru_logic.md",
+        "guru_logic_validation_path": output_root / "guru_logic_validation_path.csv",
+        "guru_logic_validation_path_report": output_root / "guru_logic_validation_path.md",
         "research_gate_status_chart": charts_dir / "research_gate_status.svg",
         "transcript_corpus_manifest": output_root / "transcript_corpus_manifest.csv",
         "transcript_corpus_manifest_report": output_root / "transcript_corpus_manifest.md",
@@ -555,6 +575,7 @@ def write_research_report(
     market_map_proof_pack: MarketMapProofPackResult | None = None,
     data_recovery: DataRecoveryAuditResult | None = None,
     research_decision_gate: ResearchDecisionGateResult | None = None,
+    guru_logic_knowledge_base: GuruLogicKnowledgeBaseResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -650,6 +671,38 @@ def write_research_report(
         "## Full-Context Guru Logic Review",
         "",
         *_guru_full_context_review_lines(guru_full_context_review),
+        "",
+        "## Guru Logic Knowledge Base",
+        "",
+        *_guru_logic_knowledge_base_lines(guru_logic_knowledge_base),
+        "",
+        "## What Can Be Extracted Now",
+        "",
+        *_guru_logic_extractable_now_lines(guru_logic_knowledge_base),
+        "",
+        "## What Cannot Be Proven Yet",
+        "",
+        *_guru_logic_not_proven_lines(guru_logic_knowledge_base),
+        "",
+        "## CME Data Dependency Matrix",
+        "",
+        *_guru_logic_dependency_matrix_lines(guru_logic_knowledge_base),
+        "",
+        "## Guru Logic Priority Ranking",
+        "",
+        *_guru_logic_priority_lines(guru_logic_knowledge_base),
+        "",
+        "## CME Collection Plan",
+        "",
+        *_guru_logic_collection_plan_lines(guru_logic_knowledge_base),
+        "",
+        "## Validation Path by Logic Type",
+        "",
+        *_guru_logic_validation_path_lines(guru_logic_knowledge_base),
+        "",
+        "## Final Recommendation",
+        "",
+        *_guru_logic_final_recommendation_lines(guru_logic_knowledge_base),
         "",
         "## Monte Carlo Validation",
         "",
@@ -1725,6 +1778,179 @@ def _guru_full_context_review_lines(guru_review: GuruFullContextReviewResult | N
         "`outputs/guru_full_context_review_decisions_template.csv`, "
         "`outputs/guru_full_context_review_report.md`.",
     ]
+
+
+def _guru_logic_knowledge_base_lines(result: GuruLogicKnowledgeBaseResult | None) -> list[str]:
+    if result is None:
+        return ["Guru Logic Knowledge Base was not run."]
+    top = _priority_preview(result, 10)
+    return [
+        "Research-only extraction layer. Logic can be extracted from transcripts now, "
+        "while CME validation remains gated by data coverage.",
+        "",
+        f"- Repeated guru logic concepts extracted: {result.knowledge_base.height}",
+        f"- Current validation-grade CME days: {result.current_available_validation_days}",
+        f"- Preliminary validation threshold: {result.minimum_validation_days}",
+        f"- Final recommendation: `{result.final_recommendation}`",
+        "",
+        "### Top Concepts",
+        "",
+        _frame_markdown(top),
+        "",
+        "- Links: `outputs/guru_logic_knowledge_base.csv`, "
+        "`outputs/guru_logic_knowledge_base.md`.",
+    ]
+
+
+def _guru_logic_extractable_now_lines(result: GuruLogicKnowledgeBaseResult | None) -> list[str]:
+    if result is None:
+        return ["Guru Logic Knowledge Base was not run."]
+    context = _priority_actions(result, {"USE_AS_PLAYBOOK_CONTEXT_NOW", "TEST_PRICE_ONLY_NOW"})
+    return [
+        "- Repeated wording, market-map context, no-trade/filter language, and required "
+        "data dependencies can be extracted without CME validation data.",
+        "- Extracted logic remains research context until later validation controls pass.",
+        "",
+        _frame_markdown(context),
+    ]
+
+
+def _guru_logic_not_proven_lines(result: GuruLogicKnowledgeBaseResult | None) -> list[str]:
+    if result is None:
+        return ["Guru Logic Knowledge Base was not run."]
+    blocked = _priority_actions(
+        result,
+        {"WAIT_FOR_MORE_CME_DATA", "COLLECT_REQUIRED_DATA_FIRST", "IGNORE_OR_REJECT"},
+    )
+    return [
+        "- The extracted logic is not validated for performance.",
+        "- Full CME validation cannot be claimed while aligned validation-grade days remain "
+        f"below {result.minimum_validation_days}.",
+        "- Direct trade-rule use, live trading, paper trading, and broker integration remain "
+        "out of scope.",
+        "",
+        _frame_markdown(blocked),
+    ]
+
+
+def _guru_logic_dependency_matrix_lines(result: GuruLogicKnowledgeBaseResult | None) -> list[str]:
+    if result is None:
+        return ["Guru Logic Knowledge Base was not run."]
+    columns = [
+        "logic_id",
+        "logic_name",
+        "requires_xau_spot",
+        "requires_gc_futures",
+        "requires_basis",
+        "requires_cme_oi_by_strike",
+        "requires_oi_change",
+        "requires_option_volume",
+        "requires_iv",
+        "current_available_validation_days",
+        "validation_blocker",
+    ]
+    frame = result.dependency_matrix
+    selected = frame.select([column for column in columns if column in frame.columns]).head(20)
+    return [
+        _frame_markdown(selected),
+        "",
+        "- Links: `outputs/guru_logic_data_dependency_matrix.csv`, "
+        "`outputs/guru_logic_data_dependency_matrix.md`.",
+    ]
+
+
+def _guru_logic_priority_lines(result: GuruLogicKnowledgeBaseResult | None) -> list[str]:
+    if result is None:
+        return ["Guru Logic Knowledge Base was not run."]
+    return [
+        _frame_markdown(_priority_preview(result, 20)),
+        "",
+        "- Link: `outputs/guru_logic_priority_rank.csv`.",
+    ]
+
+
+def _guru_logic_collection_plan_lines(result: GuruLogicKnowledgeBaseResult | None) -> list[str]:
+    if result is None:
+        return ["Guru Logic Knowledge Base was not run."]
+    columns = [
+        "source_name",
+        "priority",
+        "current_status",
+        "user_action_required",
+    ]
+    frame = result.collection_plan
+    selected = frame.select([column for column in columns if column in frame.columns])
+    return [
+        _frame_markdown(selected),
+        "",
+        "- Links: `outputs/cme_collection_plan_for_guru_logic.csv`, "
+        "`outputs/cme_collection_plan_for_guru_logic.md`.",
+    ]
+
+
+def _guru_logic_validation_path_lines(result: GuruLogicKnowledgeBaseResult | None) -> list[str]:
+    if result is None:
+        return ["Guru Logic Knowledge Base was not run."]
+    columns = [
+        "logic_type",
+        "what_can_be_done_now",
+        "what_cannot_be_proven_yet",
+        "validation_method",
+        "pass_criteria",
+    ]
+    frame = result.validation_path
+    selected = frame.select([column for column in columns if column in frame.columns])
+    return [
+        _frame_markdown(selected),
+        "",
+        "- Links: `outputs/guru_logic_validation_path.csv`, "
+        "`outputs/guru_logic_validation_path.md`.",
+    ]
+
+
+def _guru_logic_final_recommendation_lines(result: GuruLogicKnowledgeBaseResult | None) -> list[str]:
+    if result is None:
+        return ["Guru Logic Knowledge Base was not run."]
+    return [
+        f"`{result.final_recommendation}`",
+        "",
+        "The practical path is to keep extracting repeated guru concepts now, use the best "
+        "filter/map candidates only as research context or price-only pilots, and collect "
+        "more aligned CME data before validation claims.",
+    ]
+
+
+def _priority_preview(result: GuruLogicKnowledgeBaseResult, limit: int) -> pl.DataFrame:
+    if result.priority_rank.is_empty():
+        return result.priority_rank
+    columns = [
+        "rank",
+        "logic_id",
+        "logic_name",
+        "logic_type",
+        "transcript_count",
+        "priority_score",
+        "recommended_action",
+    ]
+    return result.priority_rank.select([column for column in columns if column in result.priority_rank.columns]).head(limit)
+
+
+def _priority_actions(result: GuruLogicKnowledgeBaseResult, actions: set[str]) -> pl.DataFrame:
+    if result.priority_rank.is_empty() or "recommended_action" not in result.priority_rank.columns:
+        return result.priority_rank
+    return _priority_preview(
+        GuruLogicKnowledgeBaseResult(
+            knowledge_base=result.knowledge_base,
+            dependency_matrix=result.dependency_matrix,
+            priority_rank=result.priority_rank.filter(pl.col("recommended_action").is_in(sorted(actions))),
+            collection_plan=result.collection_plan,
+            validation_path=result.validation_path,
+            final_recommendation=result.final_recommendation,
+            current_available_validation_days=result.current_available_validation_days,
+            minimum_validation_days=result.minimum_validation_days,
+        ),
+        20,
+    )
 
 
 def _guru_monte_carlo_lines(guru_monte_carlo: GuruMonteCarloValidationResult | None) -> list[str]:

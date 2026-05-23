@@ -194,7 +194,7 @@ def build_transcript_rule_timeline(
             rows.append(record)
     if not rows:
         return _empty_timeline()
-    return pl.DataFrame(rows).sort("availability_timestamp")
+    return _rows_frame(rows).sort("availability_timestamp")
 
 
 def parse_transcript_file(
@@ -291,7 +291,7 @@ def align_transcripts_to_market(
                         ),
                     }
                 )
-    return pl.DataFrame(rows) if rows else _empty_alignment()
+    return _rows_frame(rows) if rows else _empty_alignment()
 
 
 def transcript_rule_coverage(timeline: pl.DataFrame, alignment: pl.DataFrame) -> pl.DataFrame:
@@ -338,7 +338,7 @@ def transcript_rule_coverage(timeline: pl.DataFrame, alignment: pl.DataFrame) ->
                 "five_session_event_count": by_window["5_session"],
             }
         )
-    return pl.DataFrame(rows)
+    return _rows_frame(rows)
 
 
 def transcript_rule_performance(alignment: pl.DataFrame, trades: pl.DataFrame) -> pl.DataFrame:
@@ -391,7 +391,7 @@ def transcript_rule_performance(alignment: pl.DataFrame, trades: pl.DataFrame) -
                 }
             )
     _ = trades
-    return pl.DataFrame(rows)
+    return _rows_frame(rows)
 
 
 def transcript_rule_ablation(
@@ -440,7 +440,7 @@ def transcript_rule_ablation(
                 ),
             }
         )
-    return pl.DataFrame(rows)
+    return _rows_frame(rows)
 
 
 def transcript_final_decision(performance: pl.DataFrame) -> str:
@@ -1082,6 +1082,10 @@ def _svg(title: str, body: str) -> str:
         f'<text x="40" y="30" font-size="18" font-family="Arial">{title}</text>'
         f"{body}</svg>"
     )
+
+
+def _rows_frame(rows: list[dict[str, Any]]) -> pl.DataFrame:
+    return pl.DataFrame(rows, infer_schema_length=None)
 
 
 def _empty_timeline() -> pl.DataFrame:
