@@ -92,3 +92,39 @@ git status
 
 Generated reports live under ignored `data/` or `backend/data/` paths and must
 not be committed.
+
+## XAU Transcript Recovery Audit
+
+Before re-fetching Thai guru transcripts, run the read-only recovery audit:
+
+```powershell
+python -m research_xau_vol_oi.report
+```
+
+It writes:
+
+- `outputs/transcript_corpus_manifest.csv`
+- `outputs/market_data_coverage_manifest.csv`
+- `outputs/transcript_market_coverage_alignment.csv`
+- `outputs/codex_session_search_report.md`
+- `outputs/source_recovery_action_plan.md`
+- `outputs/privacy_path_audit_report.md`
+
+External transcript folders are local-only configuration. Put private roots and
+private corpus keywords in an ignored file:
+
+```toml
+[recovery]
+search_roots = ["D:/private/transcripts"]
+transcript_roots = ["D:/private/transcripts/corpus"]
+keyword_patterns = ["private corpus pattern"]
+include_codex_roots = true
+redact_paths = true
+local_debug = false
+```
+
+Do not commit `.xau_local_sources.toml`. Default reports redact absolute paths,
+session IDs, and source-identifying keywords. Use full transcript history for
+logic extraction, but only dates with matching XAU/GC price, CME options OI, IV,
+and futures/basis can support full Vol-OI validation. Dates without matched CME
+coverage are logic-only and must not be used to claim validation.

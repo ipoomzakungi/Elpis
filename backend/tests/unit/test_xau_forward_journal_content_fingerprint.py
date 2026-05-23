@@ -86,7 +86,7 @@ def test_fingerprint_ignores_timestamps_report_ids_and_local_paths(tmp_path: Pat
         reports_dir,
         "first",
         capture_timestamp="2026-05-14T03:00:00Z",
-        artifact_path="C:/Users/example/AppData/Local/Elpis/run-a.json",
+        artifact_path="<LOCAL_HOME>/AppData/Local/Elpis/run-a.json",
     )
     second_ids = _write_snapshot(
         reports_dir,

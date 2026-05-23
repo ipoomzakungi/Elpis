@@ -29,6 +29,7 @@ ENV/
 .env.local
 .env.*.local
 .quikstrike-runner.local.env
+.xau_local_sources.toml
 
 # Data files (large, not for git)
 data/raw/quikstrike/

@@ -14,6 +14,8 @@ Sharpe, or claim that a signal is tradable.
 
 - `config.py`: thresholds, labels, and column aliases.
 - `data_loader.py`: data inventory plus CSV, Parquet, Excel, and transcript loaders.
+- `data_recovery_audit.py`: read-only transcript corpus, Codex session, and
+  market-data coverage audit.
 - `basis_mapper.py`: futures-to-spot basis and spot-equivalent strike mapping.
 - `expected_move.py`: IV-derived 1SD/2SD/3SD expected move and sigma position.
 - `oi_wall_engine.py`: OI wall aggregation and transparent wall scoring.
@@ -54,6 +56,15 @@ The runner writes:
 - `outputs/walk_forward_validation.csv`
 - `outputs/oi_walls.csv`
 - `outputs/data_inventory.csv`
+- `outputs/transcript_corpus_manifest.csv`
+- `outputs/transcript_corpus_manifest.md`
+- `outputs/market_data_coverage_manifest.csv`
+- `outputs/market_data_coverage_report.md`
+- `outputs/transcript_market_coverage_alignment.csv`
+- `outputs/transcript_market_coverage_alignment.md`
+- `outputs/codex_session_search_report.md`
+- `outputs/source_recovery_action_plan.md`
+- `outputs/privacy_path_audit_report.md`
 - `outputs/guru_rule_review_queue.csv`
 - `outputs/guru_rule_review_decisions_template.csv`
 - `outputs/guru_rule_review_report.md`
@@ -81,6 +92,51 @@ The runner writes:
 - `outputs/research_report.md`
 
 `outputs/` is ignored by git because these files are generated research artifacts.
+
+## Data Recovery Audit
+
+Run the full pipeline to regenerate the data recovery outputs:
+
+```powershell
+python -m research_xau_vol_oi.report
+```
+
+By default, the audit searches only project-local roots and redacts paths in
+outputs. External transcript folders, private source-identifying patterns, and
+Codex/session searches are local-only configuration:
+
+```toml
+[recovery]
+search_roots = ["D:/private/transcripts"]
+transcript_roots = ["D:/private/transcripts/corpus"]
+keyword_patterns = ["private corpus pattern"]
+include_codex_roots = true
+redact_paths = true
+local_debug = false
+```
+
+Save this as `.xau_local_sources.toml`. It is ignored by git.
+
+Environment-variable equivalents are also supported:
+
+- `XAU_RECOVERY_SEARCH_ROOTS`
+- `XAU_TRANSCRIPT_ROOTS`
+- `XAU_RECOVERY_KEYWORDS`
+- `XAU_INCLUDE_CODEX_ROOTS`
+- `XAU_RECOVERY_LOCAL_DEBUG`
+- `XAU_RECOVERY_REDACT_PATHS`
+
+Interpretation:
+
+- `FULL_CORPUS` rows are inferred from configured roots/keywords or large
+  transcript-file counts.
+- `WEEK_SUBSET` rows are inferred from small, narrow-date transcript sets.
+- Transcript dates with no matching CME OI, IV, and futures/basis data are
+  logic-extraction only.
+- Transcript dates with price data but no CME options coverage can support only
+  price-only outcome checks.
+- Full Vol-OI validation requires transcript + price + CME OI + IV +
+  futures/basis on the same date.
 
 ## Guardrails
 

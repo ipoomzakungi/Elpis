@@ -15,6 +15,10 @@ from research_xau_vol_oi.backtest import (
 )
 from research_xau_vol_oi.basis_mapper import add_basis_columns
 from research_xau_vol_oi.config import ResearchConfig
+from research_xau_vol_oi.data_recovery_audit import (
+    DataRecoveryAuditResult,
+    run_data_recovery_audit_layer,
+)
 from research_xau_vol_oi.data_loader import (
     DataLoadError,
     discover_data_files,
@@ -210,6 +214,7 @@ def run_pipeline(
         summary=summary,
         chart_dir=charts_dir,
     )
+    data_recovery = run_data_recovery_audit_layer(output_dir=output_root, config=cfg)
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -231,6 +236,7 @@ def run_pipeline(
         guru_llm_review=guru_llm_review,
         guru_full_context_review=guru_full_context_review,
         guru_monte_carlo=guru_monte_carlo,
+        data_recovery=data_recovery,
         charts_dir=charts_dir,
     )
     audit_path = output_root / "leakage_audit_report.md"
@@ -295,6 +301,17 @@ def run_pipeline(
         "guru_full_context_review_report": output_root / "guru_full_context_review_report.md",
         "guru_monte_carlo_validation": output_root / "guru_monte_carlo_validation.csv",
         "guru_monte_carlo_report": output_root / "guru_monte_carlo_report.md",
+        "transcript_corpus_manifest": output_root / "transcript_corpus_manifest.csv",
+        "transcript_corpus_manifest_report": output_root / "transcript_corpus_manifest.md",
+        "market_data_coverage_manifest": output_root / "market_data_coverage_manifest.csv",
+        "market_data_coverage_report": output_root / "market_data_coverage_report.md",
+        "transcript_market_coverage_alignment": output_root
+        / "transcript_market_coverage_alignment.csv",
+        "transcript_market_coverage_alignment_report": output_root
+        / "transcript_market_coverage_alignment.md",
+        "codex_session_search_report": output_root / "codex_session_search_report.md",
+        "source_recovery_action_plan": output_root / "source_recovery_action_plan.md",
+        "privacy_path_audit_report": output_root / "privacy_path_audit_report.md",
         "backtest_summary": summary_path,
         "research_report": report_path,
         "leakage_audit_report": audit_path,
@@ -449,6 +466,7 @@ def write_research_report(
     guru_llm_review: GuruLlmReviewResult | None = None,
     guru_full_context_review: GuruFullContextReviewResult | None = None,
     guru_monte_carlo: GuruMonteCarloValidationResult | None = None,
+    data_recovery: DataRecoveryAuditResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -476,6 +494,10 @@ def write_research_report(
         "## Available Data Inventory",
         "",
         *_inventory_lines(inventory),
+        "",
+        "## Data Recovery and Coverage Audit",
+        "",
+        *_data_recovery_lines(data_recovery),
         "",
         "## Signal Counts",
         "",
@@ -645,6 +667,108 @@ def write_leakage_audit_report(
         "- Added walk-forward performance fields and transaction cost stress output.",
     ]
     path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _data_recovery_lines(data_recovery: DataRecoveryAuditResult | None) -> list[str]:
+    if data_recovery is None:
+        return ["Data recovery audit was not run."]
+    manifest = data_recovery.transcript_manifest
+    alignment = data_recovery.alignment
+    market = data_recovery.market_coverage
+    source_counts = (
+        manifest.group_by("source_type").len().sort("source_type")
+        if not manifest.is_empty()
+        else manifest
+    )
+    extracted_full_txt = (
+        manifest.filter(
+            (pl.col("source_type") == "FULL_CORPUS")
+            & ~pl.col("notes").str.contains("zip")
+            & pl.col("file_name").str.to_lowercase().str.ends_with(".txt")
+        ).height
+        if not manifest.is_empty()
+        else 0
+    )
+    full_extracted = (
+        manifest.filter(
+            (pl.col("source_type") == "FULL_CORPUS")
+            & ~pl.col("notes").str.contains("zip")
+            & pl.col("file_name").str.to_lowercase().str.ends_with(".txt")
+        )
+        if not manifest.is_empty()
+        else manifest
+    )
+    full_start = full_extracted.get_column("detected_date").min() if not full_extracted.is_empty() else None
+    full_end = full_extracted.get_column("detected_date").max() if not full_extracted.is_empty() else None
+    source_zip_counts = (
+        manifest.with_columns(
+            pl.col("notes").str.contains("zip").alias("is_zip_entry")
+        )
+        .group_by(["source_type", "is_zip_entry"])
+        .len()
+        .sort(["source_type", "is_zip_entry"])
+        if not manifest.is_empty()
+        else manifest
+    )
+    validation_dates = (
+        alignment.filter(pl.col("can_run_full_vol_oi_validation"))
+        .select(["transcript_date", "transcript_count"])
+        .head(20)
+        if not alignment.is_empty()
+        else alignment
+    )
+    logic_only = (
+        alignment.filter(~pl.col("can_run_full_vol_oi_validation")).height
+        if not alignment.is_empty()
+        else 0
+    )
+    return [
+        "### Transcript Corpus Status",
+        "",
+        f"- Large external transcript corpus found: {data_recovery.full_corpus_found}",
+        f"- Full corpus path: `{data_recovery.full_corpus_path or 'not found'}`",
+        f"- Full corpus archive: `{data_recovery.full_corpus_zip_path or 'not found'}`",
+        f"- Extracted full-corpus `.txt` files found: {extracted_full_txt}",
+        f"- Extracted full-corpus date range: {full_start or 'n/a'} to {full_end or 'n/a'}",
+        f"- Likely session log: `{data_recovery.likely_session_path or 'not found'}`",
+        "- Manifest row counts include extracted `.txt` files plus zip entries; "
+        "the extracted full-corpus text-file count is the clean corpus count.",
+        "- Default mode redacts source paths, session IDs, and private source names.",
+        "",
+        _frame_markdown(source_counts),
+        "",
+        _frame_markdown(source_zip_counts),
+        "",
+        "### CME/Yahoo Data Coverage",
+        "",
+        f"- Market data range detected: {data_recovery.market_date_start or 'n/a'} "
+        f"to {data_recovery.market_date_end or 'n/a'}",
+        f"- Market coverage files: {market.height}",
+        f"- Full CME validation transcript dates: {data_recovery.full_validation_dates}",
+        f"- Logic-only transcript dates: {logic_only}",
+        "",
+        "### Full Validation Dates",
+        "",
+        _frame_markdown(validation_dates),
+        "",
+        "### Logic-Only Transcript Dates",
+        "",
+        "- Transcript dates without matched CME OI, IV, and futures/basis are retained "
+        "for logic extraction only. They should not be used to claim Vol-OI validation.",
+        "",
+        "### Recommended Next Action",
+        "",
+        "- Do not refetch transcripts when the full corpus path and zip are present.",
+        "- Fetch or import more CME/QuikStrike history before expanding validation claims.",
+        "- Treat the one-week CME/Yahoo window as pilot alignment coverage.",
+        "",
+        "- Recovery outputs: `outputs/transcript_corpus_manifest.csv`, "
+        "`outputs/market_data_coverage_manifest.csv`, "
+        "`outputs/transcript_market_coverage_alignment.csv`, "
+        "`outputs/codex_session_search_report.md`, "
+        "`outputs/source_recovery_action_plan.md`, "
+        "`outputs/privacy_path_audit_report.md`.",
+    ]
 
 
 def _score_calibration_lines(score_calibration: ScoreCalibrationResult | None) -> list[str]:
