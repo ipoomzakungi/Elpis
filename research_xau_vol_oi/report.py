@@ -62,6 +62,11 @@ from research_xau_vol_oi.guru_transcript_alignment_debug import (
     guru_transcript_alignment_report_lines,
     run_guru_transcript_alignment_debug_layer,
 )
+from research_xau_vol_oi.session_alignment_resolution import (
+    SessionAlignmentResolutionResult,
+    run_session_alignment_resolution_layer,
+    session_alignment_resolution_report_lines,
+)
 from research_xau_vol_oi.gold_baseline_lab import (
     GoldBaselineLabResult,
     run_gold_baseline_lab,
@@ -303,6 +308,9 @@ def run_pipeline(
     guru_transcript_alignment_debug = run_guru_transcript_alignment_debug_layer(
         output_dir=output_root,
     )
+    session_alignment_resolution = run_session_alignment_resolution_layer(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -334,6 +342,7 @@ def run_pipeline(
         current_data_usability=current_data_usability,
         current_week_replay=current_week_replay,
         guru_transcript_alignment_debug=guru_transcript_alignment_debug,
+        session_alignment_resolution=session_alignment_resolution,
         charts_dir=charts_dir,
     )
     return {
@@ -469,6 +478,22 @@ def run_pipeline(
         "missing_xau_spot_basis_fetch_plan": output_root / "missing_xau_spot_basis_fetch_plan.csv",
         "missing_xau_spot_basis_fetch_plan_report": output_root
         / "missing_xau_spot_basis_fetch_plan.md",
+        "session_calendar_audit": output_root / "session_calendar_audit.csv",
+        "session_calendar_audit_report": output_root / "session_calendar_audit.md",
+        "same_date_transcript_resolution": output_root / "same_date_transcript_resolution.csv",
+        "same_date_transcript_resolution_report": output_root
+        / "same_date_transcript_resolution.md",
+        "transcript_manifest_dedup_audit": output_root / "transcript_manifest_dedup_audit.csv",
+        "transcript_manifest_dedup_audit_report": output_root
+        / "transcript_manifest_dedup_audit.md",
+        "same_day_guru_signal_readiness": output_root / "same_day_guru_signal_readiness.csv",
+        "same_day_guru_signal_readiness_report": output_root
+        / "same_day_guru_signal_readiness.md",
+        "refined_missing_data_action_plan": output_root / "refined_missing_data_action_plan.csv",
+        "refined_missing_data_action_plan_report": output_root
+        / "refined_missing_data_action_plan.md",
+        "current_week_replay_resolved": output_root / "current_week_replay_resolved.csv",
+        "current_week_replay_resolved_report": output_root / "current_week_replay_resolved.md",
         "research_gate_status_chart": charts_dir / "research_gate_status.svg",
         "transcript_corpus_manifest": output_root / "transcript_corpus_manifest.csv",
         "transcript_corpus_manifest_report": output_root / "transcript_corpus_manifest.md",
@@ -645,6 +670,7 @@ def write_research_report(
     current_data_usability: CurrentDataUsabilityAuditResult | None = None,
     current_week_replay: CurrentWeekReplayResult | None = None,
     guru_transcript_alignment_debug: GuruTranscriptAlignmentDebugResult | None = None,
+    session_alignment_resolution: SessionAlignmentResolutionResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -690,6 +716,8 @@ def write_research_report(
         *current_week_replay_report_lines(current_week_replay),
         "",
         *guru_transcript_alignment_report_lines(guru_transcript_alignment_debug),
+        "",
+        *session_alignment_resolution_report_lines(session_alignment_resolution),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
