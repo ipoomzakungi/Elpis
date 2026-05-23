@@ -34,6 +34,7 @@ DEFAULT_CME_IMPORT_ROOTS = (
     Path("data/vendor"),
     Path("backend/data/raw"),
     Path("backend/data/processed"),
+    Path("backend/data/reports"),
     Path("outputs"),
 )
 GENERATED_OUTPUT_NAMES = {
@@ -61,6 +62,18 @@ GENERATED_OUTPUT_NAMES = {
     "cme_history_missing_field_report.csv",
     "cme_history_duplicate_conflict_report.csv",
     "cme_history_source_inventory.csv",
+    "current_cme_date_usability.csv",
+    "current_cme_date_usability.md",
+    "iv_field_mapping_audit.csv",
+    "iv_field_mapping_audit.md",
+    "spot_basis_join_audit.csv",
+    "spot_basis_join_audit.md",
+    "one_week_cme_pilot_summary.csv",
+    "one_week_cme_pilot_report.md",
+    "ohlc_guru_price_only_pilot.csv",
+    "ohlc_guru_price_only_pilot.md",
+    "cme_fetch_tool_gap_audit.csv",
+    "cme_fetch_tool_gap_audit.md",
     "metadata.json",
     "report.json",
     "source_validation.json",
@@ -293,7 +306,24 @@ def detect_cme_export_type(path: str | Path, frame: pl.DataFrame) -> dict[str, A
         "OPEN_INTEREST_PROFILE": _matched(cols, ["strike", "expiry", "open_interest", "total_oi"]),
         "MOST_ACTIVE_STRIKES": _matched(cols, ["strike", "volume", "total_volume", "call_volume", "put_volume"]),
         "OPTION_SETTLEMENTS": _matched(cols, ["strike", "expiry", "settlement_price", "settle"]),
-        "QUIKVOL": _matched(cols, ["implied_vol", "implied_volatility", "iv", "expected_range"]),
+        "QUIKVOL": _matched(
+            cols,
+            [
+                "implied_vol",
+                "implied_volatility",
+                "impliedVolatility",
+                "iv",
+                "IV",
+                "volatility",
+                "atm_iv",
+                "quikvol",
+                "cvol",
+                "vol2vol",
+                "expected_range",
+                "expected_move",
+                "one_sd",
+            ],
+        ),
         "VOLATILITY_TERM_STRUCTURE": _matched(cols, ["term_structure", "expiry", "dte", "implied_vol"]),
         "ECONOMIC_EVENT_ANALYZER": _matched(cols, ["event_name", "event_type", "forecast", "previous"]),
         "FUTURES_VOLUME_OI": _matched(cols, ["futures_symbol", "volume", "open_interest"]),
@@ -442,6 +472,7 @@ def classify_validation_grade_days(canonical: dict[str, pl.DataFrame]) -> pl.Dat
             "has_macro_event_flag": not events.is_empty(),
         }
         grade = _validation_grade(flags)
+        pilot_grade = _pilot_usability_grade(flags)
         full = grade == "FULL_CME_VOL_OI"
         missing = _missing_components(flags)
         rows.append(
@@ -450,6 +481,8 @@ def classify_validation_grade_days(canonical: dict[str, pl.DataFrame]) -> pl.Dat
                 **flags,
                 "complete_validation_grade": full,
                 "missing_components": "|".join(missing),
+                "strict_validation_grade": grade,
+                "pilot_usability_grade": pilot_grade,
                 "validation_grade": grade,
             }
         )
@@ -498,6 +531,8 @@ def build_validation_dataset(
                 "two_sd_upper": spot_price + 2 * one_sd if spot_price and one_sd else None,
                 "two_sd_lower": spot_price - 2 * one_sd if spot_price and one_sd else None,
                 "sigma_position": (spot_price - session_open) / one_sd if spot_price and session_open and one_sd else None,
+                "strict_validation_grade": grade_row.get("strict_validation_grade") or grade_row.get("validation_grade"),
+                "pilot_usability_grade": grade_row.get("pilot_usability_grade"),
                 "validation_grade": grade_row.get("validation_grade"),
             }
         )
@@ -904,7 +939,22 @@ def _option_iv_rows(record: dict[str, Any], frame: pl.DataFrame) -> list[dict[st
     expiry_col = _find_col(columns, ["expiry", "expiration", "expiration_date", "expiry_date"])
     dte_col = _find_col(columns, ["dte", "days_to_expiry", "days_to_expiration"])
     option_type_col = _find_col(columns, ["option_type", "put_call", "type", "side"])
-    iv_col = _find_col(columns, ["implied_vol", "implied_volatility", "iv", "iv_percent"])
+    iv_col = _find_col(
+        columns,
+        [
+            "implied_vol",
+            "implied_volatility",
+            "impliedVolatility",
+            "iv",
+            "IV",
+            "iv_percent",
+            "volatility",
+            "atm_iv",
+            "quikvol",
+            "cvol",
+            "vol2vol",
+        ],
+    )
     delta_col = _find_col(columns, ["delta"])
     gamma_col = _find_col(columns, ["gamma"])
     vega_col = _find_col(columns, ["vega"])
@@ -1287,6 +1337,33 @@ def _validation_grade(flags: dict[str, bool]) -> str:
     return "UNUSABLE"
 
 
+def _pilot_usability_grade(flags: dict[str, bool]) -> str:
+    """Classify the best research pilot a date can support now."""
+
+    strict_grade = _validation_grade(flags)
+    if strict_grade == "FULL_CME_VOL_OI":
+        return "FULL_CME_VOL_OI"
+
+    has_spot = flags["has_xau_spot_price"]
+    has_futures = flags["has_gc_futures_price"]
+    has_basis = flags["has_basis"]
+    has_oi = flags["has_option_oi_by_strike"] and flags["has_expiry_dte"]
+    has_freshness = flags["has_option_oi_change"] or flags["has_option_volume"]
+    has_iv = flags["has_option_iv"]
+
+    if has_oi and has_freshness and has_futures and (not has_spot or not has_basis):
+        return "CME_OI_VOLUME_NEEDS_SPOT_BASIS"
+    if has_oi and has_futures and has_spot and not has_iv:
+        return "CME_OI_ONLY_NO_IV"
+    if has_iv and not has_oi and (has_spot or has_futures):
+        return "CME_IV_ONLY_NO_OI"
+    if has_futures and not has_oi and not has_iv:
+        return "CME_FUTURES_ONLY"
+    if has_spot and not has_oi and not has_iv:
+        return "PRICE_ONLY_GURU_PILOT"
+    return "GURU_LOGIC_ONLY"
+
+
 def _missing_components(flags: dict[str, bool]) -> list[str]:
     required = {
         "has_xau_spot_price": "xau_spot_price",
@@ -1369,7 +1446,10 @@ def _matched(cols: set[str], aliases: Iterable[str]) -> set[str]:
 
 
 def _normalize_name(value: str) -> str:
-    return str(value).strip().lower().replace(" ", "_").replace("-", "_")
+    import re
+
+    text = re.sub(r"(?<!^)(?=[A-Z])", "_", str(value).strip())
+    return text.lower().replace(" ", "_").replace("-", "_")
 
 
 def _find_col(columns: Iterable[str], aliases: Iterable[str]) -> str | None:
@@ -1685,6 +1765,8 @@ def _validation_days_schema() -> dict[str, Any]:
         "has_macro_event_flag": pl.Boolean,
         "complete_validation_grade": pl.Boolean,
         "missing_components": pl.String,
+        "strict_validation_grade": pl.String,
+        "pilot_usability_grade": pl.String,
         "validation_grade": pl.String,
     }
 
@@ -1710,6 +1792,8 @@ def _validation_dataset_schema() -> dict[str, Any]:
         "two_sd_upper": pl.Float64,
         "two_sd_lower": pl.Float64,
         "sigma_position": pl.Float64,
+        "strict_validation_grade": pl.String,
+        "pilot_usability_grade": pl.String,
         "validation_grade": pl.String,
     }
 

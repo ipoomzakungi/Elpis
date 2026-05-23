@@ -23,6 +23,11 @@ from research_xau_vol_oi.cme_history_importer import (
     run_cme_history_importer,
 )
 from research_xau_vol_oi.config import ResearchConfig
+from research_xau_vol_oi.current_data_usability_audit import (
+    CurrentDataUsabilityAuditResult,
+    current_data_usability_report_lines,
+    run_current_data_usability_audit,
+)
 from research_xau_vol_oi.data_recovery_audit import (
     DataRecoveryAuditResult,
     run_data_recovery_audit_layer,
@@ -279,6 +284,9 @@ def run_pipeline(
     guru_logic_knowledge_base = run_guru_logic_knowledge_base_layer(
         output_dir=output_root,
     )
+    current_data_usability = run_current_data_usability_audit(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -307,6 +315,7 @@ def run_pipeline(
         data_recovery=data_recovery,
         research_decision_gate=research_decision_gate,
         guru_logic_knowledge_base=guru_logic_knowledge_base,
+        current_data_usability=current_data_usability,
         charts_dir=charts_dir,
     )
     return {
@@ -403,6 +412,12 @@ def run_pipeline(
         / "cme_collection_plan_for_guru_logic.md",
         "guru_logic_validation_path": output_root / "guru_logic_validation_path.csv",
         "guru_logic_validation_path_report": output_root / "guru_logic_validation_path.md",
+        "current_cme_date_usability": output_root / "current_cme_date_usability.csv",
+        "iv_field_mapping_audit": output_root / "iv_field_mapping_audit.csv",
+        "spot_basis_join_audit": output_root / "spot_basis_join_audit.csv",
+        "one_week_cme_pilot_summary": output_root / "one_week_cme_pilot_summary.csv",
+        "ohlc_guru_price_only_pilot": output_root / "ohlc_guru_price_only_pilot.csv",
+        "cme_fetch_tool_gap_audit": output_root / "cme_fetch_tool_gap_audit.csv",
         "research_gate_status_chart": charts_dir / "research_gate_status.svg",
         "transcript_corpus_manifest": output_root / "transcript_corpus_manifest.csv",
         "transcript_corpus_manifest_report": output_root / "transcript_corpus_manifest.md",
@@ -576,6 +591,7 @@ def write_research_report(
     data_recovery: DataRecoveryAuditResult | None = None,
     research_decision_gate: ResearchDecisionGateResult | None = None,
     guru_logic_knowledge_base: GuruLogicKnowledgeBaseResult | None = None,
+    current_data_usability: CurrentDataUsabilityAuditResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -615,6 +631,8 @@ def write_research_report(
         "## CME Historical Data Import",
         "",
         *_cme_history_importer_lines(cme_history_importer),
+        "",
+        *current_data_usability_report_lines(current_data_usability),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
@@ -700,7 +718,7 @@ def write_research_report(
         "",
         *_guru_logic_validation_path_lines(guru_logic_knowledge_base),
         "",
-        "## Final Recommendation",
+        "## Guru Logic Recommendation",
         "",
         *_guru_logic_final_recommendation_lines(guru_logic_knowledge_base),
         "",
@@ -1791,7 +1809,7 @@ def _guru_logic_knowledge_base_lines(result: GuruLogicKnowledgeBaseResult | None
         f"- Repeated guru logic concepts extracted: {result.knowledge_base.height}",
         f"- Current validation-grade CME days: {result.current_available_validation_days}",
         f"- Preliminary validation threshold: {result.minimum_validation_days}",
-        f"- Final recommendation: `{result.final_recommendation}`",
+        f"- Guru logic recommendation: `{result.final_recommendation}`",
         "",
         "### Top Concepts",
         "",
