@@ -57,6 +57,11 @@ from research_xau_vol_oi.guru_logic_knowledge_base import (
     GuruLogicKnowledgeBaseResult,
     run_guru_logic_knowledge_base_layer,
 )
+from research_xau_vol_oi.guru_transcript_alignment_debug import (
+    GuruTranscriptAlignmentDebugResult,
+    guru_transcript_alignment_report_lines,
+    run_guru_transcript_alignment_debug_layer,
+)
 from research_xau_vol_oi.gold_baseline_lab import (
     GoldBaselineLabResult,
     run_gold_baseline_lab,
@@ -295,6 +300,9 @@ def run_pipeline(
     current_week_replay = run_current_week_replay_layer(
         output_dir=output_root,
     )
+    guru_transcript_alignment_debug = run_guru_transcript_alignment_debug_layer(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -325,6 +333,7 @@ def run_pipeline(
         guru_logic_knowledge_base=guru_logic_knowledge_base,
         current_data_usability=current_data_usability,
         current_week_replay=current_week_replay,
+        guru_transcript_alignment_debug=guru_transcript_alignment_debug,
         charts_dir=charts_dir,
     )
     return {
@@ -444,6 +453,22 @@ def run_pipeline(
         "current_week_basis_replay_chart": charts_dir / "current_week_basis_replay.svg",
         "current_week_guru_filter_overlay_chart": charts_dir
         / "current_week_guru_filter_overlay.svg",
+        "guru_transcript_alignment_debug": output_root / "guru_transcript_alignment_debug.csv",
+        "guru_transcript_alignment_debug_report": output_root / "guru_transcript_alignment_debug.md",
+        "guru_text_interpretation_audit": output_root / "guru_text_interpretation_audit.csv",
+        "guru_text_interpretation_audit_report": output_root / "guru_text_interpretation_audit.md",
+        "guru_playbook_overlay_for_current_week": output_root
+        / "guru_playbook_overlay_for_current_week.csv",
+        "guru_playbook_overlay_for_current_week_report": output_root
+        / "guru_playbook_overlay_for_current_week.md",
+        "no_guru_context_explanation": output_root / "no_guru_context_explanation.md",
+        "current_week_cme_guru_playbook_replay": output_root
+        / "current_week_cme_guru_playbook_replay.csv",
+        "current_week_cme_guru_playbook_replay_report": output_root
+        / "current_week_cme_guru_playbook_replay.md",
+        "missing_xau_spot_basis_fetch_plan": output_root / "missing_xau_spot_basis_fetch_plan.csv",
+        "missing_xau_spot_basis_fetch_plan_report": output_root
+        / "missing_xau_spot_basis_fetch_plan.md",
         "research_gate_status_chart": charts_dir / "research_gate_status.svg",
         "transcript_corpus_manifest": output_root / "transcript_corpus_manifest.csv",
         "transcript_corpus_manifest_report": output_root / "transcript_corpus_manifest.md",
@@ -619,6 +644,7 @@ def write_research_report(
     guru_logic_knowledge_base: GuruLogicKnowledgeBaseResult | None = None,
     current_data_usability: CurrentDataUsabilityAuditResult | None = None,
     current_week_replay: CurrentWeekReplayResult | None = None,
+    guru_transcript_alignment_debug: GuruTranscriptAlignmentDebugResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -662,6 +688,8 @@ def write_research_report(
         *current_data_usability_report_lines(current_data_usability),
         "",
         *current_week_replay_report_lines(current_week_replay),
+        "",
+        *guru_transcript_alignment_report_lines(guru_transcript_alignment_debug),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
