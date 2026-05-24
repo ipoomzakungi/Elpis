@@ -164,7 +164,7 @@ def test_yahoo_finance_provider_reports_ohlcv_only_capabilities():
     assert info.supports_funding_rate is False
     assert info.requires_auth is False
     assert info.default_symbol == "SPY"
-    assert set(info.supported_timeframes) == {"1d", "1h"}
+    assert {"1m", "30m", "60m", "1h", "1d"}.issubset(info.supported_timeframes)
     assert any("OHLCV-only" in limitation for limitation in info.limitations)
 
 
@@ -173,8 +173,10 @@ def test_yahoo_finance_provider_validates_curated_symbols_and_timeframes():
 
     assert provider.validate_symbol("spy") == "SPY"
     assert provider.validate_symbol("gc=f") == "GC=F"
+    assert provider.validate_symbol("xauusd=x") == "XAUUSD=X"
     assert provider.validate_symbol("gld") == "GLD"
     assert provider.validate_timeframe("1D") == "1d"
+    assert provider.validate_timeframe("30m") == "30m"
     gld = next(symbol for symbol in provider.get_supported_symbols() if symbol.symbol == "GLD")
     assert gld.asset_class == "etf_proxy"
     assert any("PROXY_ONLY" in note for note in gld.notes)
@@ -183,4 +185,4 @@ def test_yahoo_finance_provider_validates_curated_symbols_and_timeframes():
         provider.validate_symbol("ABC")
 
     with pytest.raises(ProviderValidationError):
-        provider.validate_timeframe("15m")
+        provider.validate_timeframe("4h")

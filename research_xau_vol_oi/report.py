@@ -43,6 +43,11 @@ from research_xau_vol_oi.daily_forward_data_gate import (
     daily_forward_data_gate_report_lines,
     run_daily_forward_data_gate,
 )
+from research_xau_vol_oi.yahoo_intraday_outcome_resolver import (
+    YahooIntradayOutcomeResolverResult,
+    run_yahoo_intraday_outcome_resolver,
+    yahoo_intraday_outcome_report_lines,
+)
 from research_xau_vol_oi.data_recovery_audit import (
     DataRecoveryAuditResult,
     run_data_recovery_audit_layer,
@@ -359,6 +364,9 @@ def run_pipeline(
     daily_forward_data_gate = run_daily_forward_data_gate(
         output_dir=output_root,
     )
+    yahoo_intraday_outcome = run_yahoo_intraday_outcome_resolver(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -397,6 +405,7 @@ def run_pipeline(
         youtube_metadata_recovery=youtube_metadata_recovery,
         guru_rule_backtest_lab=guru_rule_backtest_lab,
         daily_forward_data_gate=daily_forward_data_gate,
+        yahoo_intraday_outcome=yahoo_intraday_outcome,
         charts_dir=charts_dir,
     )
     return {
@@ -640,6 +649,18 @@ def run_pipeline(
         / "forward_data_provider_audit.md",
         "daily_forward_run_decision": output_root / "daily_forward_run_decision.csv",
         "daily_forward_run_decision_report": output_root / "daily_forward_run_decision.md",
+        "yahoo_intraday_fetch_plan": output_root / "yahoo_intraday_fetch_plan.csv",
+        "yahoo_intraday_fetch_plan_report": output_root / "yahoo_intraday_fetch_plan.md",
+        "intraday_resample_coverage": output_root / "intraday_resample_coverage.csv",
+        "intraday_resample_coverage_report": output_root / "intraday_resample_coverage.md",
+        "partial_outcome_resolution": output_root / "partial_outcome_resolution.csv",
+        "partial_outcome_resolution_report": output_root / "partial_outcome_resolution.md",
+        "forward_evidence_outcomes_preview": output_root
+        / "forward_evidence_outcomes_preview.csv",
+        "forward_journal_status_report": output_root / "forward_journal_status_report.md",
+        "forward_journal_scorecard": output_root / "forward_journal_scorecard.csv",
+        "useful_evidence_so_far": output_root / "useful_evidence_so_far.csv",
+        "useful_evidence_so_far_report": output_root / "useful_evidence_so_far.md",
         "speckit_prereq_warning": output_root / "speckit_prereq_warning.md",
         "rule_backtest_expectancy_chart": charts_dir / "rule_backtest_expectancy.svg",
         "rule_filter_value_chart": charts_dir / "rule_filter_value.svg",
@@ -828,6 +849,7 @@ def write_research_report(
     youtube_metadata_recovery: YouTubeMetadataRecoveryResult | None = None,
     guru_rule_backtest_lab: GuruRuleBacktestLabResult | None = None,
     daily_forward_data_gate: DailyForwardDataGateResult | None = None,
+    yahoo_intraday_outcome: YahooIntradayOutcomeResolverResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -887,6 +909,8 @@ def write_research_report(
         *guru_rule_backtest_lab_report_lines(guru_rule_backtest_lab),
         "",
         *daily_forward_data_gate_report_lines(daily_forward_data_gate),
+        "",
+        *yahoo_intraday_outcome_report_lines(yahoo_intraday_outcome),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",

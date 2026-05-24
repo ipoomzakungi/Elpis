@@ -41,6 +41,7 @@ data/reports/quikstrike_matrix/
 data/reports/xau_quikstrike_fusion/
 data/reports/xau_forward_journal/
 data/raw/
+data/yahoo_intraday/
 data/processed/
 data/reports/
 data/*.duckdb

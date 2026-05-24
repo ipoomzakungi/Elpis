@@ -30,6 +30,8 @@ INTRADAY_WINDOWS = {"30m", "1h", "4h"}
 RUN_STATES = {
     "SKIP_MARKET_CLOSED",
     "SKIP_WEEKEND_ARTIFACT",
+    "SKIP_NEW_ROWS_BUT_RESOLVE_OLD_OUTCOMES",
+    "PARTIAL_OUTCOME_RESOLUTION_READY",
     "WAIT_FOR_INTRADAY_OHLC",
     "WAIT_FOR_MANUAL_CME_SNAPSHOT",
     "CREATE_PENDING_JOURNAL_ROWS",
@@ -40,6 +42,8 @@ RUN_STATES = {
 FINAL_RECOMMENDATIONS = {
     "WAIT_FOR_NEXT_MARKET_SESSION",
     "WAIT_FOR_INTRADAY_OHLC",
+    "PARTIAL_OUTCOME_RESOLUTION_READY",
+    "SKIP_NEW_ROWS_BUT_RESOLVE_OLD_OUTCOMES",
     "RESOLVE_OUTCOME_READY",
     "CREATE_NEW_JOURNAL_READY",
     "DATA_FEED_FIX_REQUIRED",
@@ -308,7 +312,7 @@ def build_calendar_gate_frame(
                 "is_weekend_artifact": latest_artifact,
                 "should_create_new_journal_rows": create_rows,
                 "should_resolve_pending_outcomes": bool(
-                    can_resolve_pending and not weekend and not latest_artifact
+                    can_resolve_pending
                 ),
                 "reason_plain_english": reason,
                 "timezone_utc": UTC_ZONE.key,
@@ -842,15 +846,27 @@ def build_run_decision_frame(
 
     create_rows = _any_true(calendar_gate, "should_create_new_journal_rows")
     resolve_any = _any_true(outcome_coverage, "can_resolve_any_window")
-    resolve_full = _any_true(outcome_coverage, "can_resolve_full_outcome")
+    resolve_full = _all_true(outcome_coverage, "can_resolve_full_outcome")
     missing_coverage = _join_unique(outcome_coverage, "missing_coverage_reason")
     missing_providers = _join_provider_gaps(provider_audit)
     missing_data_text = missing_coverage or missing_providers or "none_detected"
-    if bool(latest_replay.get("is_weekend_artifact")):
+    if bool(latest_replay.get("is_weekend_artifact")) and resolve_any:
+        run_state = "SKIP_NEW_ROWS_BUT_RESOLVE_OLD_OUTCOMES"
+        final = "SKIP_NEW_ROWS_BUT_RESOLVE_OLD_OUTCOMES"
+        safe_action = (
+            "Do not create new journal rows from the weekend artifact; resolve only "
+            "older pending outcomes whose windows have strict OHLC coverage."
+        )
+        next_action = "Run the partial outcome resolver and leave uncovered windows pending."
+        create_rows = False
+    elif bool(latest_replay.get("is_weekend_artifact")):
         run_state = "SKIP_WEEKEND_ARTIFACT"
         final = "SKIP_WEEKEND_ARTIFACT"
-        safe_action = "No new journal rows and no outcome resolution are safe from this artifact."
-        next_action = "Wait for the next real market-session replay row, then rerun this gate."
+        safe_action = "No new journal rows are safe from this artifact."
+        next_action = (
+            "Wait for strict intraday OHLC on pending outcomes or the next real "
+            "market-session replay row, then rerun this gate."
+        )
         resolve_any = False
         resolve_full = False
         missing_data_text = (
@@ -864,12 +880,12 @@ def build_run_decision_frame(
         next_action = "Refresh the daily data after the next market session closes."
     elif resolve_full:
         run_state = "RESOLVE_FULL_OUTCOMES"
-        final = "RESOLVE_OUTCOME_READY"
+        final = "PARTIAL_OUTCOME_RESOLUTION_READY"
         safe_action = "Full outcome resolution is ready for covered pending rows."
         next_action = "Run the outcome resolver with the audited OHLC source labels."
     elif resolve_any:
-        run_state = "RESOLVE_PARTIAL_OUTCOMES"
-        final = "RESOLVE_OUTCOME_READY"
+        run_state = "PARTIAL_OUTCOME_RESOLUTION_READY"
+        final = "PARTIAL_OUTCOME_RESOLUTION_READY"
         safe_action = "Partial outcome resolution is possible only for fully covered windows."
         next_action = "Resolve only covered windows and leave missing windows pending."
     elif pending_journal_count > 0:
@@ -1328,6 +1344,12 @@ def _any_true(frame: pl.DataFrame, column: str) -> bool:
     if frame.is_empty() or column not in frame.columns:
         return False
     return any(bool(value) for value in frame.get_column(column).to_list())
+
+
+def _all_true(frame: pl.DataFrame, column: str) -> bool:
+    if frame.is_empty() or column not in frame.columns:
+        return False
+    return all(bool(value) for value in frame.get_column(column).to_list())
 
 
 def _join_unique(frame: pl.DataFrame, column: str) -> str:
