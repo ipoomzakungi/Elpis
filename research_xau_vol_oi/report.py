@@ -48,6 +48,11 @@ from research_xau_vol_oi.yahoo_intraday_outcome_resolver import (
     run_yahoo_intraday_outcome_resolver,
     yahoo_intraday_outcome_report_lines,
 )
+from research_xau_vol_oi.forward_outcome_review import (
+    ForwardOutcomeReviewResult,
+    forward_outcome_review_report_lines,
+    run_forward_outcome_review,
+)
 from research_xau_vol_oi.data_recovery_audit import (
     DataRecoveryAuditResult,
     run_data_recovery_audit_layer,
@@ -367,6 +372,9 @@ def run_pipeline(
     yahoo_intraday_outcome = run_yahoo_intraday_outcome_resolver(
         output_dir=output_root,
     )
+    forward_outcome_review = run_forward_outcome_review(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -406,6 +414,7 @@ def run_pipeline(
         guru_rule_backtest_lab=guru_rule_backtest_lab,
         daily_forward_data_gate=daily_forward_data_gate,
         yahoo_intraday_outcome=yahoo_intraday_outcome,
+        forward_outcome_review=forward_outcome_review,
         charts_dir=charts_dir,
     )
     return {
@@ -661,6 +670,31 @@ def run_pipeline(
         "forward_journal_scorecard": output_root / "forward_journal_scorecard.csv",
         "useful_evidence_so_far": output_root / "useful_evidence_so_far.csv",
         "useful_evidence_so_far_report": output_root / "useful_evidence_so_far.md",
+        "forward_outcome_preview_audit": output_root
+        / "forward_outcome_preview_audit.csv",
+        "forward_outcome_preview_audit_report": output_root
+        / "forward_outcome_preview_audit.md",
+        "forward_evidence_outcomes": output_root / "forward_evidence_outcomes.csv",
+        "forward_evidence_outcomes_promoted": output_root
+        / "forward_evidence_outcomes_promoted.csv",
+        "forward_outcome_promotion_report": output_root
+        / "forward_outcome_promotion_report.md",
+        "forward_rule_evidence_summary": output_root
+        / "forward_rule_evidence_summary.csv",
+        "forward_rule_evidence_summary_report": output_root
+        / "forward_rule_evidence_summary.md",
+        "forward_filter_evidence": output_root / "forward_filter_evidence.csv",
+        "forward_filter_evidence_report": output_root / "forward_filter_evidence.md",
+        "forward_market_map_evidence": output_root / "forward_market_map_evidence.csv",
+        "forward_market_map_evidence_report": output_root
+        / "forward_market_map_evidence.md",
+        "forward_pending_outcome_summary": output_root
+        / "forward_pending_outcome_summary.csv",
+        "forward_pending_outcome_summary_report": output_root
+        / "forward_pending_outcome_summary.md",
+        "forward_evidence_scorecard": output_root / "forward_evidence_scorecard.csv",
+        "forward_evidence_scorecard_report": output_root
+        / "forward_evidence_scorecard.md",
         "speckit_prereq_warning": output_root / "speckit_prereq_warning.md",
         "rule_backtest_expectancy_chart": charts_dir / "rule_backtest_expectancy.svg",
         "rule_filter_value_chart": charts_dir / "rule_filter_value.svg",
@@ -850,6 +884,7 @@ def write_research_report(
     guru_rule_backtest_lab: GuruRuleBacktestLabResult | None = None,
     daily_forward_data_gate: DailyForwardDataGateResult | None = None,
     yahoo_intraday_outcome: YahooIntradayOutcomeResolverResult | None = None,
+    forward_outcome_review: ForwardOutcomeReviewResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -911,6 +946,8 @@ def write_research_report(
         *daily_forward_data_gate_report_lines(daily_forward_data_gate),
         "",
         *yahoo_intraday_outcome_report_lines(yahoo_intraday_outcome),
+        "",
+        *forward_outcome_review_report_lines(forward_outcome_review),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
