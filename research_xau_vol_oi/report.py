@@ -53,6 +53,11 @@ from research_xau_vol_oi.forward_outcome_review import (
     forward_outcome_review_report_lines,
     run_forward_outcome_review,
 )
+from research_xau_vol_oi.forward_event_evidence_aggregator import (
+    ForwardEventEvidenceAggregatorResult,
+    forward_event_evidence_report_lines,
+    run_forward_event_evidence_aggregator,
+)
 from research_xau_vol_oi.data_recovery_audit import (
     DataRecoveryAuditResult,
     run_data_recovery_audit_layer,
@@ -375,6 +380,9 @@ def run_pipeline(
     forward_outcome_review = run_forward_outcome_review(
         output_dir=output_root,
     )
+    forward_event_evidence = run_forward_event_evidence_aggregator(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -415,6 +423,7 @@ def run_pipeline(
         daily_forward_data_gate=daily_forward_data_gate,
         yahoo_intraday_outcome=yahoo_intraday_outcome,
         forward_outcome_review=forward_outcome_review,
+        forward_event_evidence=forward_event_evidence,
         charts_dir=charts_dir,
     )
     return {
@@ -695,6 +704,19 @@ def run_pipeline(
         "forward_evidence_scorecard": output_root / "forward_evidence_scorecard.csv",
         "forward_evidence_scorecard_report": output_root
         / "forward_evidence_scorecard.md",
+        "forward_event_level_outcomes": output_root
+        / "forward_event_level_outcomes.csv",
+        "forward_event_level_outcomes_report": output_root
+        / "forward_event_level_outcomes.md",
+        "forward_rule_event_evidence": output_root / "forward_rule_event_evidence.csv",
+        "forward_rule_event_evidence_report": output_root
+        / "forward_rule_event_evidence.md",
+        "forward_rule_governance": output_root / "forward_rule_governance.csv",
+        "forward_rule_governance_report": output_root / "forward_rule_governance.md",
+        "next_rule_focus_list": output_root / "next_rule_focus_list.csv",
+        "next_rule_focus_list_report": output_root / "next_rule_focus_list.md",
+        "forward_event_scorecard": output_root / "forward_event_scorecard.csv",
+        "forward_event_scorecard_report": output_root / "forward_event_scorecard.md",
         "speckit_prereq_warning": output_root / "speckit_prereq_warning.md",
         "rule_backtest_expectancy_chart": charts_dir / "rule_backtest_expectancy.svg",
         "rule_filter_value_chart": charts_dir / "rule_filter_value.svg",
@@ -885,6 +907,7 @@ def write_research_report(
     daily_forward_data_gate: DailyForwardDataGateResult | None = None,
     yahoo_intraday_outcome: YahooIntradayOutcomeResolverResult | None = None,
     forward_outcome_review: ForwardOutcomeReviewResult | None = None,
+    forward_event_evidence: ForwardEventEvidenceAggregatorResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -948,6 +971,8 @@ def write_research_report(
         *yahoo_intraday_outcome_report_lines(yahoo_intraday_outcome),
         "",
         *forward_outcome_review_report_lines(forward_outcome_review),
+        "",
+        *forward_event_evidence_report_lines(forward_event_evidence),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
