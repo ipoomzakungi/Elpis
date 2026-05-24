@@ -93,6 +93,17 @@ class YahooFinanceProvider:
                 notes=["Yahoo Finance futures proxy OHLCV only"],
             ),
             ProviderSymbol(
+                symbol="GLD",
+                display_name="SPDR Gold Shares ETF Proxy",
+                asset_class="etf_proxy",
+                supports_ohlcv=True,
+                supports_open_interest=False,
+                supports_funding_rate=False,
+                notes=[
+                    "PROXY_ONLY research symbol; not true XAU/USD spot or CME options OI"
+                ],
+            ),
+            ProviderSymbol(
                 symbol="BTC-USD",
                 display_name="Bitcoin USD Reference",
                 asset_class="crypto",

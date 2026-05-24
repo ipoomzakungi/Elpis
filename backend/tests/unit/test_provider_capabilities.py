@@ -173,7 +173,11 @@ def test_yahoo_finance_provider_validates_curated_symbols_and_timeframes():
 
     assert provider.validate_symbol("spy") == "SPY"
     assert provider.validate_symbol("gc=f") == "GC=F"
+    assert provider.validate_symbol("gld") == "GLD"
     assert provider.validate_timeframe("1D") == "1d"
+    gld = next(symbol for symbol in provider.get_supported_symbols() if symbol.symbol == "GLD")
+    assert gld.asset_class == "etf_proxy"
+    assert any("PROXY_ONLY" in note for note in gld.notes)
 
     with pytest.raises(ProviderValidationError):
         provider.validate_symbol("ABC")

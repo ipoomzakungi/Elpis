@@ -38,6 +38,11 @@ from research_xau_vol_oi.current_week_replay import (
     current_week_replay_report_lines,
     run_current_week_replay_layer,
 )
+from research_xau_vol_oi.daily_forward_data_gate import (
+    DailyForwardDataGateResult,
+    daily_forward_data_gate_report_lines,
+    run_daily_forward_data_gate,
+)
 from research_xau_vol_oi.data_recovery_audit import (
     DataRecoveryAuditResult,
     run_data_recovery_audit_layer,
@@ -351,6 +356,9 @@ def run_pipeline(
     guru_rule_backtest_lab = run_guru_rule_backtest_lab(
         output_dir=output_root,
     )
+    daily_forward_data_gate = run_daily_forward_data_gate(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -388,6 +396,7 @@ def run_pipeline(
         transcript_timing_evidence=transcript_timing_evidence,
         youtube_metadata_recovery=youtube_metadata_recovery,
         guru_rule_backtest_lab=guru_rule_backtest_lab,
+        daily_forward_data_gate=daily_forward_data_gate,
         charts_dir=charts_dir,
     )
     return {
@@ -622,6 +631,16 @@ def run_pipeline(
         "range_period_rule_backtest_report": output_root
         / "range_period_rule_backtest_report.md",
         "range_period_rule_scorecard": output_root / "range_period_rule_scorecard.csv",
+        "daily_forward_data_gate": output_root / "daily_forward_data_gate.csv",
+        "daily_forward_data_gate_report": output_root / "daily_forward_data_gate.md",
+        "outcome_coverage_check": output_root / "outcome_coverage_check.csv",
+        "outcome_coverage_check_report": output_root / "outcome_coverage_check.md",
+        "forward_data_provider_audit": output_root / "forward_data_provider_audit.csv",
+        "forward_data_provider_audit_report": output_root
+        / "forward_data_provider_audit.md",
+        "daily_forward_run_decision": output_root / "daily_forward_run_decision.csv",
+        "daily_forward_run_decision_report": output_root / "daily_forward_run_decision.md",
+        "speckit_prereq_warning": output_root / "speckit_prereq_warning.md",
         "rule_backtest_expectancy_chart": charts_dir / "rule_backtest_expectancy.svg",
         "rule_filter_value_chart": charts_dir / "rule_filter_value.svg",
         "rule_market_map_hit_rate_chart": charts_dir / "rule_market_map_hit_rate.svg",
@@ -808,6 +827,7 @@ def write_research_report(
     transcript_timing_evidence: TimingEvidenceResult | None = None,
     youtube_metadata_recovery: YouTubeMetadataRecoveryResult | None = None,
     guru_rule_backtest_lab: GuruRuleBacktestLabResult | None = None,
+    daily_forward_data_gate: DailyForwardDataGateResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -865,6 +885,8 @@ def write_research_report(
         *youtube_metadata_recovery_report_lines(youtube_metadata_recovery),
         "",
         *guru_rule_backtest_lab_report_lines(guru_rule_backtest_lab),
+        "",
+        *daily_forward_data_gate_report_lines(daily_forward_data_gate),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
