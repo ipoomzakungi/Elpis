@@ -23,6 +23,11 @@ from research_xau_vol_oi.cme_history_importer import (
     run_cme_history_importer,
 )
 from research_xau_vol_oi.config import ResearchConfig
+from research_xau_vol_oi.approved_session_remap_interpretation import (
+    ApprovedSessionRemapInterpretationResult,
+    approved_session_remap_report_lines,
+    run_approved_session_remap_interpretation_layer,
+)
 from research_xau_vol_oi.current_data_usability_audit import (
     CurrentDataUsabilityAuditResult,
     current_data_usability_report_lines,
@@ -319,6 +324,9 @@ def run_pipeline(
     transcript_identity_session_remap = run_transcript_identity_session_remap_layer(
         output_dir=output_root,
     )
+    approved_session_remap_interpretation = run_approved_session_remap_interpretation_layer(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -352,6 +360,7 @@ def run_pipeline(
         guru_transcript_alignment_debug=guru_transcript_alignment_debug,
         session_alignment_resolution=session_alignment_resolution,
         transcript_identity_session_remap=transcript_identity_session_remap,
+        approved_session_remap_interpretation=approved_session_remap_interpretation,
         charts_dir=charts_dir,
     )
     return {
@@ -520,6 +529,21 @@ def run_pipeline(
         / "same_day_guru_reinterpretation_after_identity.csv",
         "same_day_guru_reinterpretation_after_identity_report": output_root
         / "same_day_guru_reinterpretation_after_identity.md",
+        "session_remap_decisions_applied": output_root / "session_remap_decisions_applied.csv",
+        "current_week_replay_after_market_session_remap": output_root
+        / "current_week_replay_after_market_session_remap.csv",
+        "current_week_replay_after_market_session_remap_report": output_root
+        / "current_week_replay_after_market_session_remap.md",
+        "same_day_transcript_interpretation_debug": output_root
+        / "same_day_transcript_interpretation_debug.csv",
+        "same_day_transcript_interpretation_debug_report": output_root
+        / "same_day_transcript_interpretation_debug.md",
+        "same_day_playbook_matches": output_root / "same_day_playbook_matches.csv",
+        "same_day_playbook_matches_report": output_root / "same_day_playbook_matches.md",
+        "current_week_same_day_guru_overlay": output_root
+        / "current_week_same_day_guru_overlay.csv",
+        "current_week_same_day_guru_overlay_report": output_root
+        / "current_week_same_day_guru_overlay.md",
         "research_gate_status_chart": charts_dir / "research_gate_status.svg",
         "transcript_corpus_manifest": output_root / "transcript_corpus_manifest.csv",
         "transcript_corpus_manifest_report": output_root / "transcript_corpus_manifest.md",
@@ -698,6 +722,7 @@ def write_research_report(
     guru_transcript_alignment_debug: GuruTranscriptAlignmentDebugResult | None = None,
     session_alignment_resolution: SessionAlignmentResolutionResult | None = None,
     transcript_identity_session_remap: TranscriptIdentitySessionRemapResult | None = None,
+    approved_session_remap_interpretation: ApprovedSessionRemapInterpretationResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -747,6 +772,8 @@ def write_research_report(
         *session_alignment_resolution_report_lines(session_alignment_resolution),
         "",
         *transcript_identity_session_remap_report_lines(transcript_identity_session_remap),
+        "",
+        *approved_session_remap_report_lines(approved_session_remap_interpretation),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
