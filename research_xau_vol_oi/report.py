@@ -77,6 +77,11 @@ from research_xau_vol_oi.transcript_identity_session_remap import (
     run_transcript_identity_session_remap_layer,
     transcript_identity_session_remap_report_lines,
 )
+from research_xau_vol_oi.transcript_timing_evidence import (
+    TimingEvidenceResult,
+    run_transcript_timing_evidence_layer,
+    timing_evidence_report_lines,
+)
 from research_xau_vol_oi.gold_baseline_lab import (
     GoldBaselineLabResult,
     run_gold_baseline_lab,
@@ -327,6 +332,9 @@ def run_pipeline(
     approved_session_remap_interpretation = run_approved_session_remap_interpretation_layer(
         output_dir=output_root,
     )
+    transcript_timing_evidence = run_transcript_timing_evidence_layer(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -361,6 +369,7 @@ def run_pipeline(
         session_alignment_resolution=session_alignment_resolution,
         transcript_identity_session_remap=transcript_identity_session_remap,
         approved_session_remap_interpretation=approved_session_remap_interpretation,
+        transcript_timing_evidence=transcript_timing_evidence,
         charts_dir=charts_dir,
     )
     return {
@@ -544,6 +553,23 @@ def run_pipeline(
         / "current_week_same_day_guru_overlay.csv",
         "current_week_same_day_guru_overlay_report": output_root
         / "current_week_same_day_guru_overlay.md",
+        "transcript_timing_metadata_audit": output_root / "transcript_timing_metadata_audit.csv",
+        "transcript_timing_metadata_audit_report": output_root
+        / "transcript_timing_metadata_audit.md",
+        "transcript_availability_classification": output_root
+        / "transcript_availability_classification.csv",
+        "transcript_availability_classification_report": output_root
+        / "transcript_availability_classification.md",
+        "same_day_filter_evidence": output_root / "same_day_filter_evidence.csv",
+        "same_day_filter_evidence_report": output_root / "same_day_filter_evidence.md",
+        "same_day_market_map_evidence": output_root / "same_day_market_map_evidence.csv",
+        "same_day_market_map_evidence_report": output_root
+        / "same_day_market_map_evidence.md",
+        "current_week_evidence_report": output_root / "current_week_evidence_report.md",
+        "current_week_evidence_scorecard": output_root / "current_week_evidence_scorecard.csv",
+        "transcript_metadata_fetch_plan": output_root / "transcript_metadata_fetch_plan.csv",
+        "transcript_metadata_fetch_plan_report": output_root
+        / "transcript_metadata_fetch_plan.md",
         "research_gate_status_chart": charts_dir / "research_gate_status.svg",
         "transcript_corpus_manifest": output_root / "transcript_corpus_manifest.csv",
         "transcript_corpus_manifest_report": output_root / "transcript_corpus_manifest.md",
@@ -723,6 +749,7 @@ def write_research_report(
     session_alignment_resolution: SessionAlignmentResolutionResult | None = None,
     transcript_identity_session_remap: TranscriptIdentitySessionRemapResult | None = None,
     approved_session_remap_interpretation: ApprovedSessionRemapInterpretationResult | None = None,
+    transcript_timing_evidence: TimingEvidenceResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -774,6 +801,8 @@ def write_research_report(
         *transcript_identity_session_remap_report_lines(transcript_identity_session_remap),
         "",
         *approved_session_remap_report_lines(approved_session_remap_interpretation),
+        "",
+        *timing_evidence_report_lines(transcript_timing_evidence),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
