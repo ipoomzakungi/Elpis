@@ -82,6 +82,11 @@ from research_xau_vol_oi.transcript_timing_evidence import (
     run_transcript_timing_evidence_layer,
     timing_evidence_report_lines,
 )
+from research_xau_vol_oi.youtube_metadata_recovery import (
+    YouTubeMetadataRecoveryResult,
+    run_youtube_metadata_recovery_layer,
+    youtube_metadata_recovery_report_lines,
+)
 from research_xau_vol_oi.gold_baseline_lab import (
     GoldBaselineLabResult,
     run_gold_baseline_lab,
@@ -335,6 +340,9 @@ def run_pipeline(
     transcript_timing_evidence = run_transcript_timing_evidence_layer(
         output_dir=output_root,
     )
+    youtube_metadata_recovery = run_youtube_metadata_recovery_layer(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -370,6 +378,7 @@ def run_pipeline(
         transcript_identity_session_remap=transcript_identity_session_remap,
         approved_session_remap_interpretation=approved_session_remap_interpretation,
         transcript_timing_evidence=transcript_timing_evidence,
+        youtube_metadata_recovery=youtube_metadata_recovery,
         charts_dir=charts_dir,
     )
     return {
@@ -570,6 +579,26 @@ def run_pipeline(
         "transcript_metadata_fetch_plan": output_root / "transcript_metadata_fetch_plan.csv",
         "transcript_metadata_fetch_plan_report": output_root
         / "transcript_metadata_fetch_plan.md",
+        "youtube_metadata_local_discovery": output_root
+        / "youtube_metadata_local_discovery.csv",
+        "youtube_metadata_local_discovery_report": output_root
+        / "youtube_metadata_local_discovery.md",
+        "youtube_metadata_fetch_requests": output_root / "youtube_metadata_fetch_requests.csv",
+        "youtube_metadata_fetch_plan": output_root / "youtube_metadata_fetch_plan.md",
+        "youtube_metadata_fetch_commands_sh": output_root / "youtube_metadata_fetch_commands.sh",
+        "youtube_metadata_fetch_commands_ps1": output_root / "youtube_metadata_fetch_commands.ps1",
+        "youtube_metadata_manual_entry_template": output_root
+        / "youtube_metadata_manual_entry_template.csv",
+        "transcript_timezone_audit": output_root / "transcript_timezone_audit.csv",
+        "transcript_timezone_audit_report": output_root / "transcript_timezone_audit.md",
+        "transcript_availability_classification_after_metadata": output_root
+        / "transcript_availability_classification_after_metadata.csv",
+        "same_day_filter_evidence_after_metadata": output_root
+        / "same_day_filter_evidence_after_metadata.csv",
+        "same_day_market_map_evidence_after_metadata": output_root
+        / "same_day_market_map_evidence_after_metadata.csv",
+        "current_week_evidence_report_after_metadata": output_root
+        / "current_week_evidence_report_after_metadata.md",
         "research_gate_status_chart": charts_dir / "research_gate_status.svg",
         "transcript_corpus_manifest": output_root / "transcript_corpus_manifest.csv",
         "transcript_corpus_manifest_report": output_root / "transcript_corpus_manifest.md",
@@ -750,6 +779,7 @@ def write_research_report(
     transcript_identity_session_remap: TranscriptIdentitySessionRemapResult | None = None,
     approved_session_remap_interpretation: ApprovedSessionRemapInterpretationResult | None = None,
     transcript_timing_evidence: TimingEvidenceResult | None = None,
+    youtube_metadata_recovery: YouTubeMetadataRecoveryResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -803,6 +833,8 @@ def write_research_report(
         *approved_session_remap_report_lines(approved_session_remap_interpretation),
         "",
         *timing_evidence_report_lines(transcript_timing_evidence),
+        "",
+        *youtube_metadata_recovery_report_lines(youtube_metadata_recovery),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
