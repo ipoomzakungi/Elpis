@@ -58,6 +58,11 @@ from research_xau_vol_oi.forward_event_evidence_aggregator import (
     forward_event_evidence_report_lines,
     run_forward_event_evidence_aggregator,
 )
+from research_xau_vol_oi.forward_evidence_integrity_audit import (
+    ForwardEvidenceIntegrityAuditResult,
+    forward_evidence_integrity_report_lines,
+    run_forward_evidence_integrity_audit,
+)
 from research_xau_vol_oi.data_recovery_audit import (
     DataRecoveryAuditResult,
     run_data_recovery_audit_layer,
@@ -383,6 +388,9 @@ def run_pipeline(
     forward_event_evidence = run_forward_event_evidence_aggregator(
         output_dir=output_root,
     )
+    forward_evidence_integrity = run_forward_evidence_integrity_audit(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -424,6 +432,7 @@ def run_pipeline(
         yahoo_intraday_outcome=yahoo_intraday_outcome,
         forward_outcome_review=forward_outcome_review,
         forward_event_evidence=forward_event_evidence,
+        forward_evidence_integrity=forward_evidence_integrity,
         charts_dir=charts_dir,
     )
     return {
@@ -717,6 +726,17 @@ def run_pipeline(
         "next_rule_focus_list_report": output_root / "next_rule_focus_list.md",
         "forward_event_scorecard": output_root / "forward_event_scorecard.csv",
         "forward_event_scorecard_report": output_root / "forward_event_scorecard.md",
+        "forward_evidence_count_reconciliation": output_root
+        / "forward_evidence_count_reconciliation.csv",
+        "forward_evidence_count_reconciliation_report": output_root
+        / "forward_evidence_count_reconciliation.md",
+        "forward_event_duplication_audit": output_root / "forward_event_duplication_audit.csv",
+        "forward_event_duplication_audit_report": output_root
+        / "forward_event_duplication_audit.md",
+        "forward_sample_size_by_definition": output_root
+        / "forward_sample_size_by_definition.csv",
+        "forward_sample_size_by_definition_report": output_root
+        / "forward_sample_size_by_definition.md",
         "speckit_prereq_warning": output_root / "speckit_prereq_warning.md",
         "rule_backtest_expectancy_chart": charts_dir / "rule_backtest_expectancy.svg",
         "rule_filter_value_chart": charts_dir / "rule_filter_value.svg",
@@ -908,6 +928,7 @@ def write_research_report(
     yahoo_intraday_outcome: YahooIntradayOutcomeResolverResult | None = None,
     forward_outcome_review: ForwardOutcomeReviewResult | None = None,
     forward_event_evidence: ForwardEventEvidenceAggregatorResult | None = None,
+    forward_evidence_integrity: ForwardEvidenceIntegrityAuditResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -973,6 +994,8 @@ def write_research_report(
         *forward_outcome_review_report_lines(forward_outcome_review),
         "",
         *forward_event_evidence_report_lines(forward_event_evidence),
+        "",
+        *forward_evidence_integrity_report_lines(forward_evidence_integrity),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
