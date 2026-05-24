@@ -39,6 +39,20 @@ def test_metadata_json_timestamp_parsing() -> None:
     assert timing.detected_live_end_timestamp == "2026-05-14T09:05:00"
 
 
+def test_metadata_json_epoch_timestamp_keeps_utc_offset() -> None:
+    timing = parse_metadata_json_timing(
+        {
+            "timestamp": 1778749200,
+            "live_start_time": 1778748300,
+        }
+    )
+
+    assert timing.timing_source == "YOUTUBE_METADATA_JSON"
+    assert timing.timing_confidence == "HIGH"
+    assert timing.detected_publish_timestamp.endswith("+00:00")
+    assert timing.detected_live_start_timestamp.endswith("+00:00")
+
+
 def test_srt_timecode_only_gives_relative_time_not_publish_time() -> None:
     timing = parse_srt_timecodes(
         "1\n00:00:01,000 --> 00:00:03,500\nhello\n\n"

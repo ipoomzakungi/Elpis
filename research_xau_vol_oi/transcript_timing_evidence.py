@@ -1189,7 +1189,7 @@ def _timestamp_from_value(value: Any) -> str:
         return ""
     if isinstance(value, (int, float)):
         try:
-            return datetime.fromtimestamp(float(value), tz=timezone.utc).replace(tzinfo=None).isoformat()
+            return datetime.fromtimestamp(float(value), tz=timezone.utc).isoformat()
         except (OverflowError, OSError, ValueError):
             return ""
     text = str(value).strip()

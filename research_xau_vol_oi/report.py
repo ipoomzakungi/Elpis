@@ -87,6 +87,11 @@ from research_xau_vol_oi.youtube_metadata_recovery import (
     run_youtube_metadata_recovery_layer,
     youtube_metadata_recovery_report_lines,
 )
+from research_xau_vol_oi.guru_rule_backtest_lab import (
+    GuruRuleBacktestLabResult,
+    guru_rule_backtest_lab_report_lines,
+    run_guru_rule_backtest_lab,
+)
 from research_xau_vol_oi.gold_baseline_lab import (
     GoldBaselineLabResult,
     run_gold_baseline_lab,
@@ -343,6 +348,9 @@ def run_pipeline(
     youtube_metadata_recovery = run_youtube_metadata_recovery_layer(
         output_dir=output_root,
     )
+    guru_rule_backtest_lab = run_guru_rule_backtest_lab(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -379,6 +387,7 @@ def run_pipeline(
         approved_session_remap_interpretation=approved_session_remap_interpretation,
         transcript_timing_evidence=transcript_timing_evidence,
         youtube_metadata_recovery=youtube_metadata_recovery,
+        guru_rule_backtest_lab=guru_rule_backtest_lab,
         charts_dir=charts_dir,
     )
     return {
@@ -599,6 +608,24 @@ def run_pipeline(
         / "same_day_market_map_evidence_after_metadata.csv",
         "current_week_evidence_report_after_metadata": output_root
         / "current_week_evidence_report_after_metadata.md",
+        "guru_rule_library": output_root / "guru_rule_library.csv",
+        "guru_rule_library_report": output_root / "guru_rule_library.md",
+        "guru_rule_definitions": output_root / "guru_rule_definitions.yaml",
+        "guru_rule_backtest_events": output_root / "guru_rule_backtest_events.csv",
+        "guru_rule_backtest_summary": output_root / "guru_rule_backtest_summary.csv",
+        "guru_rule_backtest_by_period": output_root / "guru_rule_backtest_by_period.csv",
+        "guru_rule_backtest_report": output_root / "guru_rule_backtest_report.md",
+        "guru_rule_formation_test_results": output_root
+        / "guru_rule_formation_test_results.csv",
+        "guru_rule_ablation": output_root / "guru_rule_ablation.csv",
+        "guru_rule_ablation_report": output_root / "guru_rule_ablation_report.md",
+        "range_period_rule_backtest_report": output_root
+        / "range_period_rule_backtest_report.md",
+        "range_period_rule_scorecard": output_root / "range_period_rule_scorecard.csv",
+        "rule_backtest_expectancy_chart": charts_dir / "rule_backtest_expectancy.svg",
+        "rule_filter_value_chart": charts_dir / "rule_filter_value.svg",
+        "rule_market_map_hit_rate_chart": charts_dir / "rule_market_map_hit_rate.svg",
+        "rule_mode_coverage_chart": charts_dir / "rule_mode_coverage.svg",
         "research_gate_status_chart": charts_dir / "research_gate_status.svg",
         "transcript_corpus_manifest": output_root / "transcript_corpus_manifest.csv",
         "transcript_corpus_manifest_report": output_root / "transcript_corpus_manifest.md",
@@ -780,6 +807,7 @@ def write_research_report(
     approved_session_remap_interpretation: ApprovedSessionRemapInterpretationResult | None = None,
     transcript_timing_evidence: TimingEvidenceResult | None = None,
     youtube_metadata_recovery: YouTubeMetadataRecoveryResult | None = None,
+    guru_rule_backtest_lab: GuruRuleBacktestLabResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -835,6 +863,8 @@ def write_research_report(
         *timing_evidence_report_lines(transcript_timing_evidence),
         "",
         *youtube_metadata_recovery_report_lines(youtube_metadata_recovery),
+        "",
+        *guru_rule_backtest_lab_report_lines(guru_rule_backtest_lab),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
