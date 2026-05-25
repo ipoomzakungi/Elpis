@@ -141,6 +141,7 @@ from research_xau_vol_oi.market_map_proof_pack import (
     MarketMapProofPackResult,
     run_market_map_proof_pack,
 )
+from research_xau_vol_oi.pine_python_engine import run_pine_python_engine_lab
 from research_xau_vol_oi.pine_strategy_overlay_lab import run_pine_strategy_overlay_lab
 from research_xau_vol_oi.research_decision_gate import (
     ResearchDecisionGateResult,
@@ -437,6 +438,7 @@ def run_pipeline(
         charts_dir=charts_dir,
     )
     run_pine_strategy_overlay_lab(output_dir=output_root)
+    run_pine_python_engine_lab(output_dir=output_root)
     return {
         "feature_table": feature_path,
         "signal_events": events_path,
@@ -760,6 +762,14 @@ def run_pipeline(
         "pine_overlay_backtest_summary": output_root / "pine_overlay_backtest_summary.csv",
         "pine_overlay_formation_test": output_root / "pine_overlay_formation_test.csv",
         "pine_fast_start_decision": output_root / "pine_fast_start_decision.csv",
+        "yahoo_ohlc_inventory": output_root / "yahoo_ohlc_inventory.csv",
+        "python_indicator_snapshot": output_root / "python_indicator_snapshot.csv",
+        "python_pine_like_signals": output_root / "python_pine_like_signals.csv",
+        "python_pine_like_backtest_summary": output_root
+        / "python_pine_like_backtest_summary.csv",
+        "python_cme_guru_overlay_summary": output_root / "python_cme_guru_overlay_summary.csv",
+        "python_vs_tradingview_parity": output_root / "python_vs_tradingview_parity.csv",
+        "python_fast_use_decision": output_root / "python_fast_use_decision.csv",
         "backtest_summary": summary_path,
         "research_report": report_path,
         "leakage_audit_report": audit_path,
