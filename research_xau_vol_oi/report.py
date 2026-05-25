@@ -146,6 +146,9 @@ from research_xau_vol_oi.pine_strategy_overlay_lab import run_pine_strategy_over
 from research_xau_vol_oi.python_engine_expanded_backtest import (
     run_python_engine_expanded_backtest_lab,
 )
+from research_xau_vol_oi.python_single_timeframe_validation import (
+    run_single_timeframe_validation_lab,
+)
 from research_xau_vol_oi.research_decision_gate import (
     ResearchDecisionGateResult,
     run_research_decision_gate,
@@ -443,6 +446,7 @@ def run_pipeline(
     run_pine_strategy_overlay_lab(output_dir=output_root)
     run_pine_python_engine_lab(output_dir=output_root)
     run_python_engine_expanded_backtest_lab(output_dir=output_root)
+    run_single_timeframe_validation_lab(output_dir=output_root)
     return {
         "feature_table": feature_path,
         "signal_events": events_path,
@@ -781,6 +785,12 @@ def run_pipeline(
         "python_indicator_diagnostics": output_root / "python_indicator_diagnostics.csv",
         "python_grid_sensitivity_preview": output_root / "python_grid_sensitivity_preview.csv",
         "python_engine_fast_use_decision": output_root / "python_engine_fast_use_decision.csv",
+        "python_single_timeframe_results": output_root / "python_single_timeframe_results.csv",
+        "python_walk_forward_by_timeframe": output_root / "python_walk_forward_by_timeframe.csv",
+        "python_4h_candidate_deep_dive": output_root / "python_4h_candidate_deep_dive.csv",
+        "python_fee_drag_by_timeframe": output_root / "python_fee_drag_by_timeframe.csv",
+        "python_timeframe_decision": output_root / "python_timeframe_decision.csv",
+        "python_4h_candidate_chart": charts_dir / "python_4h_candidate_chart.html",
         "backtest_summary": summary_path,
         "research_report": report_path,
         "leakage_audit_report": audit_path,
