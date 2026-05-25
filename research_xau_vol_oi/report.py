@@ -141,6 +141,7 @@ from research_xau_vol_oi.market_map_proof_pack import (
     MarketMapProofPackResult,
     run_market_map_proof_pack,
 )
+from research_xau_vol_oi.pine_strategy_overlay_lab import run_pine_strategy_overlay_lab
 from research_xau_vol_oi.research_decision_gate import (
     ResearchDecisionGateResult,
     run_research_decision_gate,
@@ -435,6 +436,7 @@ def run_pipeline(
         forward_evidence_integrity=forward_evidence_integrity,
         charts_dir=charts_dir,
     )
+    run_pine_strategy_overlay_lab(output_dir=output_root)
     return {
         "feature_table": feature_path,
         "signal_events": events_path,
@@ -754,6 +756,10 @@ def run_pipeline(
         "codex_session_search_report": output_root / "codex_session_search_report.md",
         "source_recovery_action_plan": output_root / "source_recovery_action_plan.md",
         "privacy_path_audit_report": output_root / "privacy_path_audit_report.md",
+        "pine_baseline_summary": output_root / "pine_baseline_summary.csv",
+        "pine_overlay_backtest_summary": output_root / "pine_overlay_backtest_summary.csv",
+        "pine_overlay_formation_test": output_root / "pine_overlay_formation_test.csv",
+        "pine_fast_start_decision": output_root / "pine_fast_start_decision.csv",
         "backtest_summary": summary_path,
         "research_report": report_path,
         "leakage_audit_report": audit_path,
