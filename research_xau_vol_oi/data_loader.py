@@ -70,7 +70,7 @@ def discover_data_files(
                 "category": pl.String,
             }
         )
-    return pl.DataFrame(rows).sort("path")
+    return pl.DataFrame(rows, infer_schema_length=None).sort("path")
 
 
 def categorize_data_file(path: str | Path) -> str:
@@ -141,7 +141,7 @@ def load_transcripts(paths: Iterable[str | Path]) -> pl.DataFrame:
                 "text": doc.text,
             }
         )
-    return pl.DataFrame(rows) if rows else pl.DataFrame()
+    return pl.DataFrame(rows, infer_schema_length=None) if rows else pl.DataFrame()
 
 
 def standardize_price_frame(
@@ -189,7 +189,7 @@ def standardize_price_frame(
 
     if not rows:
         raise DataLoadError("Price frame is empty")
-    return pl.DataFrame(rows).sort("timestamp")
+    return pl.DataFrame(rows, infer_schema_length=None).sort("timestamp")
 
 
 def standardize_options_frame(
@@ -272,7 +272,7 @@ def standardize_options_frame(
 
     if not rows:
         raise DataLoadError("Options frame is empty")
-    return pl.DataFrame(rows).sort(["timestamp", "expiry", "strike"])
+    return pl.DataFrame(rows, infer_schema_length=None).sort(["timestamp", "expiry", "strike"])
 
 
 def _is_excluded(path: Path, config: ResearchConfig) -> bool:

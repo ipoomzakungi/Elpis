@@ -44,6 +44,11 @@ from research_xau_vol_oi.daily_forward_data_gate import (
     daily_forward_data_gate_report_lines,
     run_daily_forward_data_gate,
 )
+from research_xau_vol_oi.dukascopy_spot_integration import (
+    DukascopySpotIntegrationResult,
+    dukascopy_report_lines,
+    run_dukascopy_spot_integration,
+)
 from research_xau_vol_oi.yahoo_intraday_outcome_resolver import (
     YahooIntradayOutcomeResolverResult,
     run_yahoo_intraday_outcome_resolver,
@@ -182,6 +187,7 @@ def run_pipeline(
     options_path: str | Path | None = None,
     output_dir: str | Path | None = None,
     config: ResearchConfig | None = None,
+    dukascopy_use_cache: bool = True,
 ) -> dict[str, Path]:
     """Run the local research pipeline and write requested outputs."""
 
@@ -198,6 +204,10 @@ def run_pipeline(
     output_root.mkdir(parents=True, exist_ok=True)
     charts_dir.mkdir(parents=True, exist_ok=True)
 
+    dukascopy_spot = run_dukascopy_spot_integration(
+        output_dir=output_root,
+        use_cache=dukascopy_use_cache,
+    )
     inventory = discover_data_files(config=cfg)
     inventory.write_csv(output_root / "data_inventory.csv")
 
@@ -442,6 +452,7 @@ def run_pipeline(
         forward_outcome_review=forward_outcome_review,
         forward_event_evidence=forward_event_evidence,
         forward_evidence_integrity=forward_evidence_integrity,
+        dukascopy_spot=dukascopy_spot,
         charts_dir=charts_dir,
     )
     run_pine_strategy_overlay_lab(output_dir=output_root)
@@ -800,11 +811,51 @@ def run_pipeline(
         "cme_overlap_entry_tp_summary": output_root / "cme_overlap_entry_tp_summary.csv",
         "cme_overlap_timeframe_comparison": output_root / "cme_overlap_timeframe_comparison.csv",
         "cme_overlap_pilot_decision": output_root / "cme_overlap_pilot_decision.csv",
+        "dukascopy_xau_m1_mid": output_root / "dukascopy_xau_m1_mid.parquet",
+        "dukascopy_data_readiness_summary": output_root / "dukascopy_data_readiness_summary.md",
         "backtest_summary": summary_path,
         "research_report": report_path,
         "leakage_audit_report": audit_path,
         "signal_dashboard": output_root / "signal_dashboard.html",
         "charts": charts_dir,
+    }
+
+
+def run_dukascopy_only_pipeline(
+    *,
+    cleaned_path: str | Path | None = None,
+    output_dir: str | Path | None = None,
+    config: ResearchConfig | None = None,
+    use_cache: bool = True,
+) -> dict[str, Path]:
+    """Run only the Dukascopy spot refresh and write a focused research report."""
+
+    cfg = config or ResearchConfig()
+    if output_dir is not None:
+        cfg = ResearchConfig(output_dir=Path(output_dir))
+    output_root = cfg.output_dir
+    output_root.mkdir(parents=True, exist_ok=True)
+    kwargs: dict[str, Any] = {
+        "output_dir": output_root,
+        "use_cache": use_cache,
+    }
+    if cleaned_path is not None:
+        kwargs["cleaned_path"] = cleaned_path
+    result = run_dukascopy_spot_integration(**kwargs)
+    report_path = output_root / "research_report.md"
+    report_path.write_text(
+        "\n".join(
+            [
+                "# XAU Vol-OI Research Report",
+                "",
+                *dukascopy_report_lines(result),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return {
+        "research_report": report_path,
+        **result.paths,
     }
 
 
@@ -821,7 +872,12 @@ def select_default_inputs(
     default_price = Path("data/raw/yahoo/gc=f_15m_ohlcv_20260513_20260521.parquet")
     default_options = Path("backend/data/raw/xau/quikstrike_20260513_101537_xau_vol_oi_input.csv")
     if price_path is None and not default_price.exists():
-        candidates = sorted(Path("data/raw/yahoo").glob("*ohlcv*.parquet"))
+        yahoo_root = Path("data/raw/yahoo")
+        candidates = sorted(yahoo_root.glob("*xauusd*ohlcv*.parquet")) if yahoo_root.exists() else []
+        if not candidates and yahoo_root.exists():
+            candidates = sorted(yahoo_root.glob("*gc=f*ohlcv*.parquet"))
+        if not candidates and yahoo_root.exists():
+            candidates = sorted(yahoo_root.glob("*gld*ohlcv*.parquet"))
         if not candidates:
             raise DataLoadError("No default Yahoo/price OHLCV parquet file was found.")
         default_price = candidates[-1]
@@ -870,7 +926,7 @@ def attach_wall_context(
                 "next_wall_distance": wall.get("next_wall_distance") if wall else None,
             }
         )
-    return pl.DataFrame(rows) if rows else price_features
+    return pl.DataFrame(rows, infer_schema_length=None) if rows else price_features
 
 
 def write_charts(
@@ -975,6 +1031,7 @@ def write_research_report(
     forward_outcome_review: ForwardOutcomeReviewResult | None = None,
     forward_event_evidence: ForwardEventEvidenceAggregatorResult | None = None,
     forward_evidence_integrity: ForwardEvidenceIntegrityAuditResult | None = None,
+    dukascopy_spot: DukascopySpotIntegrationResult | None = None,
     charts_dir: Path,
 ) -> None:
     """Write a research report that answers the requested evaluation questions."""
@@ -1006,6 +1063,8 @@ def write_research_report(
         "## Data Recovery and Coverage Audit",
         "",
         *_data_recovery_lines(data_recovery),
+        "",
+        *dukascopy_report_lines(dukascopy_spot),
         "",
         "## Validation-Grade CME History Normalizer",
         "",
@@ -2763,8 +2822,36 @@ def main() -> None:
     parser.add_argument("--price", type=Path, default=None)
     parser.add_argument("--options", type=Path, default=None)
     parser.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    parser.add_argument(
+        "--dukascopy-only",
+        action="store_true",
+        help="Run only the Dukascopy spot/outcome refresh layer.",
+    )
+    parser.add_argument(
+        "--cleaned-dukascopy",
+        type=Path,
+        default=None,
+        help="Optional cleaned Dukascopy M1 Parquet path for --dukascopy-only.",
+    )
+    parser.add_argument(
+        "--force-refresh",
+        action="store_true",
+        help="Ignore the Dukascopy manifest cache and rebuild derived artifacts.",
+    )
     args = parser.parse_args()
-    paths = run_pipeline(price_path=args.price, options_path=args.options, output_dir=args.output_dir)
+    if args.dukascopy_only:
+        paths = run_dukascopy_only_pipeline(
+            cleaned_path=args.cleaned_dukascopy,
+            output_dir=args.output_dir,
+            use_cache=not args.force_refresh,
+        )
+    else:
+        paths = run_pipeline(
+            price_path=args.price,
+            options_path=args.options,
+            output_dir=args.output_dir,
+            dukascopy_use_cache=not args.force_refresh,
+        )
     for name, path in paths.items():
         print(f"{name}: {path}")
 

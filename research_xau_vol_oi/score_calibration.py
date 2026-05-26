@@ -168,7 +168,7 @@ def score_bucket_performance(
                 min_sample_size=min_sample_size,
             )
             rows.append(metrics)
-    return pl.DataFrame(rows) if rows else _empty_performance()
+    return pl.DataFrame(rows, infer_schema_length=None) if rows else _empty_performance()
 
 
 def score_threshold_performance(
@@ -222,7 +222,7 @@ def score_threshold_performance(
                         "slippage_points_per_side": stressed_cfg.slippage_points_per_side,
                     }
                 )
-    return pl.DataFrame(rows) if rows else _empty_threshold_performance()
+    return pl.DataFrame(rows, infer_schema_length=None) if rows else _empty_threshold_performance()
 
 
 def walk_forward_score_calibration(
@@ -322,7 +322,7 @@ def walk_forward_score_calibration(
             )
         split_id += 1
         start = test_end + 1
-    return pl.DataFrame(rows) if rows else _empty_walk_forward()
+    return pl.DataFrame(rows, infer_schema_length=None) if rows else _empty_walk_forward()
 
 
 def classify_score_monotonicity(deciles: pl.DataFrame) -> dict[str, Any]:
@@ -412,7 +412,7 @@ def feature_ablation(
                 "impact": "improves" if expectancy_delta > 0 else "worsens" if expectancy_delta < 0 else "unchanged",
             }
         )
-    return pl.DataFrame(rows) if rows else _empty_ablation()
+    return pl.DataFrame(rows, infer_schema_length=None) if rows else _empty_ablation()
 
 
 def build_signal_kill_list(
@@ -484,7 +484,7 @@ def build_signal_kill_list(
                 "recommendation": recommendation,
             }
         )
-    return pl.DataFrame(rows) if rows else _empty_kill_list()
+    return pl.DataFrame(rows, infer_schema_length=None) if rows else _empty_kill_list()
 
 
 def threshold_policy_recommendation(
@@ -735,7 +735,7 @@ def _enrich_scores(signal_scores: pl.DataFrame, signal_events: pl.DataFrame) -> 
                 "signal": score.get("signal_label"),
             }
         )
-    return pl.DataFrame(rows)
+    return pl.DataFrame(rows, infer_schema_length=None)
 
 
 def score_decile(score: Any) -> str:
@@ -1100,7 +1100,7 @@ def _add_score_decile(frame: pl.DataFrame) -> pl.DataFrame:
     if frame.is_empty() or "score_decile" in frame.columns:
         return frame
     rows = [{**row, "score_decile": score_decile(row.get("signal_score"))} for row in frame.to_dicts()]
-    return pl.DataFrame(rows) if rows else frame
+    return pl.DataFrame(rows, infer_schema_length=None) if rows else frame
 
 
 def _sigma_zone(value: Any) -> str:

@@ -75,7 +75,7 @@ def add_volatility_regime(price: pl.DataFrame) -> pl.DataFrame:
                 "vol_regime": regime.value,
             }
         )
-    return pl.DataFrame(rows) if rows else price
+    return pl.DataFrame(rows, infer_schema_length=None) if rows else price
 
 
 def add_bollinger_baseline(

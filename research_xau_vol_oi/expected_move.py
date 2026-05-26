@@ -119,7 +119,7 @@ def add_expected_move_columns(
                 "lower_3sd": float(session_open) - move.three_sd_remaining,
             }
         )
-    return pl.DataFrame(rows)
+    return pl.DataFrame(rows, infer_schema_length=None)
 
 
 def add_expected_move_columns_asof_options(
@@ -204,7 +204,7 @@ def add_expected_move_columns_asof_options(
                 "data_quality_state": "VALID",
             }
         )
-    return pl.DataFrame(rows)
+    return pl.DataFrame(rows, infer_schema_length=None)
 
 
 def time_remaining_fraction(

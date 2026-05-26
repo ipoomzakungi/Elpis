@@ -122,7 +122,7 @@ def score_signal_events(
                 disabled_components=disabled_components,
             ).as_dict()
         )
-    return pl.DataFrame(rows) if rows else _empty_scores()
+    return pl.DataFrame(rows, infer_schema_length=None) if rows else _empty_scores()
 
 
 def score_signal_event(

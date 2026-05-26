@@ -689,12 +689,13 @@ def write_one_week_expected_range_svg(path: Path, frame: pl.DataFrame) -> None:
 
 
 def _load_existing_outputs(output_root: Path) -> dict[str, pl.DataFrame]:
+    spot = _read_frame(output_root / "cme_canonical_xau_spot_price.parquet", _spot_schema())
     return {
         "validation_days": _read_frame(output_root / "cme_validation_grade_days.csv", _date_usability_input_schema()),
         "option_oi": _read_frame(output_root / "cme_canonical_option_oi_by_strike.parquet", _option_oi_schema()),
         "option_iv": _read_frame(output_root / "cme_canonical_option_iv_by_strike.parquet", _option_iv_schema()),
         "futures": _read_frame(output_root / "cme_canonical_futures_price.parquet", _futures_schema()),
-        "spot": _read_frame(output_root / "cme_canonical_xau_spot_price.parquet", _spot_schema()),
+        "spot": _compact_price_frame(spot),
         "basis": _read_frame(output_root / "cme_canonical_basis.parquet", _basis_schema()),
         "events": _read_frame(output_root / "cme_canonical_macro_event_calendar.csv", _event_schema()),
         "validation_dataset": _read_frame(output_root / "xau_vol_oi_validation_dataset.parquet", {}),
@@ -718,6 +719,32 @@ def _read_frame(path: Path, schema: dict[str, Any]) -> pl.DataFrame:
         return pl.read_csv(path)
     except Exception:
         return pl.DataFrame(schema=schema)
+
+
+def _compact_price_frame(frame: pl.DataFrame, *, max_rows: int = 20_000) -> pl.DataFrame:
+    """Reduce large intraday price frames to date-level OHLC for this audit."""
+
+    if frame.is_empty() or frame.height <= max_rows or "trade_date" not in frame.columns:
+        return frame
+    columns = set(frame.columns)
+    aggregations = []
+    if "timestamp" in columns:
+        aggregations.append(pl.col("timestamp").max().alias("timestamp"))
+    if "open" in columns:
+        aggregations.append(pl.col("open").first().alias("open"))
+    if "high" in columns:
+        aggregations.append(pl.col("high").max().alias("high"))
+    if "low" in columns:
+        aggregations.append(pl.col("low").min().alias("low"))
+    if "close" in columns:
+        aggregations.append(pl.col("close").last().alias("close"))
+    if "spot_price" in columns:
+        aggregations.append(pl.col("spot_price").last().alias("spot_price"))
+    if not aggregations:
+        return frame
+    return frame.sort("timestamp" if "timestamp" in columns else "trade_date").group_by(
+        "trade_date"
+    ).agg(aggregations).sort("trade_date")
 
 
 def _flags_for_date(frames: dict[str, pl.DataFrame], trade_date: str) -> dict[str, bool]:

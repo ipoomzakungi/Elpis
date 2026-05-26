@@ -26,6 +26,7 @@ from research_xau_vol_oi.config import ResearchConfig
 
 TRANSCRIPT_EXTENSIONS = {".txt", ".zip"}
 MARKET_EXTENSIONS = {".csv", ".parquet", ".xlsx", ".xls", ".json", ".jsonl", ".md"}
+MAX_MARKET_AUDIT_READ_BYTES = 20_000_000
 FORBIDDEN_SKIP_DIRS = {
     ".git",
     ".venv",
@@ -884,6 +885,13 @@ def _market_file_row(path: Path, config: RecoveryAuditConfig) -> dict[str, Any]:
 def _read_market_frame(path: Path) -> tuple[pl.DataFrame, list[str], int | None, str]:
     suffix = path.suffix.lower()
     try:
+        if path.stat().st_size > MAX_MARKET_AUDIT_READ_BYTES:
+            return (
+                pl.DataFrame(),
+                [],
+                None,
+                "large tabular artifact; skipped full read in generic recovery audit",
+            )
         if suffix == ".parquet":
             frame = pl.read_parquet(path)
         elif suffix == ".csv":
@@ -1347,7 +1355,7 @@ def _normalize_col(column: str) -> str:
 
 def _frame(rows: list[dict[str, Any]], schema: dict[str, Any]) -> pl.DataFrame:
     if rows:
-        return pl.DataFrame(rows).select(list(schema))
+        return pl.DataFrame(rows, infer_schema_length=None).select(list(schema))
     return pl.DataFrame(schema=schema)
 
 

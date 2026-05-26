@@ -32,6 +32,7 @@ DEFAULT_SPOT_DATA_ROOTS = (
 )
 SUPPORTED_SPOT_EXTENSIONS = {".csv", ".parquet", ".xlsx", ".xls", ".json", ".jsonl", ".txt", ".tsv"}
 EXCLUDED_DIR_NAMES = {".git", ".venv", "venv", "node_modules", ".next", "__pycache__", ".pytest_cache"}
+MAX_SPOT_AUDIT_READ_BYTES = 20_000_000
 PILOT_DATES = {
     "2026-05-14",
     "2026-05-15",
@@ -167,6 +168,12 @@ def run_current_week_replay_layer(
 def load_current_week_inputs(output_root: Path) -> dict[str, pl.DataFrame]:
     """Load optional input artifacts with empty-frame fallbacks."""
 
+    dukascopy_spot = _compact_spot_frame(
+        _load_optional(output_root / "cme_canonical_xau_spot_price_from_dukascopy.parquet")
+    )
+    canonical_spot = _compact_spot_frame(
+        _load_optional(output_root / "cme_canonical_xau_spot_price.parquet")
+    )
     return {
         "date_usability": _load_optional(output_root / "current_cme_date_usability.csv"),
         "one_week": _load_optional(output_root / "one_week_cme_pilot_summary.csv"),
@@ -174,7 +181,7 @@ def load_current_week_inputs(output_root: Path) -> dict[str, pl.DataFrame]:
         "option_oi": _load_optional(output_root / "cme_canonical_option_oi_by_strike.parquet"),
         "option_iv": _load_optional(output_root / "cme_canonical_option_iv_by_strike.parquet"),
         "futures": _load_optional(output_root / "cme_canonical_futures_price.parquet"),
-        "spot": _load_optional(output_root / "cme_canonical_xau_spot_price.parquet"),
+        "spot": dukascopy_spot if not dukascopy_spot.is_empty() else canonical_spot,
         "basis": _load_optional(output_root / "cme_canonical_basis.parquet"),
         "validation_dataset": _load_optional(output_root / "xau_vol_oi_validation_dataset.parquet"),
         "guru_kb": _load_optional(output_root / "guru_logic_knowledge_base.csv"),
@@ -212,6 +219,8 @@ def detect_spot_ohlc_files(
     audit_rows: list[dict[str, Any]] = []
     spot_frames: list[pl.DataFrame] = []
     for path in _candidate_paths(roots):
+        if _is_large_spot_artifact(path):
+            continue
         try:
             frame = load_supported_table(path)
         except Exception:
@@ -1074,6 +1083,43 @@ def _prefer_backfilled_spot(canonical: pl.DataFrame, backfilled: pl.DataFrame) -
     return pl.concat([canonical, backfilled], how="diagonal_relaxed")
 
 
+def _compact_spot_frame(frame: pl.DataFrame, *, max_rows: int = 20_000) -> pl.DataFrame:
+    """Reduce large intraday spot frames to date-level OHLC for replay summaries."""
+
+    if frame.is_empty() or frame.height <= max_rows or "trade_date" not in frame.columns:
+        return frame
+    columns = set(frame.columns)
+    aggregations = []
+    if "timestamp" in columns:
+        aggregations.append(pl.col("timestamp").max().alias("timestamp"))
+    for source, op in [
+        ("open", "first"),
+        ("high", "max"),
+        ("low", "min"),
+        ("close", "last"),
+        ("spot_price", "last"),
+    ]:
+        if source not in columns:
+            continue
+        expr = getattr(pl.col(source), op)().alias(source)
+        aggregations.append(expr)
+    if not aggregations:
+        return frame
+    sort_col = "timestamp" if "timestamp" in columns else "trade_date"
+    return frame.sort(sort_col).group_by("trade_date").agg(aggregations).sort("trade_date")
+
+
+def _is_large_spot_artifact(path: Path) -> bool:
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return False
+    if size <= MAX_SPOT_AUDIT_READ_BYTES:
+        return False
+    lower = path.as_posix().lower()
+    return "xau" in lower or "spot" in lower or "dukascopy" in lower
+
+
 def _validation_grade(flags: dict[str, bool]) -> str:
     has_price = flags["has_xau_spot_price"]
     has_futures_basis = flags["has_gc_futures_price"] and flags["has_basis"]
@@ -1247,7 +1293,13 @@ def _usable_basis_frame(frame: pl.DataFrame) -> pl.DataFrame:
     if frame.is_empty():
         return frame
     rows = [row for row in frame.to_dicts() if _basis_row_is_usable(row)]
-    return _frame(rows, _basis_backfill_schema()) if rows and "join_tolerance" in frame.columns else pl.DataFrame(rows) if rows else frame.clear()
+    return (
+        _frame(rows, _basis_backfill_schema())
+        if rows and "join_tolerance" in frame.columns
+        else pl.DataFrame(rows, infer_schema_length=None)
+        if rows
+        else frame.clear()
+    )
 
 
 def _basis_row_is_usable(row: dict[str, Any]) -> bool:

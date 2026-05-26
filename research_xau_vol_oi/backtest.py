@@ -86,7 +86,7 @@ def run_event_backtest(
                 "research_only": True,
             }
         )
-    return pl.DataFrame(trades) if trades else _empty_trades()
+    return pl.DataFrame(trades, infer_schema_length=None) if trades else _empty_trades()
 
 
 def summarize_backtest(trades: pl.DataFrame) -> pl.DataFrame:
@@ -103,7 +103,7 @@ def summarize_backtest(trades: pl.DataFrame) -> pl.DataFrame:
         ("vol_regime", "iv_rv_vrp_regime"),
     ]:
         rows.extend(_summarize_group(trades.to_dicts(), group_type=label, key=key))
-    return pl.DataFrame(rows)
+    return pl.DataFrame(rows, infer_schema_length=None)
 
 
 def summarize_event_coverage(events: pl.DataFrame) -> pl.DataFrame:
@@ -132,7 +132,7 @@ def summarize_event_coverage(events: pl.DataFrame) -> pl.DataFrame:
                 "average_time_in_trade": None,
             }
         )
-    return pl.DataFrame(rows)
+    return pl.DataFrame(rows, infer_schema_length=None)
 
 
 def generate_random_baseline_events(
@@ -156,7 +156,7 @@ def generate_random_baseline_events(
                     "reason": "random_direction_control",
                 }
             )
-    return pl.DataFrame(rows) if rows else pl.DataFrame()
+    return pl.DataFrame(rows, infer_schema_length=None) if rows else pl.DataFrame()
 
 
 def generate_sd_only_baseline_events(price_features: pl.DataFrame) -> pl.DataFrame:
@@ -189,7 +189,7 @@ def generate_sd_only_baseline_events(price_features: pl.DataFrame) -> pl.DataFra
                 "research_only": True,
             }
         )
-    return pl.DataFrame(rows) if rows else pl.DataFrame()
+    return pl.DataFrame(rows, infer_schema_length=None) if rows else pl.DataFrame()
 
 
 def generate_oi_wall_only_baseline_events(price_features: pl.DataFrame) -> pl.DataFrame:
@@ -223,7 +223,7 @@ def generate_oi_wall_only_baseline_events(price_features: pl.DataFrame) -> pl.Da
                 "research_only": True,
             }
         )
-    return pl.DataFrame(rows) if rows else pl.DataFrame()
+    return pl.DataFrame(rows, infer_schema_length=None) if rows else pl.DataFrame()
 
 
 def generate_bollinger_baseline_events(price_features: pl.DataFrame) -> pl.DataFrame:
@@ -258,7 +258,7 @@ def generate_bollinger_baseline_events(price_features: pl.DataFrame) -> pl.DataF
                 "research_only": True,
             }
         )
-    return pl.DataFrame(rows) if rows else pl.DataFrame()
+    return pl.DataFrame(rows, infer_schema_length=None) if rows else pl.DataFrame()
 
 
 def backtest_all_scenarios(
@@ -350,7 +350,7 @@ def walk_forward_validate(
         )
         split_id += 1
         start = test_end + 1
-    return pl.DataFrame(rows) if rows else pl.DataFrame()
+    return pl.DataFrame(rows, infer_schema_length=None) if rows else pl.DataFrame()
 
 
 def run_cost_stress(
@@ -386,7 +386,7 @@ def run_cost_stress(
                     "max_drawdown": row["max_drawdown"],
                 }
             )
-    return pl.DataFrame(rows) if rows else pl.DataFrame()
+    return pl.DataFrame(rows, infer_schema_length=None) if rows else pl.DataFrame()
 
 
 def _direction_for_event(

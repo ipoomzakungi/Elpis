@@ -118,7 +118,7 @@ def build_signal_events(
             event["event_timestamp"] = next_bar["timestamp"]
             event["confirmation_timestamp"] = next_bar["timestamp"]
         events.append(event)
-    return pl.DataFrame(events) if events else _empty_events()
+    return pl.DataFrame(events, infer_schema_length=None) if events else _empty_events()
 
 
 def choose_wall_for_bar(

@@ -1873,17 +1873,28 @@ def _redact_text(text: str) -> str:
 def _price_candidates(timeframe: str, output_root: Path) -> list[Path]:
     names = {
         "m1": [
+            output_root / "dukascopy_xau_m1_mid.parquet",
             output_root / "xau_spot_dukascopy_m1.parquet",
             Path("data_pipeline/data/processed/xauusd_m1_2024_to_now.parquet"),
         ],
         "15m": [
+            output_root / "dukascopy_xau_15m.parquet",
             output_root / "xau_spot_dukascopy_15m.parquet",
             Path("data_pipeline/data/processed/xauusd_m15_2024_to_now.parquet"),
         ],
-        "30m": [output_root / "xau_spot_dukascopy_30m.parquet"],
-        "1h": [output_root / "xau_spot_dukascopy_1h.parquet"],
+        "30m": [
+            output_root / "dukascopy_xau_30m.parquet",
+            output_root / "xau_spot_dukascopy_30m.parquet",
+        ],
+        "1h": [
+            output_root / "dukascopy_xau_1h.parquet",
+            output_root / "xau_spot_dukascopy_1h.parquet",
+        ],
         "2h": [],
-        "4h": [output_root / "xau_spot_dukascopy_4h.parquet"],
+        "4h": [
+            output_root / "dukascopy_xau_4h.parquet",
+            output_root / "xau_spot_dukascopy_4h.parquet",
+        ],
     }
     return names.get(timeframe, [])
 

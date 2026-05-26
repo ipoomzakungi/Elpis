@@ -62,4 +62,4 @@ def add_basis_columns(
                 "basis_available": basis is not None,
             }
         )
-    return pl.DataFrame(rows) if rows else options
+    return pl.DataFrame(rows, infer_schema_length=None) if rows else options
