@@ -22,6 +22,11 @@ from research_xau_vol_oi.cme_history_importer import (
     CmeHistoryImporterResult,
     run_cme_history_importer,
 )
+from research_xau_vol_oi.cme_overlap_backtest_lab import (
+    CmeOverlapBacktestLabResult,
+    cme_overlap_backtest_report_lines,
+    run_cme_overlap_backtest_lab,
+)
 from research_xau_vol_oi.cme_overlap_entry_tp_lab import run_cme_overlap_entry_tp_lab
 from research_xau_vol_oi.config import ResearchConfig
 from research_xau_vol_oi.approved_session_remap_interpretation import (
@@ -448,6 +453,7 @@ def run_pipeline(
     xau_trade_quality_usage_guide = run_xau_trade_quality_usage_guide(
         output_dir=output_root,
     )
+    cme_overlap_backtest_lab = run_cme_overlap_backtest_lab(output_dir=output_root)
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -494,6 +500,7 @@ def run_pipeline(
         xau_trade_quality_forward_monitor=xau_trade_quality_forward_monitor,
         xau_trade_quality_failure_diagnostic=xau_trade_quality_failure_diagnostic,
         xau_trade_quality_usage_guide=xau_trade_quality_usage_guide,
+        cme_overlap_backtest_lab=cme_overlap_backtest_lab,
         dukascopy_spot=dukascopy_spot,
         charts_dir=charts_dir,
     )
@@ -853,6 +860,14 @@ def run_pipeline(
         "cme_overlap_entry_tp_summary": output_root / "cme_overlap_entry_tp_summary.csv",
         "cme_overlap_timeframe_comparison": output_root / "cme_overlap_timeframe_comparison.csv",
         "cme_overlap_pilot_decision": output_root / "cme_overlap_pilot_decision.csv",
+        "cme_overlap_backtest_date_audit": output_root / "cme_overlap_backtest_date_audit.csv",
+        "cme_overlap_candidate_source_report": output_root / "cme_overlap_candidate_source_report.csv",
+        "cme_overlap_trade_candidates": output_root / "cme_overlap_trade_candidates.csv",
+        "cme_overlap_filter_backtest": output_root / "cme_overlap_filter_backtest.csv",
+        "cme_wall_filter_effect": output_root / "cme_wall_filter_effect.csv",
+        "cme_iv_range_filter_effect": output_root / "cme_iv_range_filter_effect.csv",
+        "cme_overlap_guru_filter_effect": output_root / "cme_overlap_guru_filter_effect.csv",
+        "cme_overlap_replay": output_root / "cme_overlap_replay.md",
         "dukascopy_xau_m1_mid": output_root / "dukascopy_xau_m1_mid.parquet",
         "dukascopy_data_readiness_summary": output_root / "dukascopy_data_readiness_summary.md",
         "backtest_summary": summary_path,
@@ -912,6 +927,7 @@ def run_dukascopy_only_pipeline(
     trade_quality_forward_monitor = run_xau_trade_quality_forward_monitor(output_dir=output_root)
     trade_quality_failure_diagnostic = run_xau_trade_quality_failure_diagnostic(output_dir=output_root)
     trade_quality_usage_guide = run_xau_trade_quality_usage_guide(output_dir=output_root)
+    cme_overlap_backtest_lab = run_cme_overlap_backtest_lab(output_dir=output_root)
     report_path = output_root / "research_report.md"
     report_path.write_text(
         "\n".join(
@@ -931,6 +947,8 @@ def run_dukascopy_only_pipeline(
                 *xau_trade_quality_failure_diagnostic_report_lines(trade_quality_failure_diagnostic),
                 "",
                 *xau_trade_quality_usage_guide_report_lines(trade_quality_usage_guide),
+                "",
+                *cme_overlap_backtest_report_lines(cme_overlap_backtest_lab),
             ]
         ),
         encoding="utf-8",
@@ -967,6 +985,11 @@ def run_dukascopy_only_pipeline(
         **{
             name: path
             for name, path in trade_quality_usage_guide.paths.items()
+            if name.endswith("_csv") or name.endswith("_md")
+        },
+        **{
+            name: path
+            for name, path in cme_overlap_backtest_lab.paths.items()
             if name.endswith("_csv") or name.endswith("_md")
         },
     }
@@ -1148,6 +1171,7 @@ def write_research_report(
     xau_trade_quality_forward_monitor: XauTradeQualityForwardMonitorResult | None = None,
     xau_trade_quality_failure_diagnostic: XauTradeQualityFailureDiagnosticResult | None = None,
     xau_trade_quality_usage_guide: XauTradeQualityUsageGuideResult | None = None,
+    cme_overlap_backtest_lab: CmeOverlapBacktestLabResult | None = None,
     dukascopy_spot: DukascopySpotIntegrationResult | None = None,
     charts_dir: Path,
 ) -> None:
@@ -1226,6 +1250,8 @@ def write_research_report(
         *xau_trade_quality_failure_diagnostic_report_lines(xau_trade_quality_failure_diagnostic),
         "",
         *xau_trade_quality_usage_guide_report_lines(xau_trade_quality_usage_guide),
+        "",
+        *cme_overlap_backtest_report_lines(cme_overlap_backtest_lab),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
