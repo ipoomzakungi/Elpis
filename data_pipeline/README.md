@@ -237,10 +237,12 @@ stops, and time exits. It uses walk-forward train/validation/test splits and
 rejects validation configs outside the configured trade-frequency,
 profit-factor, average-win/loss, and commission-drag thresholds.
 
-The default config mirrors the Pine file's `Balanced Quality` effective-input
-preset. Keep the Pine `Entry strictness preset`, fee profile, order fee mode,
-slippage, and funding inputs aligned with `pine_input_preset.md` before pasting
-one of the candidate parameter blocks back into TradingView.
+The default config targets the Pine file's high-frequency `Research Frequency`
+effective-input preset, with a hard validation gate of 500-1500 trades/year and
+a ranking preference near 1000 trades/year. Keep the Pine `Entry strictness
+preset`, fee profile, order fee mode, slippage, and funding inputs aligned with
+`pine_input_preset.md` before pasting one of the candidate parameter blocks back
+into TradingView.
 
 These presets are candidates to paste back into Pine and re-test in
 TradingView. They are not proof of profitability, predictive power, safety, or

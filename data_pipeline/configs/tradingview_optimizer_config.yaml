@@ -37,14 +37,15 @@ search:
   top_n: 20
 
 reject:
-  min_trades_per_year: 100
-  max_trades_per_year: 400
+  min_trades_per_year: 500
+  max_trades_per_year: 1500
+  preferred_trades_per_year: 1000
   min_validation_profit_factor: 1.05
   min_avg_win_loss: 1.30
   max_commission_to_gross_profit: 0.40
 
 fixed:
-  entryStrictness: balanced_quality
+  entryStrictness: research_frequency
   gridSdLen: 50
   exitAtrLen: 14
   atrStopMult: 2.0
@@ -70,17 +71,17 @@ fixed:
   macdSignalLen: 9
 
 parameters:
-  entrySd: [1.15, 2.20]
-  stopSd: [2.50, 3.60]
-  noTradeSd: [0.35, 1.00]
-  mrMinScoreLong: [4.0, 7.0]
-  mrMinScoreShort: [4.5, 7.5]
-  breakoutMinScore: [4.0, 7.5]
-  cooldownBars: [6, 36]
-  donFastLen: [8, 16]
-  donSlowLen: [20, 40]
-  minFeeMultipleForTP: [2.0, 7.0]
+  entrySd: [0.50, 0.75]
+  stopSd: [2.40, 3.40]
+  noTradeSd: [0.10, 0.20]
+  mrMinScoreLong: [1.5, 2.5]
+  mrMinScoreShort: [2.0, 3.0]
+  breakoutMinScore: [2.0, 2.5]
+  cooldownBars: [0, 2]
+  donFastLen: [8, 12]
+  donSlowLen: [20, 34]
+  minFeeMultipleForTP: [2.0, 6.0]
   brkTp1R: [0.5, 1.5]
   brkRunnerR: [1.5, 4.0]
-  mrMaxBars: [2, 6]
-  brkMaxBars: [32, 64]
+  mrMaxBars: [2, 5]
+  brkMaxBars: [8, 16]

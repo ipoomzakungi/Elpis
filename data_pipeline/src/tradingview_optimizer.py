@@ -228,7 +228,7 @@ def evaluate_candidate(
     reject_reasons = rejection_reasons(validation, config["reject"])
     train_stable = train["profit_factor"] is not None and train["profit_factor"] >= 1.0
     test_not_collapsed = test["net_pnl"] >= -abs(validation["net_pnl"]) * 0.75
-    score = validation_score(validation)
+    score = validation_score(validation, config["reject"])
     if reject_reasons:
         score -= 100.0 + len(reject_reasons) * 10.0
     if not train_stable:
@@ -904,9 +904,13 @@ def rejection_reasons(metrics: dict[str, Any], reject: dict[str, Any]) -> list[s
     return reasons
 
 
-def validation_score(metrics: dict[str, Any]) -> float:
+def validation_score(metrics: dict[str, Any], reject: dict[str, Any]) -> float:
     pf = min(metrics["profit_factor"] or 0.0, 3.0)
-    trades_score = -abs(metrics["trades_per_year"] - 220.0) / 20.0
+    min_trades = float(reject["min_trades_per_year"])
+    max_trades = float(reject["max_trades_per_year"])
+    target_trades = float(reject.get("preferred_trades_per_year", (min_trades + max_trades) * 0.5))
+    trade_band = max((max_trades - min_trades) * 0.25, 1.0)
+    trades_score = -abs(metrics["trades_per_year"] - target_trades) / trade_band
     win_loss = min(metrics["avg_win_loss"] or 0.0, 3.0)
     drawdown_penalty = abs(metrics["max_drawdown_pct"]) * 0.2
     return metrics["net_pnl"] * 0.01 + pf * 10.0 + win_loss * 5.0 + trades_score - drawdown_penalty
