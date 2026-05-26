@@ -214,8 +214,12 @@ For the strategy in `Tradingview - Copy.pine`, use the local Python
 approximation:
 
 ```powershell
-python src/tradingview_optimizer.py --config configs/tradingview_optimizer_config.yaml --iterations 250
+python src/tradingview_optimizer.py --config configs/tradingview_optimizer_config.yaml --iterations 250 --workers 0
 ```
+
+`--workers 0` uses CPU count minus one. Use `--workers 1` for deterministic
+single-process debugging, or set a fixed number such as `--workers 8` if you
+want to reserve more CPU for other work.
 
 Default input:
 
@@ -243,14 +247,18 @@ stops, and time exits. It uses walk-forward train/validation/test splits and
 rejects validation configs outside the configured trade-frequency,
 profit-factor, average-win/loss, and commission-drag thresholds.
 
-The default config explores M15, M30, H1, and H2 using the Pine file's
-high-frequency `Research Frequency` effective-input preset. It requires at
-least 500 trades/year but does not cap the maximum trade count; ranking is
-driven mainly by validation net P&L, profit factor, win/loss quality, drawdown,
-and commission drag. Keep the Pine `Entry strictness preset`, fee profile,
-order fee mode, slippage, and funding inputs aligned with
-`pine_input_preset.md` before pasting one of the candidate parameter blocks back
-into TradingView.
+The default config explores M15, M30, H1, and H2. It samples strategy mode,
+long/short permissions, strictness preset, grid/Donchian lengths, regime
+thresholds, RSI/MACD/EMA lengths, ATR stop behavior, TP quantities, TP/runner
+levels, MR TP2, breakeven behavior, and fee-multiple gates. It requires at
+least 500 trades/year but does not cap the maximum trade count.
+
+Robustness checks are enabled by default. Each candidate is evaluated with the
+base fee model and an additional worst-case taker/slippage/funding scenario.
+Ranking is driven mainly by validation net P&L, profit factor, win/loss
+quality, drawdown, commission drag, and worst-fee validation performance. Keep
+the Pine inputs shown in `pine_input_preset.md` aligned before pasting one of
+the candidate parameter blocks back into TradingView.
 
 These presets are candidates to paste back into Pine and re-test in
 TradingView. They are not proof of profitability, predictive power, safety, or

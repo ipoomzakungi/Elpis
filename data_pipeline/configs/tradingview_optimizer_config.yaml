@@ -32,6 +32,20 @@ fees:
   slippage_pct_per_side: 0.010
   expected_funding_pct: 0.000
 
+robustness:
+  enabled: true
+  require_validation_net_pnl_positive: true
+  require_validation_profit_factor: 1.0
+  require_test_net_pnl_positive: false
+  fee_scenarios:
+    - name: worst_case_taker
+      exchange: custom
+      order_fee_mode: taker_taker
+      custom_maker_fee_pct: 0.055
+      custom_taker_fee_pct: 0.075
+      slippage_pct_per_side: 0.030
+      expected_funding_pct: 0.010
+
 walk_forward:
   train_start: "2024-01-01T00:00:00Z"
   train_end: "2025-01-01T00:00:00Z"
@@ -44,6 +58,8 @@ search:
   iterations: 250
   seed: 42
   top_n: 20
+  # 0 means auto: use CPU count minus one. Override with --workers N.
+  max_workers: 0
 
 reject:
   min_trades_per_year: 500
@@ -53,35 +69,15 @@ reject:
   min_avg_win_loss: 1.30
   max_commission_to_gross_profit: 0.40
 
-fixed:
-  entryStrictness: research_frequency
-  gridSdLen: 50
-  exitAtrLen: 14
-  atrStopMult: 2.0
-  brkTp1Qty: 30.0
-  mrTp1Qty: 75.0
-  mrUseTp2: true
-  moveStopToBreakevenAfterTp1: true
-  softMajorityPct: 0.50
-  majorityPct: 0.52
-  regimeDiLen: 14
-  regimeAdxSmooth: 14
-  regimeAdxLevel: 20.0
-  regimeAtrLen: 14
-  atrBaseLen: 14
-  regimeAtrRatioLevel: 1.0
-  maxAdxForMeanReversion: 34.0
-  softMaxAdxForMR: 36.0
-  sweepLookback: 20
-  maLen: 50
-  rsiLen: 14
-  macdFastLen: 12
-  macdSlowLen: 26
-  macdSignalLen: 9
+fixed: {}
 
 parameters:
+  entryStrictness: [research_frequency, balanced_quality]
+  tradeMode: [auto, don_only, sd_only]
+  allowLongs: [true]
+  allowShorts: [true, false]
   entrySd: [0.50, 0.75]
-  stopSd: [2.40, 3.40]
+  stopSd: [1.60, 3.80]
   noTradeSd: [0.10, 0.20]
   mrMinScoreLong: [1.5, 2.5]
   mrMinScoreShort: [2.0, 3.0]
@@ -89,8 +85,31 @@ parameters:
   cooldownBars: [0, 2]
   donFastLen: [8, 12]
   donSlowLen: [20, 34]
-  minFeeMultipleForTP: [2.0, 6.0]
-  brkTp1R: [0.5, 1.5]
-  brkRunnerR: [1.5, 4.0]
-  mrMaxBars: [2, 5]
-  brkMaxBars: [8, 16]
+  minFeeMultipleForTP: [1.0, 8.0]
+  brkTp1R: [0.5, 3.0]
+  brkRunnerR: [1.0, 6.0]
+  mrMaxBars: [2, 12]
+  brkMaxBars: [8, 48]
+  gridSdLen: [20, 120]
+  exitAtrLen: [7, 35]
+  atrStopMult: [0.75, 4.0]
+  brkTp1Qty: [10.0, 80.0]
+  mrTp1Qty: [25.0, 100.0]
+  mrUseTp2: [true, false]
+  moveStopToBreakevenAfterTp1: [true, false]
+  softMajorityPct: [0.45, 0.60]
+  majorityPct: [0.50, 0.65]
+  regimeDiLen: [7, 28]
+  regimeAdxSmooth: [7, 28]
+  regimeAdxLevel: [10.0, 32.0]
+  regimeAtrLen: [7, 28]
+  atrBaseLen: [7, 35]
+  regimeAtrRatioLevel: [0.75, 1.35]
+  maxAdxForMeanReversion: [25.0, 55.0]
+  softMaxAdxForMR: [30.0, 60.0]
+  sweepLookback: [8, 50]
+  maLen: [20, 120]
+  rsiLen: [7, 28]
+  macdFastLen: [6, 18]
+  macdSlowLen: [18, 40]
+  macdSignalLen: [5, 18]

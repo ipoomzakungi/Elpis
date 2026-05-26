@@ -4,7 +4,9 @@ import argparse
 import csv
 import json
 import math
+import os
 import random
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,7 +16,11 @@ import polars as pl
 
 from pipeline_utils import parse_timestamp_value, read_yaml, resolve_path, to_jsonable, write_json
 
-PARAMETER_ORDER = [
+BASE_PARAMETER_ORDER = [
+    "entryStrictness",
+    "tradeMode",
+    "allowLongs",
+    "allowShorts",
     "entrySd",
     "stopSd",
     "noTradeSd",
@@ -29,7 +35,74 @@ PARAMETER_ORDER = [
     "brkRunnerR",
     "mrMaxBars",
     "brkMaxBars",
+    "gridSdLen",
+    "exitAtrLen",
+    "atrStopMult",
+    "brkTp1Qty",
+    "mrTp1Qty",
+    "mrUseTp2",
+    "moveStopToBreakevenAfterTp1",
+    "softMajorityPct",
+    "majorityPct",
+    "regimeDiLen",
+    "regimeAdxSmooth",
+    "regimeAdxLevel",
+    "regimeAtrLen",
+    "atrBaseLen",
+    "regimeAtrRatioLevel",
+    "maxAdxForMeanReversion",
+    "softMaxAdxForMR",
+    "sweepLookback",
+    "maLen",
+    "rsiLen",
+    "macdFastLen",
+    "macdSlowLen",
+    "macdSignalLen",
 ]
+
+INTEGER_PARAMETERS = {
+    "cooldownBars",
+    "donFastLen",
+    "donSlowLen",
+    "mrMaxBars",
+    "brkMaxBars",
+    "gridSdLen",
+    "exitAtrLen",
+    "regimeDiLen",
+    "regimeAdxSmooth",
+    "regimeAtrLen",
+    "atrBaseLen",
+    "sweepLookback",
+    "maLen",
+    "rsiLen",
+    "macdFastLen",
+    "macdSlowLen",
+    "macdSignalLen",
+}
+
+PARAMETER_STEPS = {
+    "entrySd": 0.05,
+    "stopSd": 0.05,
+    "noTradeSd": 0.05,
+    "mrMinScoreLong": 0.5,
+    "mrMinScoreShort": 0.5,
+    "breakoutMinScore": 0.5,
+    "minFeeMultipleForTP": 0.25,
+    "brkTp1R": 0.25,
+    "brkRunnerR": 0.25,
+    "atrStopMult": 0.25,
+    "brkTp1Qty": 5.0,
+    "mrTp1Qty": 5.0,
+    "softMajorityPct": 0.01,
+    "majorityPct": 0.01,
+    "regimeAdxLevel": 0.5,
+    "regimeAtrRatioLevel": 0.05,
+    "maxAdxForMeanReversion": 0.5,
+    "softMaxAdxForMR": 0.5,
+}
+
+_WORKER_SPLITS: dict[str, list[dict[str, Any]]] | None = None
+_WORKER_CONFIG: dict[str, Any] | None = None
 
 
 @dataclass
@@ -81,12 +154,17 @@ def load_frame(path: Path) -> list[dict[str, Any]]:
     return df.sort("datetime").to_dicts()
 
 
-def optimize(config_path: Path, iterations_override: int | None = None) -> dict[str, Any]:
+def optimize(
+    config_path: Path,
+    iterations_override: int | None = None,
+    max_workers_override: int | None = None,
+) -> dict[str, Any]:
     config = read_yaml(config_path)
     reports_dir = resolve_path(config["data"].get("reports_dir", "data/reports/tradingview_optimizer"))
     reports_dir.mkdir(parents=True, exist_ok=True)
     rng = random.Random(int(config.get("search", {}).get("seed", 42)))
     iterations = iterations_override or int(config.get("search", {}).get("iterations", 250))
+    max_workers = resolve_max_workers(max_workers_override, config)
     top_n = int(config.get("search", {}).get("top_n", 20))
 
     all_candidates: list[dict[str, Any]] = []
@@ -100,6 +178,7 @@ def optimize(config_path: Path, iterations_override: int | None = None) -> dict[
             splits=splits,
             rng=rng,
             iterations=iterations,
+            max_workers=max_workers,
             timeframe=timeframe,
             data_path=data_path,
         )
@@ -148,20 +227,68 @@ def run_search(
     splits: dict[str, list[dict[str, Any]]],
     rng: random.Random,
     iterations: int,
+    max_workers: int,
     timeframe: str,
     data_path: Path,
 ) -> list[dict[str, Any]]:
-    fixed = config.get("fixed", {})
+    fixed = config.get("fixed") or {}
     parameter_space = config["parameters"]
-    candidates = []
+    tasks: list[tuple[str, dict[str, Any]]] = []
     for index in range(iterations):
         params = {**fixed, **sample_params(parameter_space, rng)}
-        params["stopSd"] = max(params["stopSd"], params["entrySd"] + 0.25)
-        result = evaluate_candidate(f"{timeframe}_{index + 1}", params, splits, config)
+        params = coerce_sampled_params(params)
+        tasks.append((f"{timeframe}_{index + 1}", params))
+
+    if max_workers <= 1 or iterations <= 1:
+        candidates = [evaluate_candidate(config_id, params, splits, config) for config_id, params in tasks]
+    else:
+        worker_count = min(max_workers, iterations)
+        chunk_size = max(1, len(tasks) // max(worker_count * 4, 1))
+        with ProcessPoolExecutor(
+            max_workers=worker_count,
+            initializer=init_worker,
+            initargs=(splits, config),
+        ) as executor:
+            candidates = list(executor.map(evaluate_candidate_worker, tasks, chunksize=chunk_size))
+
+    for result in candidates:
         result["timeframe"] = timeframe
         result["data_path"] = data_path
-        candidates.append(result)
     return candidates
+
+
+def resolve_max_workers(max_workers_override: int | None, config: dict[str, Any]) -> int:
+    configured = max_workers_override
+    if configured is None:
+        configured = int(config.get("search", {}).get("max_workers", 1))
+    if configured == 0:
+        return max((os.cpu_count() or 2) - 1, 1)
+    return max(int(configured), 1)
+
+
+def init_worker(splits: dict[str, list[dict[str, Any]]], config: dict[str, Any]) -> None:
+    global _WORKER_SPLITS, _WORKER_CONFIG
+    _WORKER_SPLITS = splits
+    _WORKER_CONFIG = config
+
+
+def evaluate_candidate_worker(task: tuple[str, dict[str, Any]]) -> dict[str, Any]:
+    if _WORKER_SPLITS is None or _WORKER_CONFIG is None:
+        raise RuntimeError("Worker was not initialized")
+    config_id, params = task
+    return evaluate_candidate(config_id, params, _WORKER_SPLITS, _WORKER_CONFIG)
+
+
+def parameter_order(config: dict[str, Any]) -> list[str]:
+    keys: list[str] = []
+    configured = set(config.get("parameters", {}).keys())
+    for key in BASE_PARAMETER_ORDER:
+        if key in configured:
+            keys.append(key)
+    for key in config.get("parameters", {}).keys():
+        if key not in keys:
+            keys.append(key)
+    return keys
 
 
 def split_rows(rows: list[dict[str, Any]], split_config: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
@@ -187,24 +314,35 @@ def split_rows(rows: list[dict[str, Any]], split_config: dict[str, Any]) -> dict
 
 def sample_params(parameter_space: dict[str, list[Any]], rng: random.Random) -> dict[str, Any]:
     params: dict[str, Any] = {}
-    integer_params = {"cooldownBars", "donFastLen", "donSlowLen", "mrMaxBars", "brkMaxBars"}
-    half_step_params = {"mrMinScoreLong", "mrMinScoreShort", "breakoutMinScore"}
-    quarter_step_params = {"minFeeMultipleForTP", "brkTp1R", "brkRunnerR"}
-    five_step_params = {"entrySd", "stopSd", "noTradeSd"}
     for key, value in parameter_space.items():
+        if not isinstance(value, list):
+            params[key] = value
+            continue
         if len(value) != 2:
             params[key] = rng.choice(value)
             continue
         low, high = value
-        if key in integer_params:
+        if isinstance(low, bool) or isinstance(high, bool) or not isinstance(low, (int, float)) or not isinstance(high, (int, float)):
+            params[key] = rng.choice(value)
+        elif key in INTEGER_PARAMETERS:
             params[key] = rng.randint(int(low), int(high))
         else:
             raw = rng.uniform(float(low), float(high))
-            step = 0.5 if key in half_step_params else 0.25 if key in quarter_step_params else 0.05
-            if key not in half_step_params | quarter_step_params | five_step_params:
-                step = 0.05
+            step = PARAMETER_STEPS.get(key, 0.05)
             params[key] = round(round(raw / step) * step, 4)
     return params
+
+
+def coerce_sampled_params(params: dict[str, Any]) -> dict[str, Any]:
+    coerced = dict(params)
+    coerced["stopSd"] = max(float(coerced["stopSd"]), float(coerced["entrySd"]) + 0.25)
+    if "donFastLen" in coerced and "donSlowLen" in coerced:
+        coerced["donSlowLen"] = max(int(coerced["donSlowLen"]), int(coerced["donFastLen"]) + 2)
+    if "macdFastLen" in coerced and "macdSlowLen" in coerced:
+        coerced["macdSlowLen"] = max(int(coerced["macdSlowLen"]), int(coerced["macdFastLen"]) + 2)
+    if coerced.get("allowLongs") is False and coerced.get("allowShorts") is False:
+        coerced["allowLongs"] = True
+    return coerced
 
 
 def apply_effective_pine_preset(params: dict[str, Any]) -> dict[str, Any]:
@@ -267,7 +405,7 @@ def apply_effective_pine_preset(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def evaluate_candidate(
-    config_id: int,
+    config_id: str | int,
     params: dict[str, Any],
     splits: dict[str, list[dict[str, Any]]],
     config: dict[str, Any],
@@ -275,35 +413,93 @@ def evaluate_candidate(
     train = run_backtest(splits["train"], params, config)
     validation = run_backtest(splits["validation"], params, config)
     test = run_backtest(splits["test"], params, config)
+    scenario_results = evaluate_fee_scenarios(params, splits, config)
     reject_reasons = rejection_reasons(validation, config["reject"])
+    robust_reasons = robustness_reasons(scenario_results, config.get("robustness", {}))
     train_stable = train["profit_factor"] is not None and train["profit_factor"] >= 1.0
     test_not_collapsed = test["net_pnl"] >= -abs(validation["net_pnl"]) * 0.75
-    score = validation_score(validation, config["reject"])
-    if reject_reasons:
-        score -= 100.0 + len(reject_reasons) * 10.0
+    score = validation_score(validation, config["reject"], scenario_results)
+    all_reasons = reject_reasons + robust_reasons
+    if all_reasons:
+        score -= 100.0 + len(all_reasons) * 10.0
     if not train_stable:
         score -= 15.0
     if not test_not_collapsed:
         score -= 20.0
 
-    return {
+    ordered_params = parameter_order(config)
+    result = {
         "config_id": config_id,
-        **{key: params[key] for key in PARAMETER_ORDER},
+        **{key: params.get(key) for key in ordered_params},
         **prefix_metrics("train", train),
         **prefix_metrics("validation", validation),
         **prefix_metrics("test", test),
-        "accepted": not reject_reasons,
+        "accepted": not all_reasons,
         "train_stable": train_stable,
         "test_not_collapsed": test_not_collapsed,
-        "reject_reasons": "; ".join(reject_reasons),
+        "reject_reasons": "; ".join(all_reasons),
         "score": score,
     }
+    if scenario_results:
+        worst_validation = min(scenario_results, key=lambda item: item["validation"]["net_pnl"])
+        worst_test = min(scenario_results, key=lambda item: item["test"]["net_pnl"])
+        result.update(
+            {
+                "worst_fee_scenario": worst_validation["name"],
+                "worst_fee_validation_net_pnl": worst_validation["validation"]["net_pnl"],
+                "worst_fee_validation_profit_factor": worst_validation["validation"]["profit_factor"],
+                "worst_fee_validation_trades_per_year": worst_validation["validation"]["trades_per_year"],
+                "worst_fee_test_net_pnl": worst_test["test"]["net_pnl"],
+                "worst_fee_test_profit_factor": worst_test["test"]["profit_factor"],
+            }
+        )
+        for scenario in scenario_results:
+            result.update(prefix_metrics(f"{scenario['name']}_validation", scenario["validation"]))
+            result.update(prefix_metrics(f"{scenario['name']}_test", scenario["test"]))
+    return result
 
 
-def run_backtest(rows: list[dict[str, Any]], params: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
+def evaluate_fee_scenarios(
+    params: dict[str, Any],
+    splits: dict[str, list[dict[str, Any]]],
+    config: dict[str, Any],
+) -> list[dict[str, Any]]:
+    scenarios = fee_scenarios(config)
+    results = []
+    for name, fee_config in scenarios:
+        results.append(
+            {
+                "name": name,
+                "validation": run_backtest(splits["validation"], params, config, fee_config=fee_config),
+                "test": run_backtest(splits["test"], params, config, fee_config=fee_config),
+            }
+        )
+    return results
+
+
+def fee_scenarios(config: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    robustness = config.get("robustness", {})
+    if not robustness.get("enabled", False):
+        return []
+    scenarios = []
+    for index, scenario in enumerate(robustness.get("fee_scenarios", []), start=1):
+        if not isinstance(scenario, dict):
+            raise ValueError("fee_scenarios entries must be mappings")
+        name = slugify(str(scenario.get("name", f"fee_scenario_{index}")))
+        fee_config = {**config["fees"], **scenario}
+        scenarios.append((name, fee_config))
+    return scenarios
+
+
+def run_backtest(
+    rows: list[dict[str, Any]],
+    params: dict[str, Any],
+    config: dict[str, Any],
+    fee_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     effective = apply_effective_pine_preset(params)
     indicators = build_indicators(rows, effective)
-    fee_model = fee_model_from_config(config["fees"])
+    fee_model = fee_model_from_config(fee_config or config["fees"])
     initial_cash = float(config["execution"].get("initial_cash", 100000))
     fixed_qty = float(config["execution"].get("fixed_qty", 1.0))
     use_spread = bool(config["execution"].get("use_spread", True))
@@ -384,6 +580,11 @@ def signal_at(
     params: dict[str, Any],
     fee_model: dict[str, float],
 ) -> dict[str, Any] | None:
+    trade_mode = str(params.get("tradeMode", "auto")).lower()
+    allow_breakout = trade_mode in {"auto", "don_only", "breakout", "donchian", "donchian_breakout_only"}
+    allow_mr = trade_mode in {"auto", "sd_only", "mr", "mean_reversion", "sd_mean_reversion_only"}
+    allow_longs = bool(params.get("allowLongs", True))
+    allow_shorts = bool(params.get("allowShorts", True))
     close = float(rows[index]["close"])
     high = float(rows[index]["high"])
     low = float(rows[index]["low"])
@@ -447,10 +648,10 @@ def signal_at(
     breakout_short_score += 1.0 if atr_expanding else 0.0
     breakout_short_score -= 1.0 if range_regime else 0.0
 
-    if bull_breakout and breakout_cost_ok and breakout_long_score >= float(params["breakoutMinScore"]):
+    if allow_breakout and allow_longs and bull_breakout and breakout_cost_ok and breakout_long_score >= float(params["breakoutMinScore"]):
         stop = close - exit_atr * float(params.get("atrStopMult", 2.0))
         return {"side": "long", "type": "breakout", "signal_index": index, "stop": stop}
-    if bear_breakout and breakout_cost_ok and breakout_short_score >= float(params["breakoutMinScore"]):
+    if allow_breakout and allow_shorts and bear_breakout and breakout_cost_ok and breakout_short_score >= float(params["breakoutMinScore"]):
         stop = close + exit_atr * float(params.get("atrStopMult", 2.0))
         return {"side": "short", "type": "breakout", "signal_index": index, "stop": stop}
 
@@ -500,6 +701,8 @@ def signal_at(
 
     if (
         mr_cost_ok
+        and allow_mr
+        and allow_longs
         and mr_long_score >= float(params["mrMinScoreLong"])
         and close > lower_stop
         and not no_fade_long_blocked
@@ -515,6 +718,8 @@ def signal_at(
         }
     if (
         mr_cost_ok
+        and allow_mr
+        and allow_shorts
         and mr_short_score >= float(params["mrMinScoreShort"])
         and close < upper_stop
         and not no_fade_short_blocked
@@ -569,7 +774,7 @@ def open_position(
             if side == "long"
             else grid_mid - grid_dev * float(params["noTradeSd"])
         )
-        tp1_qty_pct = float(params.get("mrTp1Qty", 75.0))
+        tp1_qty_pct = float(params.get("mrTp1Qty", 75.0)) if bool(params.get("mrUseTp2", True)) else 100.0
 
     return Position(
         side=side,
@@ -955,7 +1160,31 @@ def rejection_reasons(metrics: dict[str, Any], reject: dict[str, Any]) -> list[s
     return reasons
 
 
-def validation_score(metrics: dict[str, Any], reject: dict[str, Any]) -> float:
+def robustness_reasons(scenario_results: list[dict[str, Any]], robustness: dict[str, Any]) -> list[str]:
+    if not robustness.get("enabled", False):
+        return []
+    reasons: list[str] = []
+    require_validation_positive = bool(robustness.get("require_validation_net_pnl_positive", True))
+    require_test_positive = bool(robustness.get("require_test_net_pnl_positive", False))
+    min_validation_pf = robustness.get("min_validation_profit_factor", 1.0)
+    for scenario in scenario_results:
+        validation = scenario["validation"]
+        test = scenario["test"]
+        name = scenario["name"]
+        if require_validation_positive and validation["net_pnl"] <= 0:
+            reasons.append(f"{name} validation net P&L not positive")
+        if min_validation_pf is not None and (validation["profit_factor"] is None or validation["profit_factor"] < float(min_validation_pf)):
+            reasons.append(f"{name} validation profit factor below robust minimum")
+        if require_test_positive and test["net_pnl"] <= 0:
+            reasons.append(f"{name} test net P&L not positive")
+    return reasons
+
+
+def validation_score(
+    metrics: dict[str, Any],
+    reject: dict[str, Any],
+    scenario_results: list[dict[str, Any]] | None = None,
+) -> float:
     pf = min(metrics["profit_factor"] or 0.0, 3.0)
     min_trades = float(reject.get("min_trades_per_year", 0.0))
     trades_score = min(metrics["trades_per_year"] / min_trades, 2.0) if min_trades else 0.0
@@ -964,7 +1193,14 @@ def validation_score(metrics: dict[str, Any], reject: dict[str, Any]) -> float:
     win_loss = min(metrics["avg_win_loss"] or 0.0, 3.0)
     drawdown_penalty = abs(metrics["max_drawdown_pct"]) * 0.2
     commission_drag = metrics["commission_to_gross_profit"] or 0.0
-    return metrics["net_pnl"] * 0.02 + pf * 20.0 + win_loss * 8.0 + trades_score * 2.0 - drawdown_penalty - commission_drag * 8.0
+    score = metrics["net_pnl"] * 0.02 + pf * 20.0 + win_loss * 8.0 + trades_score * 2.0 - drawdown_penalty - commission_drag * 8.0
+    if scenario_results:
+        worst_validation = min(scenario_results, key=lambda item: item["validation"]["net_pnl"])["validation"]
+        worst_pf = min((item["validation"]["profit_factor"] or 0.0) for item in scenario_results)
+        score += worst_validation["net_pnl"] * 0.025 + min(worst_pf, 3.0) * 12.0
+        if worst_validation["net_pnl"] <= 0:
+            score -= 50.0 + abs(worst_validation["net_pnl"]) * 0.01
+    return score
 
 
 def prefix_metrics(prefix: str, metrics: dict[str, Any]) -> dict[str, Any]:
@@ -989,11 +1225,12 @@ def prefix_metrics(prefix: str, metrics: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_presets(top: list[dict[str, Any]], config: dict[str, Any]) -> dict[str, Any]:
+    ordered_params = parameter_order(config)
     return {
         "source": "TradingView strategy Python approximation",
         "created_at": datetime.now(timezone.utc),
         "fixed_inputs": {
-            "entryStrictness": config.get("fixed", {}).get("entryStrictness", "balanced_quality"),
+            "entryStrictness": (config.get("fixed") or {}).get("entryStrictness", "sampled"),
             "fee_exchange": config.get("fees", {}).get("exchange"),
             "order_fee_mode": config.get("fees", {}).get("order_fee_mode"),
             "slippage_pct_per_side": config.get("fees", {}).get("slippage_pct_per_side"),
@@ -1011,7 +1248,7 @@ def build_presets(top: list[dict[str, Any]], config: dict[str, Any]) -> dict[str
                 "accepted": row["accepted"],
                 "timeframe": row.get("timeframe"),
                 "data_path": row.get("data_path"),
-                "parameters": {key: row[key] for key in PARAMETER_ORDER},
+                "parameters": {key: row.get(key) for key in ordered_params},
                 "validation": {key.removeprefix("validation_"): value for key, value in row.items() if key.startswith("validation_")},
                 "test": {key.removeprefix("test_"): value for key, value in row.items() if key.startswith("test_")},
             }
@@ -1021,8 +1258,9 @@ def build_presets(top: list[dict[str, Any]], config: dict[str, Any]) -> dict[str
 
 
 def write_pine_markdown(path: Path, top: list[dict[str, Any]], config: dict[str, Any]) -> None:
-    fixed = config.get("fixed", {})
+    fixed = config.get("fixed") or {}
     fees = config.get("fees", {})
+    ordered_params = parameter_order(config)
     lines = [
         "# Pine Input Presets",
         "",
@@ -1033,7 +1271,7 @@ def write_pine_markdown(path: Path, top: list[dict[str, Any]], config: dict[str,
         "Keep these fixed Pine inputs aligned before pasting a preset:",
         "",
         "```text",
-        f"entryStrictness = {fixed.get('entryStrictness', 'balanced_quality')}",
+        f"entryStrictness = {fixed.get('entryStrictness', 'sampled per preset')}",
         f"exchangeFeeProfile = {fees.get('exchange', 'bybit')}",
         f"orderFeeMode = {fees.get('order_fee_mode', 'maker_taker')}",
         f"slippagePctPerSide = {fees.get('slippage_pct_per_side', 0.0)}",
@@ -1057,10 +1295,13 @@ def write_pine_markdown(path: Path, top: list[dict[str, Any]], config: dict[str,
         lines.append(f"- Validation PF: `{format_float(row['validation_profit_factor'])}`")
         lines.append(f"- Validation trades/year: `{format_float(row['validation_trades_per_year'])}`")
         lines.append(f"- Validation net P&L: `{format_float(row['validation_net_pnl'])}`")
+        if "worst_fee_validation_net_pnl" in row:
+            lines.append(f"- Worst-fee validation net P&L: `{format_float(row['worst_fee_validation_net_pnl'])}`")
+            lines.append(f"- Worst-fee validation PF: `{format_float(row['worst_fee_validation_profit_factor'])}`")
         lines.append("")
         lines.append("```text")
-        for key in PARAMETER_ORDER:
-            lines.append(f"{key} = {row[key]}")
+        for key in ordered_params:
+            lines.append(f"{key} = {row.get(key)}")
         lines.append("```")
         lines.append("")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1094,6 +1335,11 @@ def format_float(value: Any) -> str:
     if isinstance(value, float):
         return f"{value:.4f}"
     return str(value)
+
+
+def slugify(value: str) -> str:
+    cleaned = "".join(character.lower() if character.isalnum() else "_" for character in value)
+    return "_".join(part for part in cleaned.split("_") if part)
 
 
 def sign(value: float | None) -> int:
@@ -1286,12 +1532,22 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Optimize TradingView Pine strategy parameters locally.")
     parser.add_argument("--config", default="configs/tradingview_optimizer_config.yaml")
     parser.add_argument("--iterations", type=int, default=None)
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="Parallel worker processes. Use 0 for CPU count minus one.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    result = optimize(resolve_path(args.config), iterations_override=args.iterations)
+    result = optimize(
+        resolve_path(args.config),
+        iterations_override=args.iterations,
+        max_workers_override=args.workers,
+    )
     best = result["best"]
     if best is None:
         print("optimizer completed with no candidates")
