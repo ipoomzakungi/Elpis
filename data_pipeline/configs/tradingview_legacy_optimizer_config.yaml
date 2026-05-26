@@ -1,0 +1,126 @@
+data:
+  input_path: data/processed/xauusd_m15_2024_to_now.parquet
+  reports_dir: data/reports/tradingview_legacy_optimizer
+  symbol: XAUUSD
+  timeframe: 15m
+  source_pine: ../Tradingview.pine
+  inputs:
+    - timeframe: m15
+      input_path: data/processed/xauusd_m15_2024_to_now.parquet
+    - timeframe: m30
+      input_path: data/processed/xauusd_m30_2024_to_now.parquet
+    - timeframe: h1
+      input_path: data/processed/xauusd_h1_2024_to_now.parquet
+    - timeframe: h2
+      input_path: data/processed/xauusd_h2_2024_to_now.parquet
+
+execution:
+  initial_cash: 100000
+  position_size_mode: percent_equity
+  fixed_qty: 1.0
+  equity_pct: 10.0
+  point_value: 1.0
+  entry_timing: signal_close
+  use_spread: true
+  stop_first_when_ambiguous: true
+
+fees:
+  exchange: bybit
+  order_fee_mode: maker_taker
+  bybit_maker_fee_pct: 0.020
+  bybit_taker_fee_pct: 0.055
+  mexc_maker_fee_pct: 0.000
+  mexc_taker_fee_pct: 0.040
+  custom_maker_fee_pct: 0.020
+  custom_taker_fee_pct: 0.055
+  slippage_pct_per_side: 0.010
+  expected_funding_pct: 0.000
+
+robustness:
+  enabled: true
+  require_validation_net_pnl_positive: true
+  require_test_net_pnl_positive: false
+  min_validation_profit_factor: 1.0
+  fee_scenarios:
+    - name: worst_case_taker
+      exchange: custom
+      order_fee_mode: taker_taker
+      custom_maker_fee_pct: 0.055
+      custom_taker_fee_pct: 0.075
+      slippage_pct_per_side: 0.030
+      expected_funding_pct: 0.010
+
+walk_forward:
+  train_start: "2024-01-01T00:00:00Z"
+  train_end: "2025-01-01T00:00:00Z"
+  validation_start: "2025-01-01T00:00:00Z"
+  validation_end: "2026-01-01T00:00:00Z"
+  test_start: "2026-01-01T00:00:00Z"
+
+search:
+  mode: random
+  iterations: 250
+  seed: 91
+  top_n: 20
+  max_workers: 0
+
+reject:
+  min_validation_net_pnl: 0
+  min_trades_per_year: 500
+  max_trades_per_year: null
+  min_validation_profit_factor: 1.05
+  min_avg_win_loss: 1.30
+  max_commission_to_gross_profit: 0.40
+
+fixed: {}
+
+parameters:
+  engineMode: [ladder, grid, tactical]
+  sideMode: [both, long_only, short_only]
+  donLen: [10, 80]
+  gridSource: [don, sd, ema]
+  gridSdLen: [20, 180]
+  entrySd: [0.40, 2.20]
+  stopSd: [1.20, 4.50]
+  noTradeSd: [0.05, 0.90]
+  useTrendFilter: [true, false]
+  maxAdxForMeanReversion: [12.0, 45.0]
+  useSweepConfirmation: [true, false]
+  closeAtMiddleMode: [cross, touch]
+  useOneTradeOnly: [true]
+  allowFlipOnZoneBreak: [false, true]
+  fixedGoldStopCapPoints: [0.0, 40.0]
+  minBarsBetweenTrades: [0, 16]
+  ladderMode: [limit, reject]
+  ladderLevel1Sd: [1.20, 2.60]
+  ladderLevel2Sd: [1.70, 3.20]
+  ladderLevel3Sd: [2.20, 4.00]
+  ladderSoftStopSd: [2.80, 5.00]
+  ladderEmergencyStopSd: [3.20, 5.80]
+  ladderWeight1: [15.0, 45.0]
+  ladderWeight2: [20.0, 45.0]
+  ladderWeight3: [20.0, 55.0]
+  ladderUseCloseConfirmedStop: [true, false]
+  ladderStopConfirmBars: [1, 3]
+  ladderUseTrendFilter: [true, false]
+  ladderMaxAdx: [18.0, 55.0]
+  ladderUseSweepConfirmation: [true, false]
+  ladderUseBasketRiskSizing: [true]
+  ladderBasketRiskPct: [0.10, 1.00]
+  ladderMaxNotionalPct: [2.0, 15.0]
+  exitAtrLen: [7, 35]
+  atrStopMult: [0.75, 4.00]
+  atrTargetMult: [0.50, 5.00]
+  maLen: [20, 120]
+  sdLen: [10, 80]
+  envLen: [10, 80]
+  rsiLen: [7, 28]
+  macdFastLen: [6, 18]
+  macdSlowLen: [18, 40]
+  macdSignalLen: [5, 18]
+  regimeDiLen: [7, 28]
+  regimeAdxSmooth: [7, 28]
+  regimeAdxLevel: [12.0, 32.0]
+  regimeAtrLen: [7, 28]
+  atrBaseLen: [7, 35]
+  sweepLookback: [6, 50]
