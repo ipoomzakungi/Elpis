@@ -57,6 +57,11 @@ from research_xau_vol_oi.xau_decision_support_dashboard import (
     run_xau_decision_support_dashboard,
     xau_decision_support_report_lines,
 )
+from research_xau_vol_oi.xau_trade_quality_score import (
+    XauTradeQualityScoreResult,
+    run_xau_trade_quality_score_lab,
+    xau_trade_quality_report_lines,
+)
 from research_xau_vol_oi.yahoo_intraday_outcome_resolver import (
     YahooIntradayOutcomeResolverResult,
     run_yahoo_intraday_outcome_resolver,
@@ -418,6 +423,7 @@ def run_pipeline(
     forward_evidence_integrity = run_forward_evidence_integrity_audit(
         output_dir=output_root,
     )
+    xau_trade_quality_score = run_xau_trade_quality_score_lab(output_dir=output_root)
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -460,6 +466,7 @@ def run_pipeline(
         forward_outcome_review=forward_outcome_review,
         forward_event_evidence=forward_event_evidence,
         forward_evidence_integrity=forward_evidence_integrity,
+        xau_trade_quality_score=xau_trade_quality_score,
         dukascopy_spot=dukascopy_spot,
         charts_dir=charts_dir,
     )
@@ -825,6 +832,11 @@ def run_pipeline(
         "research_report": report_path,
         "leakage_audit_report": audit_path,
         "signal_dashboard": output_root / "signal_dashboard.html",
+        "xau_trade_quality_score_components": output_root / "xau_trade_quality_score_components.csv",
+        "xau_trade_quality_score": output_root / "xau_trade_quality_score.csv",
+        "xau_trade_quality_score_backtest": output_root / "xau_trade_quality_score_backtest.csv",
+        "xau_trade_quality_score_ablation": output_root / "xau_trade_quality_score_ablation.csv",
+        "xau_trade_quality_forward_usage": output_root / "xau_trade_quality_forward_usage.md",
         "charts": charts_dir,
     }
 
@@ -852,6 +864,7 @@ def run_dukascopy_only_pipeline(
     result = run_dukascopy_spot_integration(**kwargs)
     forward_evidence = run_dukascopy_forward_evidence_refresh(output_dir=output_root)
     decision_dashboard = run_xau_decision_support_dashboard(output_dir=output_root)
+    trade_quality_score = run_xau_trade_quality_score_lab(output_dir=output_root)
     report_path = output_root / "research_report.md"
     report_path.write_text(
         "\n".join(
@@ -863,6 +876,8 @@ def run_dukascopy_only_pipeline(
                 *dukascopy_forward_evidence_report_lines(forward_evidence),
                 "",
                 *xau_decision_support_report_lines(decision_dashboard),
+                "",
+                *xau_trade_quality_report_lines(trade_quality_score),
             ]
         ),
         encoding="utf-8",
@@ -878,6 +893,11 @@ def run_dukascopy_only_pipeline(
         **{
             name: path
             for name, path in decision_dashboard.paths.items()
+            if name.endswith("_csv") or name.endswith("_md")
+        },
+        **{
+            name: path
+            for name, path in trade_quality_score.paths.items()
             if name.endswith("_csv") or name.endswith("_md")
         },
     }
@@ -1055,6 +1075,7 @@ def write_research_report(
     forward_outcome_review: ForwardOutcomeReviewResult | None = None,
     forward_event_evidence: ForwardEventEvidenceAggregatorResult | None = None,
     forward_evidence_integrity: ForwardEvidenceIntegrityAuditResult | None = None,
+    xau_trade_quality_score: XauTradeQualityScoreResult | None = None,
     dukascopy_spot: DukascopySpotIntegrationResult | None = None,
     charts_dir: Path,
 ) -> None:
@@ -1125,6 +1146,8 @@ def write_research_report(
         *forward_event_evidence_report_lines(forward_event_evidence),
         "",
         *forward_evidence_integrity_report_lines(forward_evidence_integrity),
+        "",
+        *xau_trade_quality_report_lines(xau_trade_quality_score),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
