@@ -49,6 +49,10 @@ from research_xau_vol_oi.dukascopy_spot_integration import (
     dukascopy_report_lines,
     run_dukascopy_spot_integration,
 )
+from research_xau_vol_oi.dukascopy_forward_evidence_refresh import (
+    dukascopy_forward_evidence_report_lines,
+    run_dukascopy_forward_evidence_refresh,
+)
 from research_xau_vol_oi.yahoo_intraday_outcome_resolver import (
     YahooIntradayOutcomeResolverResult,
     run_yahoo_intraday_outcome_resolver,
@@ -842,6 +846,7 @@ def run_dukascopy_only_pipeline(
     if cleaned_path is not None:
         kwargs["cleaned_path"] = cleaned_path
     result = run_dukascopy_spot_integration(**kwargs)
+    forward_evidence = run_dukascopy_forward_evidence_refresh(output_dir=output_root)
     report_path = output_root / "research_report.md"
     report_path.write_text(
         "\n".join(
@@ -849,6 +854,8 @@ def run_dukascopy_only_pipeline(
                 "# XAU Vol-OI Research Report",
                 "",
                 *dukascopy_report_lines(result),
+                "",
+                *dukascopy_forward_evidence_report_lines(forward_evidence),
             ]
         ),
         encoding="utf-8",
@@ -856,6 +863,11 @@ def run_dukascopy_only_pipeline(
     return {
         "research_report": report_path,
         **result.paths,
+        **{
+            name: path
+            for name, path in forward_evidence.paths.items()
+            if name.endswith("_csv") or name.endswith("_md")
+        },
     }
 
 
