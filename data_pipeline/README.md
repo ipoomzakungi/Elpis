@@ -207,3 +207,41 @@ optimize on broken or unexplained data.
 The example grid is large. `optimization.max_configs` defaults to `2000` for a
 deterministic local pass. Set it to `null` or pass `--max-configs 0` for an
 exhaustive grid.
+
+## Optimize TradingView Strategy Inputs
+
+For the strategy in `Tradingview - Copy.pine`, use the local Python
+approximation:
+
+```powershell
+python src/tradingview_optimizer.py --config configs/tradingview_optimizer_config.yaml --iterations 250
+```
+
+Default input:
+
+```text
+data/processed/xauusd_m15_2024_to_now.parquet
+```
+
+Outputs:
+
+```text
+data/reports/tradingview_optimizer/top_results.csv
+data/reports/tradingview_optimizer/best_presets.json
+data/reports/tradingview_optimizer/pine_input_preset.md
+```
+
+The optimizer approximates Donchian breakouts, SD mean reversion, score
+thresholds, Bybit/MEXC/custom fee models, slippage, funding, TP1, runner,
+stops, and time exits. It uses walk-forward train/validation/test splits and
+rejects validation configs outside the configured trade-frequency,
+profit-factor, average-win/loss, and commission-drag thresholds.
+
+The default config mirrors the Pine file's `Balanced Quality` effective-input
+preset. Keep the Pine `Entry strictness preset`, fee profile, order fee mode,
+slippage, and funding inputs aligned with `pine_input_preset.md` before pasting
+one of the candidate parameter blocks back into TradingView.
+
+These presets are candidates to paste back into Pine and re-test in
+TradingView. They are not proof of profitability, predictive power, safety, or
+live readiness.

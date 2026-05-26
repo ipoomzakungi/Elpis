@@ -1,0 +1,86 @@
+data:
+  input_path: data/processed/xauusd_m15_2024_to_now.parquet
+  reports_dir: data/reports/tradingview_optimizer
+  symbol: XAUUSD
+  timeframe: 15m
+
+execution:
+  initial_cash: 100000
+  fixed_qty: 1.0
+  entry_timing: next_open
+  use_spread: true
+  stop_first_when_ambiguous: true
+
+fees:
+  exchange: bybit
+  order_fee_mode: maker_taker
+  bybit_maker_fee_pct: 0.020
+  bybit_taker_fee_pct: 0.055
+  mexc_maker_fee_pct: 0.000
+  mexc_taker_fee_pct: 0.040
+  custom_maker_fee_pct: 0.020
+  custom_taker_fee_pct: 0.055
+  slippage_pct_per_side: 0.010
+  expected_funding_pct: 0.000
+
+walk_forward:
+  train_start: "2024-01-01T00:00:00Z"
+  train_end: "2025-01-01T00:00:00Z"
+  validation_start: "2025-01-01T00:00:00Z"
+  validation_end: "2026-01-01T00:00:00Z"
+  test_start: "2026-01-01T00:00:00Z"
+
+search:
+  mode: random
+  iterations: 250
+  seed: 42
+  top_n: 20
+
+reject:
+  min_trades_per_year: 100
+  max_trades_per_year: 400
+  min_validation_profit_factor: 1.05
+  min_avg_win_loss: 1.30
+  max_commission_to_gross_profit: 0.40
+
+fixed:
+  entryStrictness: balanced_quality
+  gridSdLen: 50
+  exitAtrLen: 14
+  atrStopMult: 2.0
+  brkTp1Qty: 30.0
+  mrTp1Qty: 75.0
+  mrUseTp2: true
+  moveStopToBreakevenAfterTp1: true
+  softMajorityPct: 0.50
+  majorityPct: 0.52
+  regimeDiLen: 14
+  regimeAdxSmooth: 14
+  regimeAdxLevel: 20.0
+  regimeAtrLen: 14
+  atrBaseLen: 14
+  regimeAtrRatioLevel: 1.0
+  maxAdxForMeanReversion: 34.0
+  softMaxAdxForMR: 36.0
+  sweepLookback: 20
+  maLen: 50
+  rsiLen: 14
+  macdFastLen: 12
+  macdSlowLen: 26
+  macdSignalLen: 9
+
+parameters:
+  entrySd: [1.15, 2.20]
+  stopSd: [2.50, 3.60]
+  noTradeSd: [0.35, 1.00]
+  mrMinScoreLong: [4.0, 7.0]
+  mrMinScoreShort: [4.5, 7.5]
+  breakoutMinScore: [4.0, 7.5]
+  cooldownBars: [6, 36]
+  donFastLen: [8, 16]
+  donSlowLen: [20, 40]
+  minFeeMultipleForTP: [2.0, 7.0]
+  brkTp1R: [0.5, 1.5]
+  brkRunnerR: [1.5, 4.0]
+  mrMaxBars: [2, 6]
+  brkMaxBars: [32, 64]
