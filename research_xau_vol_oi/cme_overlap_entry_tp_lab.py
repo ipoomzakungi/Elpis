@@ -983,8 +983,7 @@ def build_timeframe_comparison(summary: pl.DataFrame, trades: pl.DataFrame) -> p
             if str(row.get("timeframe")) == timeframe[0] and row.get("exit_reason") != "NO_ENTRY"
         ]
         pnl = [_float_or_zero(row.get("pnl_after_spread_cost")) for row in executed]
-        tf_summary = groups
-        best, worst = _best_worst_templates(tf_summary)
+        best, worst = _best_worst_templates_from_trades(executed)
         rows.append(
             {
                 "timeframe": timeframe[0],
@@ -994,7 +993,7 @@ def build_timeframe_comparison(summary: pl.DataFrame, trades: pl.DataFrame) -> p
                 "profit_factor": _profit_factor(pnl),
                 "tp_hit_rate": _exit_rate(executed, "TP_HIT"),
                 "sl_hit_rate": _exit_rate(executed, "SL_HIT"),
-                "false_signal_rate": _false_signal_rate(tf_summary),
+                "false_signal_rate": _false_signal_rate(groups),
                 "average_hold_time": _mean([_float_or_zero(row.get("bars_held")) for row in executed]),
                 "best_template": best,
                 "worst_template": worst,
@@ -1002,13 +1001,11 @@ def build_timeframe_comparison(summary: pl.DataFrame, trades: pl.DataFrame) -> p
             }
         )
     order = {name: index for index, name in enumerate(TIMEFRAME_MINUTES)}
-    return _rows_frame(rows, _timeframe_schema()).sort(
-        by="timeframe",
-        descending=False,
-    ).with_columns(
-        pl.col("timeframe")
-    ).sort(
-        by=pl.col("timeframe").replace_strict(order, default=999)
+    return (
+        _rows_frame(rows, _timeframe_schema())
+        .with_columns(pl.col("timeframe").replace_strict(order, default=999).alias("_sort_order"))
+        .sort("_sort_order")
+        .drop("_sort_order")
     )
 
 
@@ -1025,9 +1022,10 @@ def build_pilot_decision(
     few_dates = len(usable_dates) < MIN_VALIDATION_DATES
     trade_count = trades.filter(pl.col("exit_reason") != "NO_ENTRY").height if not trades.is_empty() else 0
     has_market_map = not market_map.is_empty()
-    needs_basis = _any_false(date_audit, "has_basis")
-    needs_iv = _any_false(date_audit, "has_cme_iv")
-    post_event = _any_true(date_audit, "can_use_cme_only_as_post_event_replay")
+    decision_scope = _decision_scope_rows(date_audit)
+    needs_basis = _any_false(decision_scope, "has_basis")
+    needs_iv = _any_false(decision_scope, "has_cme_iv")
+    post_event = _any_true(decision_scope, "can_use_cme_only_as_post_event_replay")
     rows = []
     reasons = {
         "CME_OVERLAP_PILOT_READY": "At least one selected date has Dukascopy bid/ask price and CME OI available during the session.",
@@ -2189,6 +2187,21 @@ def _best_worst_templates(rows: list[dict[str, Any]]) -> tuple[str, str]:
     return str(sorted_rows[-1].get("rule_template") or ""), str(sorted_rows[0].get("rule_template") or "")
 
 
+def _best_worst_templates_from_trades(rows: list[dict[str, Any]]) -> tuple[str, str]:
+    if not rows:
+        return "", ""
+    grouped: dict[str, list[float]] = {}
+    for row in rows:
+        template = str(row.get("rule_template") or "")
+        if not template:
+            continue
+        grouped.setdefault(template, []).append(_float_or_zero(row.get("pnl_after_spread_cost")))
+    if not grouped:
+        return "", ""
+    ranked = sorted((sum(values) / len(values), template) for template, values in grouped.items())
+    return ranked[-1][1], ranked[0][1]
+
+
 def _usable_dates(date_audit: pl.DataFrame) -> set[str]:
     if date_audit.is_empty() or "usable_for_entry_tp_pilot" not in date_audit.columns:
         return set()
@@ -2196,6 +2209,15 @@ def _usable_dates(date_audit: pl.DataFrame) -> set[str]:
         row["trade_date"]
         for row in date_audit.filter(pl.col("usable_for_entry_tp_pilot")).to_dicts()
     )
+
+
+def _decision_scope_rows(date_audit: pl.DataFrame) -> pl.DataFrame:
+    if date_audit.is_empty():
+        return date_audit
+    if "has_cme_oi" not in date_audit.columns:
+        return date_audit
+    scoped = date_audit.filter(pl.col("has_cme_oi"))
+    return scoped if not scoped.is_empty() else date_audit
 
 
 def _any_false(frame: pl.DataFrame, column: str) -> bool:
