@@ -1,0 +1,27 @@
+name: xauusd_ema_rsi_atr_backtest
+
+data:
+  processed_path: data/processed/xauusd_m1_2024_to_now.parquet
+  reports_dir: data/reports
+
+backtest:
+  initial_cash: 10000
+  risk_per_trade: 0.01
+  commission_per_unit: 0.0
+  slippage_points: 2
+  point_size: 0.01
+  allow_short: true
+  compound: false
+  annualization_periods: 362880
+
+strategy:
+  fast_ema: 20
+  slow_ema: 100
+  rsi_length: 14
+  rsi_buy_level: 30
+  rsi_sell_level: 70
+  atr_length: 14
+  stop_loss_atr: 1.5
+  take_profit_atr: 2.0
+  max_spread_points: 30
+
