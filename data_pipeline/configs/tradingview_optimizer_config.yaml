@@ -62,6 +62,7 @@ search:
   max_workers: 0
 
 reject:
+  min_validation_net_pnl: 0
   min_trades_per_year: 500
   max_trades_per_year: null
   preferred_trades_per_year: null

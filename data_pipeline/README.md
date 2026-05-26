@@ -263,3 +263,35 @@ the candidate parameter blocks back into TradingView.
 These presets are candidates to paste back into Pine and re-test in
 TradingView. They are not proof of profitability, predictive power, safety, or
 live readiness.
+
+## Diagnose TradingView Strategy Edge
+
+Run fee and engine-slice diagnostics to separate signal edge from execution
+cost:
+
+```powershell
+python src/tradingview_diagnostics.py --config configs/tradingview_optimizer_config.yaml --iterations 30 --workers 12
+```
+
+The diagnostics compare:
+
+```text
+Fee profiles: zero cost, Bybit maker+taker, Bybit taker+taker, MEXC low cost, worst-case taker
+Strategy slices: auto, MR only, breakout only, long only, short only
+Timeframes: M15, M30, H1, H2
+```
+
+Outputs:
+
+```text
+data/reports/tradingview_diagnostics/summary.csv
+data/reports/tradingview_diagnostics/timeframe_summary.csv
+data/reports/tradingview_diagnostics/all_results.csv
+data/reports/tradingview_diagnostics/top_results.csv
+data/reports/tradingview_diagnostics/cases/<fee>__<slice>/all_results.csv
+```
+
+Use this before deeper optimization. If zero-cost works but real-fee cases
+fail, the strategy has gross signal edge but not enough edge after execution
+costs. If MR-only or short-only fail even at zero cost, those engines should
+not be tuned blindly.

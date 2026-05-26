@@ -281,9 +281,12 @@ def evaluate_candidate_worker(task: tuple[str, dict[str, Any]]) -> dict[str, Any
 
 def parameter_order(config: dict[str, Any]) -> list[str]:
     keys: list[str] = []
-    configured = set(config.get("parameters", {}).keys())
+    configured = set((config.get("fixed") or {}).keys()) | set(config.get("parameters", {}).keys())
     for key in BASE_PARAMETER_ORDER:
         if key in configured:
+            keys.append(key)
+    for key in (config.get("fixed") or {}).keys():
+        if key not in keys:
             keys.append(key)
     for key in config.get("parameters", {}).keys():
         if key not in keys:
@@ -1143,6 +1146,9 @@ def summarize_trades(
 
 def rejection_reasons(metrics: dict[str, Any], reject: dict[str, Any]) -> list[str]:
     reasons: list[str] = []
+    min_net_pnl = reject.get("min_validation_net_pnl")
+    if min_net_pnl is not None and metrics["net_pnl"] <= float(min_net_pnl):
+        reasons.append("validation net P&L below minimum")
     if metrics["trades_per_year"] < float(reject["min_trades_per_year"]):
         reasons.append("trades/year below minimum")
     max_trades = reject.get("max_trades_per_year")
