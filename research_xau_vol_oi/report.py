@@ -22,6 +22,7 @@ from research_xau_vol_oi.cme_history_importer import (
     CmeHistoryImporterResult,
     run_cme_history_importer,
 )
+from research_xau_vol_oi.cme_overlap_entry_tp_lab import run_cme_overlap_entry_tp_lab
 from research_xau_vol_oi.config import ResearchConfig
 from research_xau_vol_oi.approved_session_remap_interpretation import (
     ApprovedSessionRemapInterpretationResult,
@@ -447,6 +448,7 @@ def run_pipeline(
     run_pine_python_engine_lab(output_dir=output_root)
     run_python_engine_expanded_backtest_lab(output_dir=output_root)
     run_single_timeframe_validation_lab(output_dir=output_root)
+    run_cme_overlap_entry_tp_lab(output_dir=output_root)
     return {
         "feature_table": feature_path,
         "signal_events": events_path,
@@ -791,6 +793,13 @@ def run_pipeline(
         "python_fee_drag_by_timeframe": output_root / "python_fee_drag_by_timeframe.csv",
         "python_timeframe_decision": output_root / "python_timeframe_decision.csv",
         "python_4h_candidate_chart": charts_dir / "python_4h_candidate_chart.html",
+        "cme_overlap_date_audit": output_root / "cme_overlap_date_audit.csv",
+        "cme_overlap_market_map": output_root / "cme_overlap_market_map.csv",
+        "cme_overlap_rule_templates": output_root / "cme_overlap_rule_templates.csv",
+        "cme_overlap_entry_tp_trades": output_root / "cme_overlap_entry_tp_trades.csv",
+        "cme_overlap_entry_tp_summary": output_root / "cme_overlap_entry_tp_summary.csv",
+        "cme_overlap_timeframe_comparison": output_root / "cme_overlap_timeframe_comparison.csv",
+        "cme_overlap_pilot_decision": output_root / "cme_overlap_pilot_decision.csv",
         "backtest_summary": summary_path,
         "research_report": report_path,
         "leakage_audit_report": audit_path,
