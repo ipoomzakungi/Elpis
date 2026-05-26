@@ -6,10 +6,10 @@
   "scripts": {
     "download:bid": "dukascopy-node -i xauusd -from 2024-01-01 -to now -t m1 -p bid -f csv -dir ./data/raw/dukascopy -fn xauusd_m1_bid_2024_to_now.csv",
     "download:ask": "dukascopy-node -i xauusd -from 2024-01-01 -to now -t m1 -p ask -f csv -dir ./data/raw/dukascopy -fn xauusd_m1_ask_2024_to_now.csv",
-    "download": "npm run download:bid && npm run download:ask"
+    "download": "npm run download:bid && npm run download:ask",
+    "download:monthly": "powershell -ExecutionPolicy Bypass -File scripts/download_xauusd_dukascopy_monthly.ps1"
   },
   "dependencies": {
     "dukascopy-node": "^1.46.4"
   }
 }
-

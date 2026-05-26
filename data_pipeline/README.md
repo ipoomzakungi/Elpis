@@ -43,7 +43,30 @@ python -m pip install -r requirements.txt
 
 ## Download Data
 
-PowerShell:
+Recommended resumable PowerShell download:
+
+```powershell
+cd data_pipeline
+powershell -ExecutionPolicy Bypass -File scripts/download_xauusd_dukascopy_monthly.ps1 -Install
+```
+
+The monthly downloader writes resumable chunks under:
+
+```text
+data/raw/dukascopy/monthly/
+```
+
+Then it combines them into the default cleaner inputs:
+
+```text
+data/raw/dukascopy/xauusd_m1_bid_2024_to_now.csv
+data/raw/dukascopy/xauusd_m1_ask_2024_to_now.csv
+```
+
+If it stops partway through, rerun the same command. Existing non-empty monthly
+files are skipped unless you pass `-Force`.
+
+Single-range PowerShell download:
 
 ```powershell
 cd data_pipeline
@@ -66,7 +89,7 @@ Bash:
 
 ```bash
 cd data_pipeline
-bash scripts/download_xauusd_dukascopy.sh --install
+bash scripts/download_xauusd_dukascopy_monthly.sh --install
 ```
 
 ## Clean Data
