@@ -62,6 +62,11 @@ from research_xau_vol_oi.xau_trade_quality_score import (
     run_xau_trade_quality_score_lab,
     xau_trade_quality_report_lines,
 )
+from research_xau_vol_oi.xau_trade_quality_forward_monitor import (
+    XauTradeQualityForwardMonitorResult,
+    run_xau_trade_quality_forward_monitor,
+    xau_trade_quality_forward_monitor_report_lines,
+)
 from research_xau_vol_oi.yahoo_intraday_outcome_resolver import (
     YahooIntradayOutcomeResolverResult,
     run_yahoo_intraday_outcome_resolver,
@@ -424,6 +429,9 @@ def run_pipeline(
         output_dir=output_root,
     )
     xau_trade_quality_score = run_xau_trade_quality_score_lab(output_dir=output_root)
+    xau_trade_quality_forward_monitor = run_xau_trade_quality_forward_monitor(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -467,6 +475,7 @@ def run_pipeline(
         forward_event_evidence=forward_event_evidence,
         forward_evidence_integrity=forward_evidence_integrity,
         xau_trade_quality_score=xau_trade_quality_score,
+        xau_trade_quality_forward_monitor=xau_trade_quality_forward_monitor,
         dukascopy_spot=dukascopy_spot,
         charts_dir=charts_dir,
     )
@@ -837,6 +846,13 @@ def run_pipeline(
         "xau_trade_quality_score_backtest": output_root / "xau_trade_quality_score_backtest.csv",
         "xau_trade_quality_score_ablation": output_root / "xau_trade_quality_score_ablation.csv",
         "xau_trade_quality_forward_usage": output_root / "xau_trade_quality_forward_usage.md",
+        "xau_trade_quality_score_v1": output_root / "xau_trade_quality_score_v1.yaml",
+        "xau_trade_quality_score_v1_hash": output_root / "xau_trade_quality_score_v1_hash.txt",
+        "xau_trade_quality_forward_monitor": output_root / "xau_trade_quality_forward_monitor.csv",
+        "xau_trade_quality_bucket_stability": output_root / "xau_trade_quality_bucket_stability.csv",
+        "xau_trade_quality_component_stability": output_root
+        / "xau_trade_quality_component_stability.csv",
+        "xau_trade_quality_daily_watchlist": output_root / "xau_trade_quality_daily_watchlist.csv",
         "charts": charts_dir,
     }
 
@@ -865,6 +881,7 @@ def run_dukascopy_only_pipeline(
     forward_evidence = run_dukascopy_forward_evidence_refresh(output_dir=output_root)
     decision_dashboard = run_xau_decision_support_dashboard(output_dir=output_root)
     trade_quality_score = run_xau_trade_quality_score_lab(output_dir=output_root)
+    trade_quality_forward_monitor = run_xau_trade_quality_forward_monitor(output_dir=output_root)
     report_path = output_root / "research_report.md"
     report_path.write_text(
         "\n".join(
@@ -878,6 +895,8 @@ def run_dukascopy_only_pipeline(
                 *xau_decision_support_report_lines(decision_dashboard),
                 "",
                 *xau_trade_quality_report_lines(trade_quality_score),
+                "",
+                *xau_trade_quality_forward_monitor_report_lines(trade_quality_forward_monitor),
             ]
         ),
         encoding="utf-8",
@@ -900,6 +919,12 @@ def run_dukascopy_only_pipeline(
             for name, path in trade_quality_score.paths.items()
             if name.endswith("_csv") or name.endswith("_md")
         },
+        **{
+            name: path
+            for name, path in trade_quality_forward_monitor.paths.items()
+            if name.endswith("_csv") or name.endswith("_md") or name.endswith("_yaml")
+        },
+        "xau_trade_quality_score_v1_hash": trade_quality_forward_monitor.frozen_config.hash_path,
     }
 
 
@@ -1076,6 +1101,7 @@ def write_research_report(
     forward_event_evidence: ForwardEventEvidenceAggregatorResult | None = None,
     forward_evidence_integrity: ForwardEvidenceIntegrityAuditResult | None = None,
     xau_trade_quality_score: XauTradeQualityScoreResult | None = None,
+    xau_trade_quality_forward_monitor: XauTradeQualityForwardMonitorResult | None = None,
     dukascopy_spot: DukascopySpotIntegrationResult | None = None,
     charts_dir: Path,
 ) -> None:
@@ -1148,6 +1174,8 @@ def write_research_report(
         *forward_evidence_integrity_report_lines(forward_evidence_integrity),
         "",
         *xau_trade_quality_report_lines(xau_trade_quality_score),
+        "",
+        *xau_trade_quality_forward_monitor_report_lines(xau_trade_quality_forward_monitor),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
