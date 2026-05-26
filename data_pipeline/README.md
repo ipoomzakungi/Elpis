@@ -221,14 +221,20 @@ Default input:
 
 ```text
 data/processed/xauusd_m15_2024_to_now.parquet
+data/processed/xauusd_m30_2024_to_now.parquet
+data/processed/xauusd_h1_2024_to_now.parquet
+data/processed/xauusd_h2_2024_to_now.parquet
 ```
 
 Outputs:
 
 ```text
 data/reports/tradingview_optimizer/top_results.csv
+data/reports/tradingview_optimizer/all_results.csv
 data/reports/tradingview_optimizer/best_presets.json
 data/reports/tradingview_optimizer/pine_input_preset.md
+data/reports/tradingview_optimizer/<timeframe>/top_results.csv
+data/reports/tradingview_optimizer/<timeframe>/all_results.csv
 ```
 
 The optimizer approximates Donchian breakouts, SD mean reversion, score
@@ -237,10 +243,12 @@ stops, and time exits. It uses walk-forward train/validation/test splits and
 rejects validation configs outside the configured trade-frequency,
 profit-factor, average-win/loss, and commission-drag thresholds.
 
-The default config targets the Pine file's high-frequency `Research Frequency`
-effective-input preset, with a hard validation gate of 500-1500 trades/year and
-a ranking preference near 1000 trades/year. Keep the Pine `Entry strictness
-preset`, fee profile, order fee mode, slippage, and funding inputs aligned with
+The default config explores M15, M30, H1, and H2 using the Pine file's
+high-frequency `Research Frequency` effective-input preset. It requires at
+least 500 trades/year but does not cap the maximum trade count; ranking is
+driven mainly by validation net P&L, profit factor, win/loss quality, drawdown,
+and commission drag. Keep the Pine `Entry strictness preset`, fee profile,
+order fee mode, slippage, and funding inputs aligned with
 `pine_input_preset.md` before pasting one of the candidate parameter blocks back
 into TradingView.
 

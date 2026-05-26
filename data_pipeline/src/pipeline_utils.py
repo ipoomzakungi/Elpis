@@ -318,6 +318,8 @@ def timeframe_to_polars_every(timeframe: str) -> str:
         "30m": "30m",
         "h1": "1h",
         "1h": "1h",
+        "h2": "2h",
+        "2h": "2h",
         "h4": "4h",
         "4h": "4h",
         "d1": "1d",

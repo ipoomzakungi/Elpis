@@ -83,35 +83,85 @@ def load_frame(path: Path) -> list[dict[str, Any]]:
 
 def optimize(config_path: Path, iterations_override: int | None = None) -> dict[str, Any]:
     config = read_yaml(config_path)
-    data_path = resolve_path(config["data"]["input_path"])
     reports_dir = resolve_path(config["data"].get("reports_dir", "data/reports/tradingview_optimizer"))
     reports_dir.mkdir(parents=True, exist_ok=True)
-    rows = load_frame(data_path)
-    splits = split_rows(rows, config["walk_forward"])
     rng = random.Random(int(config.get("search", {}).get("seed", 42)))
     iterations = iterations_override or int(config.get("search", {}).get("iterations", 250))
+    top_n = int(config.get("search", {}).get("top_n", 20))
 
+    all_candidates: list[dict[str, Any]] = []
+    for data_spec in data_specs(config):
+        data_path = resolve_path(data_spec["input_path"])
+        timeframe = str(data_spec.get("timeframe") or config["data"].get("timeframe") or data_path.stem)
+        rows = load_frame(data_path)
+        splits = split_rows(rows, config["walk_forward"])
+        candidates = run_search(
+            config=config,
+            splits=splits,
+            rng=rng,
+            iterations=iterations,
+            timeframe=timeframe,
+            data_path=data_path,
+        )
+        ranked_for_timeframe = sorted(candidates, key=lambda item: item["score"], reverse=True)
+        timeframe_dir = reports_dir / timeframe
+        write_csv(timeframe_dir / "all_results.csv", ranked_for_timeframe)
+        write_csv(timeframe_dir / "top_results.csv", ranked_for_timeframe[:top_n])
+        write_json(timeframe_dir / "best_presets.json", build_presets(ranked_for_timeframe[:top_n], config))
+        write_pine_markdown(timeframe_dir / "pine_input_preset.md", ranked_for_timeframe[:top_n], config)
+        all_candidates.extend(candidates)
+
+    ranked = sorted(all_candidates, key=lambda item: item["score"], reverse=True)
+    top = ranked[:top_n]
+    write_csv(reports_dir / "all_results.csv", ranked)
+    write_csv(reports_dir / "top_results.csv", top)
+    write_json(reports_dir / "best_presets.json", build_presets(top, config))
+    write_pine_markdown(reports_dir / "pine_input_preset.md", top, config)
+    return {
+        "reports_dir": reports_dir,
+        "evaluated": len(all_candidates),
+        "accepted": sum(1 for item in all_candidates if item["accepted"]),
+        "best": top[0] if top else None,
+    }
+
+
+def data_specs(config: dict[str, Any]) -> list[dict[str, Any]]:
+    data = config["data"]
+    inputs = data.get("inputs")
+    if inputs:
+        specs = []
+        for item in inputs:
+            if not isinstance(item, dict) or "input_path" not in item:
+                raise ValueError("Each data input must be a mapping with input_path")
+            specs.append(item)
+        return specs
+    return [
+        {
+            "input_path": data["input_path"],
+            "timeframe": data.get("timeframe"),
+        }
+    ]
+
+
+def run_search(
+    config: dict[str, Any],
+    splits: dict[str, list[dict[str, Any]]],
+    rng: random.Random,
+    iterations: int,
+    timeframe: str,
+    data_path: Path,
+) -> list[dict[str, Any]]:
     fixed = config.get("fixed", {})
     parameter_space = config["parameters"]
     candidates = []
     for index in range(iterations):
         params = {**fixed, **sample_params(parameter_space, rng)}
         params["stopSd"] = max(params["stopSd"], params["entrySd"] + 0.25)
-        result = evaluate_candidate(index + 1, params, splits, config)
+        result = evaluate_candidate(f"{timeframe}_{index + 1}", params, splits, config)
+        result["timeframe"] = timeframe
+        result["data_path"] = data_path
         candidates.append(result)
-
-    ranked = sorted(candidates, key=lambda item: item["score"], reverse=True)
-    top_n = int(config.get("search", {}).get("top_n", 20))
-    top = ranked[:top_n]
-    write_csv(reports_dir / "top_results.csv", top)
-    write_json(reports_dir / "best_presets.json", build_presets(top, config, data_path))
-    write_pine_markdown(reports_dir / "pine_input_preset.md", top, config, data_path)
-    return {
-        "reports_dir": reports_dir,
-        "evaluated": len(candidates),
-        "accepted": sum(1 for item in candidates if item["accepted"]),
-        "best": top[0] if top else None,
-    }
+    return candidates
 
 
 def split_rows(rows: list[dict[str, Any]], split_config: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
@@ -890,7 +940,8 @@ def rejection_reasons(metrics: dict[str, Any], reject: dict[str, Any]) -> list[s
     reasons: list[str] = []
     if metrics["trades_per_year"] < float(reject["min_trades_per_year"]):
         reasons.append("trades/year below minimum")
-    if metrics["trades_per_year"] > float(reject["max_trades_per_year"]):
+    max_trades = reject.get("max_trades_per_year")
+    if max_trades not in (None, "", 0, "none", "null") and metrics["trades_per_year"] > float(max_trades):
         reasons.append("trades/year above maximum")
     if metrics["profit_factor"] is None or metrics["profit_factor"] < float(reject["min_validation_profit_factor"]):
         reasons.append("validation profit factor below minimum")
@@ -906,14 +957,14 @@ def rejection_reasons(metrics: dict[str, Any], reject: dict[str, Any]) -> list[s
 
 def validation_score(metrics: dict[str, Any], reject: dict[str, Any]) -> float:
     pf = min(metrics["profit_factor"] or 0.0, 3.0)
-    min_trades = float(reject["min_trades_per_year"])
-    max_trades = float(reject["max_trades_per_year"])
-    target_trades = float(reject.get("preferred_trades_per_year", (min_trades + max_trades) * 0.5))
-    trade_band = max((max_trades - min_trades) * 0.25, 1.0)
-    trades_score = -abs(metrics["trades_per_year"] - target_trades) / trade_band
+    min_trades = float(reject.get("min_trades_per_year", 0.0))
+    trades_score = min(metrics["trades_per_year"] / min_trades, 2.0) if min_trades else 0.0
+    if min_trades and metrics["trades_per_year"] < min_trades:
+        trades_score -= (min_trades - metrics["trades_per_year"]) / max(min_trades, 1.0) * 10.0
     win_loss = min(metrics["avg_win_loss"] or 0.0, 3.0)
     drawdown_penalty = abs(metrics["max_drawdown_pct"]) * 0.2
-    return metrics["net_pnl"] * 0.01 + pf * 10.0 + win_loss * 5.0 + trades_score - drawdown_penalty
+    commission_drag = metrics["commission_to_gross_profit"] or 0.0
+    return metrics["net_pnl"] * 0.02 + pf * 20.0 + win_loss * 8.0 + trades_score * 2.0 - drawdown_penalty - commission_drag * 8.0
 
 
 def prefix_metrics(prefix: str, metrics: dict[str, Any]) -> dict[str, Any]:
@@ -937,10 +988,9 @@ def prefix_metrics(prefix: str, metrics: dict[str, Any]) -> dict[str, Any]:
     return {f"{prefix}_{key}": metrics.get(key) for key in keys}
 
 
-def build_presets(top: list[dict[str, Any]], config: dict[str, Any], data_path: Path) -> dict[str, Any]:
+def build_presets(top: list[dict[str, Any]], config: dict[str, Any]) -> dict[str, Any]:
     return {
         "source": "TradingView strategy Python approximation",
-        "data_path": data_path,
         "created_at": datetime.now(timezone.utc),
         "fixed_inputs": {
             "entryStrictness": config.get("fixed", {}).get("entryStrictness", "balanced_quality"),
@@ -959,6 +1009,8 @@ def build_presets(top: list[dict[str, Any]], config: dict[str, Any], data_path: 
                 "rank": index + 1,
                 "score": row["score"],
                 "accepted": row["accepted"],
+                "timeframe": row.get("timeframe"),
+                "data_path": row.get("data_path"),
                 "parameters": {key: row[key] for key in PARAMETER_ORDER},
                 "validation": {key.removeprefix("validation_"): value for key, value in row.items() if key.startswith("validation_")},
                 "test": {key.removeprefix("test_"): value for key, value in row.items() if key.startswith("test_")},
@@ -968,13 +1020,13 @@ def build_presets(top: list[dict[str, Any]], config: dict[str, Any], data_path: 
     }
 
 
-def write_pine_markdown(path: Path, top: list[dict[str, Any]], config: dict[str, Any], data_path: Path) -> None:
+def write_pine_markdown(path: Path, top: list[dict[str, Any]], config: dict[str, Any]) -> None:
     fixed = config.get("fixed", {})
     fees = config.get("fees", {})
     lines = [
         "# Pine Input Presets",
         "",
-        f"Data: `{data_path.as_posix()}`",
+        "Data: see each preset timeframe/path below.",
         "",
         "These presets come from a Python approximation of the Pine strategy. Re-test in TradingView before using them for any research conclusion.",
         "",
@@ -1000,6 +1052,8 @@ def write_pine_markdown(path: Path, top: list[dict[str, Any]], config: dict[str,
         lines.append(f"## Preset {index}")
         lines.append("")
         lines.append(f"- Accepted by validation filters: `{row['accepted']}`")
+        lines.append(f"- Timeframe: `{row.get('timeframe', 'n/a')}`")
+        lines.append(f"- Data: `{Path(row['data_path']).as_posix() if row.get('data_path') else 'n/a'}`")
         lines.append(f"- Validation PF: `{format_float(row['validation_profit_factor'])}`")
         lines.append(f"- Validation trades/year: `{format_float(row['validation_trades_per_year'])}`")
         lines.append(f"- Validation net P&L: `{format_float(row['validation_net_pnl'])}`")
@@ -1246,6 +1300,7 @@ def main() -> None:
         "TradingView optimizer complete: "
         f"evaluated={result['evaluated']}, accepted={result['accepted']}, "
         f"best_config_id={best['config_id']}, "
+        f"timeframe={best.get('timeframe', 'n/a')}, "
         f"validation_pf={format_float(best['validation_profit_factor'])}, "
         f"validation_trades_year={format_float(best['validation_trades_per_year'])}"
     )

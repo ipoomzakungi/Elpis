@@ -3,6 +3,15 @@ data:
   reports_dir: data/reports/tradingview_optimizer
   symbol: XAUUSD
   timeframe: 15m
+  inputs:
+    - timeframe: m15
+      input_path: data/processed/xauusd_m15_2024_to_now.parquet
+    - timeframe: m30
+      input_path: data/processed/xauusd_m30_2024_to_now.parquet
+    - timeframe: h1
+      input_path: data/processed/xauusd_h1_2024_to_now.parquet
+    - timeframe: h2
+      input_path: data/processed/xauusd_h2_2024_to_now.parquet
 
 execution:
   initial_cash: 100000
@@ -38,8 +47,8 @@ search:
 
 reject:
   min_trades_per_year: 500
-  max_trades_per_year: 1500
-  preferred_trades_per_year: 1000
+  max_trades_per_year: null
+  preferred_trades_per_year: null
   min_validation_profit_factor: 1.05
   min_avg_win_loss: 1.30
   max_commission_to_gross_profit: 0.40
