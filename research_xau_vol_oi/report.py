@@ -63,6 +63,11 @@ from research_xau_vol_oi.xau_indicator_chart_watchlist import (
     run_xau_indicator_chart_watchlist_output,
     xau_indicator_chart_watchlist_report_lines,
 )
+from research_xau_vol_oi.quikstrike_intraday_volume_snapshot import (
+    QuikStrikeIntradayVolumeSnapshotResult,
+    quikstrike_intraday_volume_report_lines,
+    run_quikstrike_intraday_volume_snapshot,
+)
 from research_xau_vol_oi.config import ResearchConfig
 from research_xau_vol_oi.approved_session_remap_interpretation import (
     ApprovedSessionRemapInterpretationResult,
@@ -502,6 +507,9 @@ def run_pipeline(
     xau_indicator_chart_watchlist = run_xau_indicator_chart_watchlist_output(
         output_dir=output_root,
     )
+    quikstrike_intraday_volume = run_quikstrike_intraday_volume_snapshot(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -556,6 +564,7 @@ def run_pipeline(
         sd_grid_result_integration=sd_grid_result_integration,
         xau_indicator_blueprint=xau_indicator_blueprint,
         xau_indicator_chart_watchlist=xau_indicator_chart_watchlist,
+        quikstrike_intraday_volume=quikstrike_intraday_volume,
         dukascopy_spot=dukascopy_spot,
         charts_dir=charts_dir,
     )
@@ -974,6 +983,24 @@ def run_pipeline(
         / "xau_indicator_watchlist_latest.md",
         "xau_indicator_blueprint_latest_chart": charts_dir
         / "xau_indicator_blueprint_latest.html",
+        "quikstrike_intraday_volume_manual_template": output_root
+        / "quikstrike_intraday_volume_manual_template.csv",
+        "quikstrike_intraday_volume_manual_guide": output_root
+        / "quikstrike_intraday_volume_manual_guide.md",
+        "quikstrike_intraday_volume_snapshot": output_root
+        / "quikstrike_intraday_volume_snapshot.csv",
+        "quikstrike_intraday_volume_snapshot_report": output_root
+        / "quikstrike_intraday_volume_snapshot.md",
+        "quikstrike_wall_scenarios": output_root / "quikstrike_wall_scenarios.csv",
+        "quikstrike_wall_scenarios_report": output_root / "quikstrike_wall_scenarios.md",
+        "xau_indicator_latest_state_with_quikstrike": output_root
+        / "xau_indicator_latest_state_with_quikstrike.csv",
+        "xau_indicator_latest_state_with_quikstrike_report": output_root
+        / "xau_indicator_latest_state_with_quikstrike.md",
+        "quikstrike_example_4550_scenario": output_root
+        / "quikstrike_example_4550_scenario.csv",
+        "quikstrike_example_4550_scenario_report": output_root
+        / "quikstrike_example_4550_scenario.md",
         "charts": charts_dir,
     }
 
@@ -1019,6 +1046,9 @@ def run_dukascopy_only_pipeline(
     xau_indicator_chart_watchlist = run_xau_indicator_chart_watchlist_output(
         output_dir=output_root,
     )
+    quikstrike_intraday_volume = run_quikstrike_intraday_volume_snapshot(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     report_path.write_text(
         "\n".join(
@@ -1059,6 +1089,10 @@ def run_dukascopy_only_pipeline(
                 "",
                 *xau_indicator_chart_watchlist_report_lines(
                     xau_indicator_chart_watchlist,
+                ),
+                "",
+                *quikstrike_intraday_volume_report_lines(
+                    quikstrike_intraday_volume,
                 ),
             ]
         ),
@@ -1137,6 +1171,11 @@ def run_dukascopy_only_pipeline(
             name: path
             for name, path in xau_indicator_chart_watchlist.paths.items()
             if name.endswith("_csv") or name.endswith("_md") or name.endswith("_html")
+        },
+        **{
+            name: path
+            for name, path in quikstrike_intraday_volume.paths.items()
+            if name.endswith("_csv") or name.endswith("_md")
         },
     }
 
@@ -1325,6 +1364,7 @@ def write_research_report(
     sd_grid_result_integration: SdGridResultIntegrationResult | None = None,
     xau_indicator_blueprint: XauSdGridCmeIndicatorBlueprintResult | None = None,
     xau_indicator_chart_watchlist: XauIndicatorChartWatchlistResult | None = None,
+    quikstrike_intraday_volume: QuikStrikeIntradayVolumeSnapshotResult | None = None,
     dukascopy_spot: DukascopySpotIntegrationResult | None = None,
     charts_dir: Path,
 ) -> None:
@@ -1419,6 +1459,8 @@ def write_research_report(
         *xau_sd_grid_cme_indicator_blueprint_report_lines(xau_indicator_blueprint),
         "",
         *xau_indicator_chart_watchlist_report_lines(xau_indicator_chart_watchlist),
+        "",
+        *quikstrike_intraday_volume_report_lines(quikstrike_intraday_volume),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
