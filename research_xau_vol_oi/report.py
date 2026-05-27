@@ -33,6 +33,11 @@ from research_xau_vol_oi.guru_cme_hypothesis_lab import (
     guru_cme_hypothesis_report_lines,
     run_guru_cme_hypothesis_lab,
 )
+from research_xau_vol_oi.guru_semantic_reasoning_lab import (
+    GuruSemanticReasoningLabResult,
+    guru_semantic_reasoning_report_lines,
+    run_guru_semantic_reasoning_lab,
+)
 from research_xau_vol_oi.config import ResearchConfig
 from research_xau_vol_oi.approved_session_remap_interpretation import (
     ApprovedSessionRemapInterpretationResult,
@@ -460,6 +465,7 @@ def run_pipeline(
     )
     cme_overlap_backtest_lab = run_cme_overlap_backtest_lab(output_dir=output_root)
     guru_cme_hypothesis_lab = run_guru_cme_hypothesis_lab(output_dir=output_root)
+    guru_semantic_reasoning_lab = run_guru_semantic_reasoning_lab(output_dir=output_root)
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -508,6 +514,7 @@ def run_pipeline(
         xau_trade_quality_usage_guide=xau_trade_quality_usage_guide,
         cme_overlap_backtest_lab=cme_overlap_backtest_lab,
         guru_cme_hypothesis_lab=guru_cme_hypothesis_lab,
+        guru_semantic_reasoning_lab=guru_semantic_reasoning_lab,
         dukascopy_spot=dukascopy_spot,
         charts_dir=charts_dir,
     )
@@ -882,6 +889,15 @@ def run_pipeline(
         "cme_put_call_wall_behavior": output_root / "cme_put_call_wall_behavior.csv",
         "xau_sd_grid_behavior_test": output_root / "xau_sd_grid_behavior_test.csv",
         "cme_only_rule_candidates": output_root / "cme_only_rule_candidates.csv",
+        "guru_transcript_semantic_segments": output_root / "guru_transcript_semantic_segments.csv",
+        "guru_semantic_claims": output_root / "guru_semantic_claims.csv",
+        "guru_reasoning_frequency_map": output_root / "guru_reasoning_frequency_map.csv",
+        "sd_grid_rule_family": output_root / "sd_grid_rule_family.csv",
+        "dukascopy_sd_grid_backtest": output_root / "dukascopy_sd_grid_backtest.csv",
+        "cme_wall_magnet_tp_backtest": output_root / "cme_wall_magnet_tp_backtest.csv",
+        "guru_to_data_mapping_report": output_root / "guru_to_data_mapping_report.csv",
+        "cme_only_rule_translation_from_guru": output_root
+        / "cme_only_rule_translation_from_guru.csv",
         "dukascopy_xau_m1_mid": output_root / "dukascopy_xau_m1_mid.parquet",
         "dukascopy_data_readiness_summary": output_root / "dukascopy_data_readiness_summary.md",
         "backtest_summary": summary_path,
@@ -943,6 +959,7 @@ def run_dukascopy_only_pipeline(
     trade_quality_usage_guide = run_xau_trade_quality_usage_guide(output_dir=output_root)
     cme_overlap_backtest_lab = run_cme_overlap_backtest_lab(output_dir=output_root)
     guru_cme_hypothesis_lab = run_guru_cme_hypothesis_lab(output_dir=output_root)
+    guru_semantic_reasoning_lab = run_guru_semantic_reasoning_lab(output_dir=output_root)
     report_path = output_root / "research_report.md"
     report_path.write_text(
         "\n".join(
@@ -966,6 +983,8 @@ def run_dukascopy_only_pipeline(
                 *cme_overlap_backtest_report_lines(cme_overlap_backtest_lab),
                 "",
                 *guru_cme_hypothesis_report_lines(guru_cme_hypothesis_lab),
+                "",
+                *guru_semantic_reasoning_report_lines(guru_semantic_reasoning_lab),
             ]
         ),
         encoding="utf-8",
@@ -1012,6 +1031,11 @@ def run_dukascopy_only_pipeline(
         **{
             name: path
             for name, path in guru_cme_hypothesis_lab.paths.items()
+            if name.endswith("_csv") or name.endswith("_md")
+        },
+        **{
+            name: path
+            for name, path in guru_semantic_reasoning_lab.paths.items()
             if name.endswith("_csv") or name.endswith("_md")
         },
     }
@@ -1195,6 +1219,7 @@ def write_research_report(
     xau_trade_quality_usage_guide: XauTradeQualityUsageGuideResult | None = None,
     cme_overlap_backtest_lab: CmeOverlapBacktestLabResult | None = None,
     guru_cme_hypothesis_lab: GuruCmeHypothesisLabResult | None = None,
+    guru_semantic_reasoning_lab: GuruSemanticReasoningLabResult | None = None,
     dukascopy_spot: DukascopySpotIntegrationResult | None = None,
     charts_dir: Path,
 ) -> None:
@@ -1277,6 +1302,8 @@ def write_research_report(
         *cme_overlap_backtest_report_lines(cme_overlap_backtest_lab),
         "",
         *guru_cme_hypothesis_report_lines(guru_cme_hypothesis_lab),
+        "",
+        *guru_semantic_reasoning_report_lines(guru_semantic_reasoning_lab),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
