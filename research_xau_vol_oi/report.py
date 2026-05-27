@@ -43,6 +43,11 @@ from research_xau_vol_oi.cme_wall_strategy_performance import (
     cme_wall_strategy_performance_report_lines,
     run_cme_wall_strategy_performance,
 )
+from research_xau_vol_oi.cme_wall_strategy_realism_audit import (
+    CmeWallStrategyRealismAuditResult,
+    cme_wall_strategy_realism_audit_report_lines,
+    run_cme_wall_strategy_realism_audit,
+)
 from research_xau_vol_oi.guru_cme_hypothesis_lab import (
     GuruCmeHypothesisLabResult,
     guru_cme_hypothesis_report_lines,
@@ -534,6 +539,9 @@ def run_pipeline(
     cme_wall_strategy_performance = run_cme_wall_strategy_performance(
         output_dir=output_root,
     )
+    cme_wall_strategy_realism_audit = run_cme_wall_strategy_realism_audit(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -592,6 +600,7 @@ def run_pipeline(
         cme_fetch_output_wiring_audit=cme_fetch_output_wiring_audit,
         fetched_cme_wall_state_tracker=fetched_cme_wall_state_tracker,
         cme_wall_strategy_performance=cme_wall_strategy_performance,
+        cme_wall_strategy_realism_audit=cme_wall_strategy_realism_audit,
         dukascopy_spot=dukascopy_spot,
         charts_dir=charts_dir,
     )
@@ -1064,6 +1073,18 @@ def run_pipeline(
         "cme_wall_strategy_vs_buy_hold": output_root / "cme_wall_strategy_vs_buy_hold.csv",
         "cme_wall_strategy_quality_grade": output_root
         / "cme_wall_strategy_quality_grade.csv",
+        "cme_wall_strategy_ledger_reconciliation": output_root
+        / "cme_wall_strategy_ledger_reconciliation.csv",
+        "cme_wall_strategy_trade_realism_audit": output_root
+        / "cme_wall_strategy_trade_realism_audit.csv",
+        "cme_wall_strategy_gross_loss_sanity": output_root
+        / "cme_wall_strategy_gross_loss_sanity.csv",
+        "cme_wall_strategy_independent_event_performance": output_root
+        / "cme_wall_strategy_independent_event_performance.csv",
+        "cme_wall_strategy_corrected_quality_grade": output_root
+        / "cme_wall_strategy_corrected_quality_grade.csv",
+        "cme_wall_strategy_entry_exit_rewrite_plan": output_root
+        / "cme_wall_strategy_entry_exit_rewrite_plan.csv",
         "charts": charts_dir,
     }
 
@@ -1119,6 +1140,9 @@ def run_dukascopy_only_pipeline(
         output_dir=output_root,
     )
     cme_wall_strategy_performance = run_cme_wall_strategy_performance(
+        output_dir=output_root,
+    )
+    cme_wall_strategy_realism_audit = run_cme_wall_strategy_realism_audit(
         output_dir=output_root,
     )
     report_path = output_root / "research_report.md"
@@ -1177,6 +1201,10 @@ def run_dukascopy_only_pipeline(
                 "",
                 *cme_wall_strategy_performance_report_lines(
                     cme_wall_strategy_performance,
+                ),
+                "",
+                *cme_wall_strategy_realism_audit_report_lines(
+                    cme_wall_strategy_realism_audit,
                 ),
             ]
         ),
@@ -1275,6 +1303,11 @@ def run_dukascopy_only_pipeline(
             name: path
             for name, path in cme_wall_strategy_performance.paths.items()
             if name.endswith("_csv") or name.endswith("_md") or name.endswith("_svg")
+        },
+        **{
+            name: path
+            for name, path in cme_wall_strategy_realism_audit.paths.items()
+            if name.endswith("_csv") or name.endswith("_md")
         },
     }
 
@@ -1467,6 +1500,7 @@ def write_research_report(
     cme_fetch_output_wiring_audit: CmeFetchOutputWiringAuditResult | None = None,
     fetched_cme_wall_state_tracker: FetchedCmeWallStateTrackerResult | None = None,
     cme_wall_strategy_performance: CmeWallStrategyPerformanceResult | None = None,
+    cme_wall_strategy_realism_audit: CmeWallStrategyRealismAuditResult | None = None,
     dukascopy_spot: DukascopySpotIntegrationResult | None = None,
     charts_dir: Path,
 ) -> None:
@@ -1569,6 +1603,8 @@ def write_research_report(
         *fetched_cme_wall_state_tracker_report_lines(fetched_cme_wall_state_tracker),
         "",
         *cme_wall_strategy_performance_report_lines(cme_wall_strategy_performance),
+        "",
+        *cme_wall_strategy_realism_audit_report_lines(cme_wall_strategy_realism_audit),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
