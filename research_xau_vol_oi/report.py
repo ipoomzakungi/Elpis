@@ -38,6 +38,11 @@ from research_xau_vol_oi.guru_semantic_reasoning_lab import (
     guru_semantic_reasoning_report_lines,
     run_guru_semantic_reasoning_lab,
 )
+from research_xau_vol_oi.gemini_guru_rulebook_ingest import (
+    GeminiGuruRulebookIngestResult,
+    gemini_guru_rulebook_report_lines,
+    run_gemini_guru_rulebook_ingest,
+)
 from research_xau_vol_oi.config import ResearchConfig
 from research_xau_vol_oi.approved_session_remap_interpretation import (
     ApprovedSessionRemapInterpretationResult,
@@ -466,6 +471,7 @@ def run_pipeline(
     cme_overlap_backtest_lab = run_cme_overlap_backtest_lab(output_dir=output_root)
     guru_cme_hypothesis_lab = run_guru_cme_hypothesis_lab(output_dir=output_root)
     guru_semantic_reasoning_lab = run_guru_semantic_reasoning_lab(output_dir=output_root)
+    gemini_guru_rulebook_ingest = run_gemini_guru_rulebook_ingest(output_dir=output_root)
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -515,6 +521,7 @@ def run_pipeline(
         cme_overlap_backtest_lab=cme_overlap_backtest_lab,
         guru_cme_hypothesis_lab=guru_cme_hypothesis_lab,
         guru_semantic_reasoning_lab=guru_semantic_reasoning_lab,
+        gemini_guru_rulebook_ingest=gemini_guru_rulebook_ingest,
         dukascopy_spot=dukascopy_spot,
         charts_dir=charts_dir,
     )
@@ -960,6 +967,7 @@ def run_dukascopy_only_pipeline(
     cme_overlap_backtest_lab = run_cme_overlap_backtest_lab(output_dir=output_root)
     guru_cme_hypothesis_lab = run_guru_cme_hypothesis_lab(output_dir=output_root)
     guru_semantic_reasoning_lab = run_guru_semantic_reasoning_lab(output_dir=output_root)
+    gemini_guru_rulebook_ingest = run_gemini_guru_rulebook_ingest(output_dir=output_root)
     report_path = output_root / "research_report.md"
     report_path.write_text(
         "\n".join(
@@ -985,6 +993,8 @@ def run_dukascopy_only_pipeline(
                 *guru_cme_hypothesis_report_lines(guru_cme_hypothesis_lab),
                 "",
                 *guru_semantic_reasoning_report_lines(guru_semantic_reasoning_lab),
+                "",
+                *gemini_guru_rulebook_report_lines(gemini_guru_rulebook_ingest),
             ]
         ),
         encoding="utf-8",
@@ -1036,6 +1046,11 @@ def run_dukascopy_only_pipeline(
         **{
             name: path
             for name, path in guru_semantic_reasoning_lab.paths.items()
+            if name.endswith("_csv") or name.endswith("_md")
+        },
+        **{
+            name: path
+            for name, path in gemini_guru_rulebook_ingest.paths.items()
             if name.endswith("_csv") or name.endswith("_md")
         },
     }
@@ -1220,6 +1235,7 @@ def write_research_report(
     cme_overlap_backtest_lab: CmeOverlapBacktestLabResult | None = None,
     guru_cme_hypothesis_lab: GuruCmeHypothesisLabResult | None = None,
     guru_semantic_reasoning_lab: GuruSemanticReasoningLabResult | None = None,
+    gemini_guru_rulebook_ingest: GeminiGuruRulebookIngestResult | None = None,
     dukascopy_spot: DukascopySpotIntegrationResult | None = None,
     charts_dir: Path,
 ) -> None:
@@ -1304,6 +1320,8 @@ def write_research_report(
         *guru_cme_hypothesis_report_lines(guru_cme_hypothesis_lab),
         "",
         *guru_semantic_reasoning_report_lines(guru_semantic_reasoning_lab),
+        "",
+        *gemini_guru_rulebook_report_lines(gemini_guru_rulebook_ingest),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
