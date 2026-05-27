@@ -33,6 +33,11 @@ from research_xau_vol_oi.cme_fetch_output_wiring_audit import (
     cme_fetch_output_wiring_audit_report_lines,
     run_cme_fetch_output_wiring_audit,
 )
+from research_xau_vol_oi.fetched_cme_wall_state_tracker import (
+    FetchedCmeWallStateTrackerResult,
+    fetched_cme_wall_state_tracker_report_lines,
+    run_fetched_cme_wall_state_tracker,
+)
 from research_xau_vol_oi.guru_cme_hypothesis_lab import (
     GuruCmeHypothesisLabResult,
     guru_cme_hypothesis_report_lines,
@@ -518,6 +523,9 @@ def run_pipeline(
     cme_fetch_output_wiring_audit = run_cme_fetch_output_wiring_audit(
         output_dir=output_root,
     )
+    fetched_cme_wall_state_tracker = run_fetched_cme_wall_state_tracker(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -574,6 +582,7 @@ def run_pipeline(
         xau_indicator_chart_watchlist=xau_indicator_chart_watchlist,
         quikstrike_intraday_volume=quikstrike_intraday_volume,
         cme_fetch_output_wiring_audit=cme_fetch_output_wiring_audit,
+        fetched_cme_wall_state_tracker=fetched_cme_wall_state_tracker,
         dukascopy_spot=dukascopy_spot,
         charts_dir=charts_dir,
     )
@@ -1023,6 +1032,13 @@ def run_pipeline(
         "cme_overlap_backtest_rerun_with_fetched_cme": output_root
         / "cme_overlap_backtest_rerun_with_fetched_cme.csv",
         "cme_fetched_data_usability_gap": output_root / "cme_fetched_data_usability_gap.csv",
+        "fetched_cme_wall_rankings": output_root / "fetched_cme_wall_rankings.csv",
+        "fetched_cme_daily_wall_state": output_root / "fetched_cme_daily_wall_state.csv",
+        "fetched_cme_wall_outcome_journal": output_root
+        / "fetched_cme_wall_outcome_journal.csv",
+        "fetched_cme_wall_role_summary": output_root / "fetched_cme_wall_role_summary.csv",
+        "xau_indicator_latest_state_with_ranked_cme_walls": output_root
+        / "xau_indicator_latest_state_with_ranked_cme_walls.csv",
         "charts": charts_dir,
     }
 
@@ -1074,6 +1090,9 @@ def run_dukascopy_only_pipeline(
     cme_fetch_output_wiring_audit = run_cme_fetch_output_wiring_audit(
         output_dir=output_root,
     )
+    fetched_cme_wall_state_tracker = run_fetched_cme_wall_state_tracker(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     report_path.write_text(
         "\n".join(
@@ -1122,6 +1141,10 @@ def run_dukascopy_only_pipeline(
                 "",
                 *cme_fetch_output_wiring_audit_report_lines(
                     cme_fetch_output_wiring_audit,
+                ),
+                "",
+                *fetched_cme_wall_state_tracker_report_lines(
+                    fetched_cme_wall_state_tracker,
                 ),
             ]
         ),
@@ -1209,6 +1232,11 @@ def run_dukascopy_only_pipeline(
         **{
             name: path
             for name, path in cme_fetch_output_wiring_audit.paths.items()
+            if name.endswith("_csv") or name.endswith("_md")
+        },
+        **{
+            name: path
+            for name, path in fetched_cme_wall_state_tracker.paths.items()
             if name.endswith("_csv") or name.endswith("_md")
         },
     }
@@ -1400,6 +1428,7 @@ def write_research_report(
     xau_indicator_chart_watchlist: XauIndicatorChartWatchlistResult | None = None,
     quikstrike_intraday_volume: QuikStrikeIntradayVolumeSnapshotResult | None = None,
     cme_fetch_output_wiring_audit: CmeFetchOutputWiringAuditResult | None = None,
+    fetched_cme_wall_state_tracker: FetchedCmeWallStateTrackerResult | None = None,
     dukascopy_spot: DukascopySpotIntegrationResult | None = None,
     charts_dir: Path,
 ) -> None:
@@ -1498,6 +1527,8 @@ def write_research_report(
         *quikstrike_intraday_volume_report_lines(quikstrike_intraday_volume),
         "",
         *cme_fetch_output_wiring_audit_report_lines(cme_fetch_output_wiring_audit),
+        "",
+        *fetched_cme_wall_state_tracker_report_lines(fetched_cme_wall_state_tracker),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
