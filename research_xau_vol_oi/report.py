@@ -48,6 +48,11 @@ from research_xau_vol_oi.gemini_sd_grid_confirmation_backtest import (
     gemini_sd_grid_confirmation_report_lines,
     run_gemini_sd_grid_confirmation_backtest,
 )
+from research_xau_vol_oi.sd_grid_result_integration import (
+    SdGridResultIntegrationResult,
+    run_sd_grid_result_integration,
+    sd_grid_result_integration_report_lines,
+)
 from research_xau_vol_oi.config import ResearchConfig
 from research_xau_vol_oi.approved_session_remap_interpretation import (
     ApprovedSessionRemapInterpretationResult,
@@ -480,6 +485,7 @@ def run_pipeline(
     gemini_sd_grid_confirmation_backtest = run_gemini_sd_grid_confirmation_backtest(
         output_dir=output_root,
     )
+    sd_grid_result_integration = run_sd_grid_result_integration(output_dir=output_root)
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -531,6 +537,7 @@ def run_pipeline(
         guru_semantic_reasoning_lab=guru_semantic_reasoning_lab,
         gemini_guru_rulebook_ingest=gemini_guru_rulebook_ingest,
         gemini_sd_grid_confirmation_backtest=gemini_sd_grid_confirmation_backtest,
+        sd_grid_result_integration=sd_grid_result_integration,
         dukascopy_spot=dukascopy_spot,
         charts_dir=charts_dir,
     )
@@ -980,6 +987,7 @@ def run_dukascopy_only_pipeline(
     gemini_sd_grid_confirmation_backtest = run_gemini_sd_grid_confirmation_backtest(
         output_dir=output_root,
     )
+    sd_grid_result_integration = run_sd_grid_result_integration(output_dir=output_root)
     report_path = output_root / "research_report.md"
     report_path.write_text(
         "\n".join(
@@ -1011,6 +1019,8 @@ def run_dukascopy_only_pipeline(
                 *gemini_sd_grid_confirmation_report_lines(
                     gemini_sd_grid_confirmation_backtest,
                 ),
+                "",
+                *sd_grid_result_integration_report_lines(sd_grid_result_integration),
             ]
         ),
         encoding="utf-8",
@@ -1073,6 +1083,11 @@ def run_dukascopy_only_pipeline(
             name: path
             for name, path in gemini_sd_grid_confirmation_backtest.paths.items()
             if name.endswith("_csv") or name.endswith("_md")
+        },
+        **{
+            name: path
+            for name, path in sd_grid_result_integration.paths.items()
+            if name.endswith("_csv") or name.endswith("_md") or name.endswith("_yaml")
         },
     }
 
@@ -1258,6 +1273,7 @@ def write_research_report(
     guru_semantic_reasoning_lab: GuruSemanticReasoningLabResult | None = None,
     gemini_guru_rulebook_ingest: GeminiGuruRulebookIngestResult | None = None,
     gemini_sd_grid_confirmation_backtest: GeminiSdGridConfirmationBacktestResult | None = None,
+    sd_grid_result_integration: SdGridResultIntegrationResult | None = None,
     dukascopy_spot: DukascopySpotIntegrationResult | None = None,
     charts_dir: Path,
 ) -> None:
@@ -1346,6 +1362,8 @@ def write_research_report(
         *gemini_guru_rulebook_report_lines(gemini_guru_rulebook_ingest),
         "",
         *gemini_sd_grid_confirmation_report_lines(gemini_sd_grid_confirmation_backtest),
+        "",
+        *sd_grid_result_integration_report_lines(sd_grid_result_integration),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
