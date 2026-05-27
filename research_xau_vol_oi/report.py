@@ -58,6 +58,11 @@ from research_xau_vol_oi.xau_sd_grid_cme_indicator_blueprint import (
     run_xau_sd_grid_cme_indicator_blueprint,
     xau_sd_grid_cme_indicator_blueprint_report_lines,
 )
+from research_xau_vol_oi.xau_indicator_chart_watchlist import (
+    XauIndicatorChartWatchlistResult,
+    run_xau_indicator_chart_watchlist_output,
+    xau_indicator_chart_watchlist_report_lines,
+)
 from research_xau_vol_oi.config import ResearchConfig
 from research_xau_vol_oi.approved_session_remap_interpretation import (
     ApprovedSessionRemapInterpretationResult,
@@ -494,6 +499,9 @@ def run_pipeline(
     xau_indicator_blueprint = run_xau_sd_grid_cme_indicator_blueprint(
         output_dir=output_root,
     )
+    xau_indicator_chart_watchlist = run_xau_indicator_chart_watchlist_output(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -547,6 +555,7 @@ def run_pipeline(
         gemini_sd_grid_confirmation_backtest=gemini_sd_grid_confirmation_backtest,
         sd_grid_result_integration=sd_grid_result_integration,
         xau_indicator_blueprint=xau_indicator_blueprint,
+        xau_indicator_chart_watchlist=xau_indicator_chart_watchlist,
         dukascopy_spot=dukascopy_spot,
         charts_dir=charts_dir,
     )
@@ -958,6 +967,13 @@ def run_pipeline(
         "xau_manual_trade_review_checklist": output_root / "xau_manual_trade_review_checklist.csv",
         "xau_score_guardrail_summary": output_root / "xau_score_guardrail_summary.md",
         "xau_latest_watchlist_explanation": output_root / "xau_latest_watchlist_explanation.md",
+        "xau_indicator_levels_latest": output_root / "xau_indicator_levels_latest.csv",
+        "xau_indicator_levels_latest_report": output_root / "xau_indicator_levels_latest.md",
+        "xau_indicator_watchlist_latest": output_root / "xau_indicator_watchlist_latest.csv",
+        "xau_indicator_watchlist_latest_report": output_root
+        / "xau_indicator_watchlist_latest.md",
+        "xau_indicator_blueprint_latest_chart": charts_dir
+        / "xau_indicator_blueprint_latest.html",
         "charts": charts_dir,
     }
 
@@ -1000,6 +1016,9 @@ def run_dukascopy_only_pipeline(
     xau_indicator_blueprint = run_xau_sd_grid_cme_indicator_blueprint(
         output_dir=output_root,
     )
+    xau_indicator_chart_watchlist = run_xau_indicator_chart_watchlist_output(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     report_path.write_text(
         "\n".join(
@@ -1036,6 +1055,10 @@ def run_dukascopy_only_pipeline(
                 "",
                 *xau_sd_grid_cme_indicator_blueprint_report_lines(
                     xau_indicator_blueprint,
+                ),
+                "",
+                *xau_indicator_chart_watchlist_report_lines(
+                    xau_indicator_chart_watchlist,
                 ),
             ]
         ),
@@ -1109,6 +1132,11 @@ def run_dukascopy_only_pipeline(
             name: path
             for name, path in xau_indicator_blueprint.paths.items()
             if name.endswith("_csv") or name.endswith("_md") or name.endswith("_yaml")
+        },
+        **{
+            name: path
+            for name, path in xau_indicator_chart_watchlist.paths.items()
+            if name.endswith("_csv") or name.endswith("_md") or name.endswith("_html")
         },
     }
 
@@ -1296,6 +1324,7 @@ def write_research_report(
     gemini_sd_grid_confirmation_backtest: GeminiSdGridConfirmationBacktestResult | None = None,
     sd_grid_result_integration: SdGridResultIntegrationResult | None = None,
     xau_indicator_blueprint: XauSdGridCmeIndicatorBlueprintResult | None = None,
+    xau_indicator_chart_watchlist: XauIndicatorChartWatchlistResult | None = None,
     dukascopy_spot: DukascopySpotIntegrationResult | None = None,
     charts_dir: Path,
 ) -> None:
@@ -1388,6 +1417,8 @@ def write_research_report(
         *sd_grid_result_integration_report_lines(sd_grid_result_integration),
         "",
         *xau_sd_grid_cme_indicator_blueprint_report_lines(xau_indicator_blueprint),
+        "",
+        *xau_indicator_chart_watchlist_report_lines(xau_indicator_chart_watchlist),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
