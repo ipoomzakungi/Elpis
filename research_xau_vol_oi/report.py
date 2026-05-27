@@ -28,6 +28,11 @@ from research_xau_vol_oi.cme_overlap_backtest_lab import (
     run_cme_overlap_backtest_lab,
 )
 from research_xau_vol_oi.cme_overlap_entry_tp_lab import run_cme_overlap_entry_tp_lab
+from research_xau_vol_oi.cme_fetch_output_wiring_audit import (
+    CmeFetchOutputWiringAuditResult,
+    cme_fetch_output_wiring_audit_report_lines,
+    run_cme_fetch_output_wiring_audit,
+)
 from research_xau_vol_oi.guru_cme_hypothesis_lab import (
     GuruCmeHypothesisLabResult,
     guru_cme_hypothesis_report_lines,
@@ -510,6 +515,9 @@ def run_pipeline(
     quikstrike_intraday_volume = run_quikstrike_intraday_volume_snapshot(
         output_dir=output_root,
     )
+    cme_fetch_output_wiring_audit = run_cme_fetch_output_wiring_audit(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -565,6 +573,7 @@ def run_pipeline(
         xau_indicator_blueprint=xau_indicator_blueprint,
         xau_indicator_chart_watchlist=xau_indicator_chart_watchlist,
         quikstrike_intraday_volume=quikstrike_intraday_volume,
+        cme_fetch_output_wiring_audit=cme_fetch_output_wiring_audit,
         dukascopy_spot=dukascopy_spot,
         charts_dir=charts_dir,
     )
@@ -987,20 +996,33 @@ def run_pipeline(
         / "quikstrike_intraday_volume_manual_template.csv",
         "quikstrike_intraday_volume_manual_guide": output_root
         / "quikstrike_intraday_volume_manual_guide.md",
+        "quikstrike_snapshot_source_resolution": output_root
+        / "quikstrike_snapshot_source_resolution.csv",
         "quikstrike_intraday_volume_snapshot": output_root
         / "quikstrike_intraday_volume_snapshot.csv",
+        "quikstrike_intraday_volume_snapshot_from_fetch": output_root
+        / "quikstrike_intraday_volume_snapshot_from_fetch.csv",
         "quikstrike_intraday_volume_snapshot_report": output_root
         / "quikstrike_intraday_volume_snapshot.md",
         "quikstrike_wall_scenarios": output_root / "quikstrike_wall_scenarios.csv",
+        "quikstrike_wall_scenarios_from_fetch": output_root
+        / "quikstrike_wall_scenarios_from_fetch.csv",
         "quikstrike_wall_scenarios_report": output_root / "quikstrike_wall_scenarios.md",
         "xau_indicator_latest_state_with_quikstrike": output_root
         / "xau_indicator_latest_state_with_quikstrike.csv",
+        "xau_indicator_latest_state_with_quikstrike_from_fetch": output_root
+        / "xau_indicator_latest_state_with_quikstrike_from_fetch.csv",
         "xau_indicator_latest_state_with_quikstrike_report": output_root
         / "xau_indicator_latest_state_with_quikstrike.md",
         "quikstrike_example_4550_scenario": output_root
         / "quikstrike_example_4550_scenario.csv",
         "quikstrike_example_4550_scenario_report": output_root
         / "quikstrike_example_4550_scenario.md",
+        "cme_fetch_output_inventory": output_root / "cme_fetch_output_inventory.csv",
+        "cme_fetch_command_audit": output_root / "cme_fetch_command_audit.csv",
+        "cme_overlap_backtest_rerun_with_fetched_cme": output_root
+        / "cme_overlap_backtest_rerun_with_fetched_cme.csv",
+        "cme_fetched_data_usability_gap": output_root / "cme_fetched_data_usability_gap.csv",
         "charts": charts_dir,
     }
 
@@ -1049,6 +1071,9 @@ def run_dukascopy_only_pipeline(
     quikstrike_intraday_volume = run_quikstrike_intraday_volume_snapshot(
         output_dir=output_root,
     )
+    cme_fetch_output_wiring_audit = run_cme_fetch_output_wiring_audit(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     report_path.write_text(
         "\n".join(
@@ -1093,6 +1118,10 @@ def run_dukascopy_only_pipeline(
                 "",
                 *quikstrike_intraday_volume_report_lines(
                     quikstrike_intraday_volume,
+                ),
+                "",
+                *cme_fetch_output_wiring_audit_report_lines(
+                    cme_fetch_output_wiring_audit,
                 ),
             ]
         ),
@@ -1175,6 +1204,11 @@ def run_dukascopy_only_pipeline(
         **{
             name: path
             for name, path in quikstrike_intraday_volume.paths.items()
+            if name.endswith("_csv") or name.endswith("_md")
+        },
+        **{
+            name: path
+            for name, path in cme_fetch_output_wiring_audit.paths.items()
             if name.endswith("_csv") or name.endswith("_md")
         },
     }
@@ -1365,6 +1399,7 @@ def write_research_report(
     xau_indicator_blueprint: XauSdGridCmeIndicatorBlueprintResult | None = None,
     xau_indicator_chart_watchlist: XauIndicatorChartWatchlistResult | None = None,
     quikstrike_intraday_volume: QuikStrikeIntradayVolumeSnapshotResult | None = None,
+    cme_fetch_output_wiring_audit: CmeFetchOutputWiringAuditResult | None = None,
     dukascopy_spot: DukascopySpotIntegrationResult | None = None,
     charts_dir: Path,
 ) -> None:
@@ -1461,6 +1496,8 @@ def write_research_report(
         *xau_indicator_chart_watchlist_report_lines(xau_indicator_chart_watchlist),
         "",
         *quikstrike_intraday_volume_report_lines(quikstrike_intraday_volume),
+        "",
+        *cme_fetch_output_wiring_audit_report_lines(cme_fetch_output_wiring_audit),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",

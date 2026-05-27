@@ -55,9 +55,13 @@ class QuikStrikeIntradayVolumeSnapshotResult:
     """Generated QuikStrike intraday volume artifacts."""
 
     manual_template: pl.DataFrame
+    source_resolution: pl.DataFrame
     snapshot: pl.DataFrame
     scenarios: pl.DataFrame
     latest_state: pl.DataFrame
+    snapshot_from_fetch: pl.DataFrame
+    scenarios_from_fetch: pl.DataFrame
+    latest_state_from_fetch: pl.DataFrame
     example_scenarios: pl.DataFrame
     final_recommendation: str
     paths: dict[str, Path]
@@ -67,6 +71,8 @@ def run_quikstrike_intraday_volume_snapshot(
     *,
     output_dir: str | Path = "outputs",
     data_dir: str | Path = "data/quikstrike_intraday_volume",
+    fetched_roots: list[str | Path] | None = None,
+    allow_fallback_example: bool = False,
     write_outputs: bool = True,
 ) -> QuikStrikeIntradayVolumeSnapshotResult:
     """Build manual template, parsed snapshot, scenarios, and latest state."""
@@ -75,20 +81,41 @@ def run_quikstrike_intraday_volume_snapshot(
     output_root.mkdir(parents=True, exist_ok=True)
     paths = _output_paths(output_root)
     manual_template = build_manual_snapshot_template()
-    manual_rows = _load_snapshot_input(output_root=output_root, data_dir=Path(data_dir))
+    manual_rows, source_resolution = resolve_quikstrike_snapshot_source(
+        output_root=output_root,
+        data_dir=Path(data_dir),
+        fetched_roots=[Path(root) for root in fetched_roots] if fetched_roots else None,
+        allow_fallback_example=allow_fallback_example,
+    )
     snapshot = build_intraday_volume_snapshot(manual_rows)
     scenarios = build_wall_scenarios(snapshot)
     latest_state = build_latest_indicator_state_with_quikstrike(
         snapshot=snapshot,
         output_root=output_root,
     )
+    source_type = _selected_source_type(source_resolution)
+    if source_type in {"FETCHED_CME_DATA", "CANONICAL_CME_DATA"}:
+        snapshot_from_fetch = snapshot
+        scenarios_from_fetch = scenarios
+        latest_state_from_fetch = latest_state
+    else:
+        snapshot_from_fetch = _frame([], _snapshot_schema())
+        scenarios_from_fetch = _frame([_insufficient_scenario()], _scenario_schema())
+        latest_state_from_fetch = build_latest_indicator_state_with_quikstrike(
+            snapshot=snapshot_from_fetch,
+            output_root=output_root,
+        )
     example_scenarios = build_example_4550_scenarios()
     final = choose_final_recommendation(snapshot=snapshot, latest_state=latest_state)
     result = QuikStrikeIntradayVolumeSnapshotResult(
         manual_template=manual_template,
+        source_resolution=source_resolution,
         snapshot=snapshot,
         scenarios=scenarios,
         latest_state=latest_state,
+        snapshot_from_fetch=snapshot_from_fetch,
+        scenarios_from_fetch=scenarios_from_fetch,
+        latest_state_from_fetch=latest_state_from_fetch,
         example_scenarios=example_scenarios,
         final_recommendation=final,
         paths=paths,
@@ -432,6 +459,16 @@ def write_quikstrike_intraday_volume_outputs(
         _safe_report_text(_manual_guide_markdown()),
         encoding="utf-8",
     )
+    result.source_resolution.write_csv(result.paths["source_resolution_csv"])
+    result.paths["source_resolution_md"].write_text(
+        _safe_report_text(
+            _artifact_markdown(
+                "QuikStrike Snapshot Source Resolution",
+                result.source_resolution,
+            )
+        ),
+        encoding="utf-8",
+    )
     result.snapshot.write_csv(result.paths["snapshot_csv"])
     result.paths["snapshot_md"].write_text(
         _safe_report_text(
@@ -456,6 +493,9 @@ def write_quikstrike_intraday_volume_outputs(
         ),
         encoding="utf-8",
     )
+    result.snapshot_from_fetch.write_csv(result.paths["snapshot_from_fetch_csv"])
+    result.scenarios_from_fetch.write_csv(result.paths["scenarios_from_fetch_csv"])
+    result.latest_state_from_fetch.write_csv(result.paths["latest_state_from_fetch_csv"])
     result.example_scenarios.write_csv(result.paths["example_csv"])
     result.paths["example_md"].write_text(
         _safe_report_text(_example_markdown(result.example_scenarios)),
@@ -481,6 +521,11 @@ def quikstrike_intraday_volume_report_lines(
         "",
         f"- Final recommendation: `{result.final_recommendation}`",
         f"- Manual template: `{_display_path(result.paths['manual_template_csv'])}`",
+        f"- Selected source: `{_selected_source_type(result.source_resolution)}`",
+        "",
+        "## QuikStrike Snapshot Source Resolution",
+        "",
+        _frame_markdown(result.source_resolution),
         "",
         _frame_markdown(result.snapshot),
         "",
@@ -499,6 +544,8 @@ def quikstrike_intraday_volume_report_lines(
         "- Links: `outputs/quikstrike_intraday_volume_snapshot.csv`, "
         "`outputs/quikstrike_wall_scenarios.csv`, "
         "`outputs/xau_indicator_latest_state_with_quikstrike.csv`, "
+        "`outputs/quikstrike_snapshot_source_resolution.csv`, "
+        "`outputs/quikstrike_intraday_volume_snapshot_from_fetch.csv`, "
         "`outputs/quikstrike_example_4550_scenario.md`.",
     ]
 
@@ -517,18 +564,517 @@ def _output_paths(output_root: Path) -> dict[str, Path]:
     return {
         "manual_template_csv": output_root / "quikstrike_intraday_volume_manual_template.csv",
         "manual_guide_md": output_root / "quikstrike_intraday_volume_manual_guide.md",
+        "source_resolution_csv": output_root / "quikstrike_snapshot_source_resolution.csv",
+        "source_resolution_md": output_root / "quikstrike_snapshot_source_resolution.md",
         "snapshot_csv": output_root / "quikstrike_intraday_volume_snapshot.csv",
         "snapshot_md": output_root / "quikstrike_intraday_volume_snapshot.md",
         "scenarios_csv": output_root / "quikstrike_wall_scenarios.csv",
         "scenarios_md": output_root / "quikstrike_wall_scenarios.md",
         "latest_state_csv": output_root / "xau_indicator_latest_state_with_quikstrike.csv",
         "latest_state_md": output_root / "xau_indicator_latest_state_with_quikstrike.md",
+        "snapshot_from_fetch_csv": output_root / "quikstrike_intraday_volume_snapshot_from_fetch.csv",
+        "scenarios_from_fetch_csv": output_root / "quikstrike_wall_scenarios_from_fetch.csv",
+        "latest_state_from_fetch_csv": output_root
+        / "xau_indicator_latest_state_with_quikstrike_from_fetch.csv",
         "example_csv": output_root / "quikstrike_example_4550_scenario.csv",
         "example_md": output_root / "quikstrike_example_4550_scenario.md",
     }
 
 
+def resolve_quikstrike_snapshot_source(
+    *,
+    output_root: Path,
+    data_dir: Path,
+    fetched_roots: list[Path] | None = None,
+    allow_fallback_example: bool = False,
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Resolve the highest-priority structured snapshot source."""
+
+    fetched = _load_fetched_snapshot_input(
+        output_root=output_root,
+        fetched_roots=fetched_roots,
+    )
+    if not fetched.is_empty():
+        resolution = _source_resolution_frame(
+            selected_source_type="FETCHED_CME_DATA",
+            selected_source_hash=_source_hash_from_frame(fetched),
+            selected_date=_best_text_column(fetched, "snapshot_timestamp"),
+            selected_expiration=_best_text_column(fetched, "expiration"),
+            rows_loaded=fetched.height,
+            reason="Fetched QuikStrike fusion CSV contains strike, side, and intraday volume fields.",
+        )
+        return fetched, resolution
+
+    canonical = _load_canonical_cme_snapshot_input(output_root=output_root)
+    if not canonical.is_empty():
+        resolution = _source_resolution_frame(
+            selected_source_type="CANONICAL_CME_DATA",
+            selected_source_hash=_source_hash_from_frame(canonical),
+            selected_date=_best_text_column(canonical, "snapshot_timestamp"),
+            selected_expiration=_best_text_column(canonical, "expiration"),
+            rows_loaded=canonical.height,
+            reason="Canonical CME rows were mapped into the QuikStrike snapshot schema.",
+        )
+        return canonical, resolution
+
+    manual = output_root / "quikstrike_intraday_volume_manual.csv"
+    if manual.exists():
+        frame = _read_optional(manual)
+        if not frame.is_empty():
+            resolution = _source_resolution_frame(
+                selected_source_type="MANUAL_CSV",
+                selected_source_hash=_hash_file(manual),
+                selected_date=_best_text_column(frame, "snapshot_timestamp"),
+                selected_expiration=_best_text_column(frame, "expiration"),
+                rows_loaded=frame.height,
+                reason="Manual structured QuikStrike CSV was used because fetched source rows were unavailable.",
+            )
+            return frame, resolution
+
+    if data_dir.exists():
+        frames = [_read_optional(path) for path in sorted(data_dir.glob("*.csv"))]
+        frames = [frame for frame in frames if not frame.is_empty()]
+        if frames:
+            frame = pl.concat(frames, how="diagonal_relaxed")
+            resolution = _source_resolution_frame(
+                selected_source_type="MANUAL_CSV",
+                selected_source_hash=_source_hash_from_frame(frame),
+                selected_date=_best_text_column(frame, "snapshot_timestamp"),
+                selected_expiration=_best_text_column(frame, "expiration"),
+                rows_loaded=frame.height,
+                reason="Manual structured CSV folder was used because fetched source rows were unavailable.",
+            )
+            return frame, resolution
+
+    if allow_fallback_example:
+        frame = build_manual_snapshot_template()
+        resolution = _source_resolution_frame(
+            selected_source_type="FALLBACK_EXAMPLE",
+            selected_source_hash=_source_hash_from_frame(frame),
+            selected_date=_best_text_column(frame, "snapshot_timestamp"),
+            selected_expiration=_best_text_column(frame, "expiration"),
+            rows_loaded=frame.height,
+            reason="Example-only fallback was explicitly allowed.",
+        )
+        return frame, resolution
+
+    resolution = _source_resolution_frame(
+        selected_source_type="NONE",
+        selected_source_hash="",
+        selected_date="",
+        selected_expiration="",
+        rows_loaded=0,
+        reason="No fetched, canonical, or manual structured source was available.",
+    )
+    return _frame([], _manual_schema()), resolution
+
+
 def _load_snapshot_input(*, output_root: Path, data_dir: Path) -> pl.DataFrame:
+    frame, _resolution = resolve_quikstrike_snapshot_source(
+        output_root=output_root,
+        data_dir=data_dir,
+        allow_fallback_example=True,
+    )
+    return frame
+
+
+def _load_fetched_snapshot_input(
+    *,
+    output_root: Path,
+    fetched_roots: list[Path] | None,
+) -> pl.DataFrame:
+    candidates = _fetched_snapshot_candidates(output_root=output_root, fetched_roots=fetched_roots)
+    for path in candidates:
+        frame = _read_optional(path)
+        mapped = map_fetched_cme_rows_to_snapshot_schema(frame, source_path=path)
+        if not mapped.is_empty():
+            return mapped
+    return _frame([], _manual_schema())
+
+
+def _fetched_snapshot_candidates(
+    *,
+    output_root: Path,
+    fetched_roots: list[Path] | None,
+) -> list[Path]:
+    roots = list(fetched_roots or [])
+    if not roots:
+        repo_root = _repo_root_from_output(output_root)
+        roots = [
+            repo_root / "backend" / "data" / "reports" / "xau_quikstrike_fusion",
+            repo_root / "data" / "reports" / "xau_quikstrike_fusion",
+            repo_root / "data" / "quikstrike",
+            repo_root / "data" / "cme",
+        ]
+    candidates: list[Path] = []
+    for root in roots:
+        if not root.exists():
+            continue
+        candidates.extend(root.rglob("xau_vol_oi_input.csv"))
+        candidates.extend(root.rglob("*intraday*volume*.csv"))
+        candidates.extend(root.rglob("*quikstrike*volume*.csv"))
+    filtered = [
+        path
+        for path in candidates
+        if path.exists()
+        and "manual" not in path.name.lower()
+        and "template" not in path.name.lower()
+        and "snapshot_from_fetch" not in path.name.lower()
+    ]
+    return sorted(set(filtered), key=lambda path: (path.stat().st_mtime, str(path)), reverse=True)
+
+
+def map_fetched_cme_rows_to_snapshot_schema(
+    frame: pl.DataFrame,
+    *,
+    source_path: Path | None = None,
+) -> pl.DataFrame:
+    """Map fetched QuikStrike fusion rows into the manual snapshot schema."""
+
+    if frame.is_empty() or "strike" not in frame.columns:
+        return _frame([], _manual_schema())
+    if {"call_volume", "put_volume"}.issubset(set(frame.columns)):
+        mapped = _map_wide_volume_rows_to_snapshot_schema(frame, source_path=source_path)
+        if not mapped.is_empty():
+            return mapped
+    side_column = _first_present(frame, ["option_type", "put_call", "call_put", "side"])
+    volume_column = _first_present(
+        frame,
+        ["intraday_volume", "option_volume", "volume", "total_volume", "eod_volume"],
+    )
+    if side_column is None or volume_column is None:
+        return _frame([], _manual_schema())
+
+    future_column = _first_present(
+        frame,
+        ["underlying_futures_price", "future_price", "futures_price", "underlying_price"],
+    )
+    volatility_column = _first_present(
+        frame,
+        ["implied_volatility", "volatility", "iv", "total_vol"],
+    )
+    expiration_column = _first_present(frame, ["expiration", "expiry", "expiration_code"])
+    timestamp_column = _first_present(frame, ["timestamp", "snapshot_timestamp", "date"])
+    date_hint = _date_hint_from_path(source_path) if source_path else ""
+    working = frame.with_columns(
+        [
+            pl.col("strike").cast(pl.Float64, strict=False).alias("_strike"),
+            pl.col(volume_column).cast(pl.Float64, strict=False).fill_null(0.0).alias("_volume"),
+            pl.col(side_column).cast(pl.Utf8, strict=False).str.to_lowercase().alias("_side"),
+            (
+                pl.col(future_column).cast(pl.Float64, strict=False)
+                if future_column
+                else pl.lit(None).cast(pl.Float64)
+            ).alias("_future_price"),
+            (
+                pl.col(volatility_column).cast(pl.Float64, strict=False)
+                if volatility_column
+                else pl.lit(None).cast(pl.Float64)
+            ).alias("_volatility"),
+            (
+                pl.col(expiration_column).cast(pl.Utf8, strict=False)
+                if expiration_column
+                else pl.lit("")
+            ).alias("_expiration"),
+            (
+                pl.col(timestamp_column).cast(pl.Utf8, strict=False)
+                if timestamp_column
+                else pl.lit("")
+            ).alias("_timestamp"),
+        ]
+    ).filter(pl.col("_strike").is_not_null())
+    if working.is_empty():
+        return _frame([], _manual_schema())
+    selected_expiration = _select_active_expiration(working)
+    if selected_expiration:
+        working = working.filter(pl.col("_expiration") == selected_expiration)
+    snapshot_timestamp = _best_text_column(working, "_timestamp") or _timestamp_from_date_hint(date_hint)
+    expiration = selected_expiration or _best_text_column(working, "_expiration")
+    future_price = _best_float_column(working, "_future_price")
+    volatility = _best_float_column(working, "_volatility")
+    grouped = (
+        working.group_by("_strike")
+        .agg(
+            [
+                pl.when(pl.col("_side").str.contains("call|c"))
+                .then(pl.col("_volume"))
+                .otherwise(0.0)
+                .sum()
+                .alias("call_volume"),
+                pl.when(pl.col("_side").str.contains("put|p"))
+                .then(pl.col("_volume"))
+                .otherwise(0.0)
+                .sum()
+                .alias("put_volume"),
+            ]
+        )
+        .sort("_strike")
+    )
+    rows: list[dict[str, Any]] = []
+    for row in grouped.to_dicts():
+        call_volume = _float(row.get("call_volume")) or 0.0
+        put_volume = _float(row.get("put_volume")) or 0.0
+        rows.append(
+            {
+                "snapshot_timestamp": snapshot_timestamp,
+                "product": "Gold",
+                "expiration": expiration,
+                "dte": None,
+                "future_price": future_price,
+                "strike": _float(row.get("_strike")),
+                "put_volume": put_volume,
+                "call_volume": call_volume,
+                "total_volume": call_volume + put_volume,
+                "volatility": volatility,
+                "volatility_change": None,
+                "future_change": None,
+                "range_label": "fetched_cme_data",
+                "notes": "Mapped from fetched QuikStrike/CME structured rows.",
+            }
+        )
+    return _frame([_safe_row(row) for row in rows], _manual_schema())
+
+
+def _map_wide_volume_rows_to_snapshot_schema(
+    frame: pl.DataFrame,
+    *,
+    source_path: Path | None,
+) -> pl.DataFrame:
+    future_column = _first_present(
+        frame,
+        ["underlying_futures_price", "future_price", "futures_price", "underlying_price"],
+    )
+    volatility_column = _first_present(
+        frame,
+        ["implied_volatility", "volatility", "iv", "total_vol"],
+    )
+    expiration_column = _first_present(frame, ["expiration", "expiry", "expiration_code"])
+    timestamp_column = _first_present(frame, ["timestamp", "snapshot_timestamp", "asof_timestamp", "date"])
+    working = frame.with_columns(
+        [
+            pl.col("strike").cast(pl.Float64, strict=False).alias("_strike"),
+            pl.col("call_volume").cast(pl.Float64, strict=False).fill_null(0.0).alias("_call_volume"),
+            pl.col("put_volume").cast(pl.Float64, strict=False).fill_null(0.0).alias("_put_volume"),
+            (
+                pl.col(future_column).cast(pl.Float64, strict=False)
+                if future_column
+                else pl.lit(None).cast(pl.Float64)
+            ).alias("_future_price"),
+            (
+                pl.col(volatility_column).cast(pl.Float64, strict=False)
+                if volatility_column
+                else pl.lit(None).cast(pl.Float64)
+            ).alias("_volatility"),
+            (
+                pl.col(expiration_column).cast(pl.Utf8, strict=False)
+                if expiration_column
+                else pl.lit("")
+            ).alias("_expiration"),
+            (
+                pl.col(timestamp_column).cast(pl.Utf8, strict=False)
+                if timestamp_column
+                else pl.lit("")
+            ).alias("_timestamp"),
+        ]
+    ).filter(pl.col("_strike").is_not_null())
+    if working.is_empty():
+        return _frame([], _manual_schema())
+    selected_expiration = _select_active_wide_expiration(working)
+    if selected_expiration:
+        working = working.filter(pl.col("_expiration") == selected_expiration)
+    date_hint = _date_hint_from_path(source_path) if source_path else ""
+    snapshot_timestamp = _best_text_column(working, "_timestamp") or _timestamp_from_date_hint(date_hint)
+    future_price = _best_float_column(working, "_future_price")
+    volatility = _best_float_column(working, "_volatility")
+    grouped = (
+        working.group_by("_strike")
+        .agg(
+            [
+                pl.col("_call_volume").sum().alias("call_volume"),
+                pl.col("_put_volume").sum().alias("put_volume"),
+            ]
+        )
+        .sort("_strike")
+    )
+    rows: list[dict[str, Any]] = []
+    for row in grouped.to_dicts():
+        call_volume = _float(row.get("call_volume")) or 0.0
+        put_volume = _float(row.get("put_volume")) or 0.0
+        rows.append(
+            {
+                "snapshot_timestamp": snapshot_timestamp,
+                "product": "Gold",
+                "expiration": selected_expiration or _best_text_column(working, "_expiration"),
+                "dte": None,
+                "future_price": future_price,
+                "strike": _float(row.get("_strike")),
+                "put_volume": put_volume,
+                "call_volume": call_volume,
+                "total_volume": call_volume + put_volume,
+                "volatility": volatility,
+                "volatility_change": None,
+                "future_change": None,
+                "range_label": "canonical_cme_data",
+                "notes": "Mapped from canonical CME strike rows.",
+            }
+        )
+    return _frame([_safe_row(row) for row in rows], _manual_schema())
+
+
+def _load_canonical_cme_snapshot_input(*, output_root: Path) -> pl.DataFrame:
+    oi = _read_optional(output_root / "cme_canonical_option_oi_by_strike.parquet")
+    if oi.is_empty():
+        return _frame([], _manual_schema())
+    mapped = map_fetched_cme_rows_to_snapshot_schema(
+        oi,
+        source_path=output_root / "cme_canonical_option_oi_by_strike.parquet",
+    )
+    if not mapped.is_empty():
+        return mapped
+    if {"strike", "option_type", "open_interest"}.issubset(set(oi.columns)):
+        fallback = oi.rename({"open_interest": "volume"})
+        return map_fetched_cme_rows_to_snapshot_schema(
+            fallback,
+            source_path=output_root / "cme_canonical_option_oi_by_strike.parquet",
+        )
+    return _frame([], _manual_schema())
+
+
+def _select_active_expiration(frame: pl.DataFrame) -> str:
+    if "_expiration" not in frame.columns:
+        return ""
+    ranked = (
+        frame.group_by("_expiration")
+        .agg(
+            [
+                pl.col("_volume").sum().alias("volume_sum"),
+                pl.len().alias("row_count"),
+            ]
+        )
+        .sort(["volume_sum", "row_count"], descending=[True, True])
+    )
+    if ranked.is_empty():
+        return ""
+    value = ranked.row(0, named=True).get("_expiration")
+    return _text(value)
+
+
+def _select_active_wide_expiration(frame: pl.DataFrame) -> str:
+    if "_expiration" not in frame.columns:
+        return ""
+    ranked = (
+        frame.group_by("_expiration")
+        .agg(
+            [
+                (pl.col("_call_volume") + pl.col("_put_volume")).sum().alias("volume_sum"),
+                pl.len().alias("row_count"),
+            ]
+        )
+        .sort(["volume_sum", "row_count"], descending=[True, True])
+    )
+    if ranked.is_empty():
+        return ""
+    value = ranked.row(0, named=True).get("_expiration")
+    return _text(value)
+
+
+def _first_present(frame: pl.DataFrame, columns: list[str]) -> str | None:
+    lowered = {column.lower(): column for column in frame.columns}
+    for candidate in columns:
+        if candidate.lower() in lowered:
+            return lowered[candidate.lower()]
+    return None
+
+
+def _repo_root_from_output(output_root: Path) -> Path:
+    resolved = output_root.resolve()
+    for candidate in (resolved, *resolved.parents):
+        if (candidate / "research_xau_vol_oi").exists():
+            return candidate
+    return resolved.parent
+
+
+def _date_hint_from_path(path: Path | None) -> str:
+    if path is None:
+        return ""
+    match = re.search(r"(20\d{6})", str(path))
+    if not match:
+        return ""
+    raw = match.group(1)
+    return f"{raw[:4]}-{raw[4:6]}-{raw[6:]}"
+
+
+def _timestamp_from_date_hint(date_hint: str) -> str:
+    return f"{date_hint}T00:00:00+00:00" if date_hint else ""
+
+
+def _selected_source_type(source_resolution: pl.DataFrame) -> str:
+    if source_resolution.is_empty() or "selected_source_type" not in source_resolution.columns:
+        return "NONE"
+    return _text(source_resolution.row(0, named=True).get("selected_source_type")) or "NONE"
+
+
+def _source_resolution_frame(
+    *,
+    selected_source_type: str,
+    selected_source_hash: str,
+    selected_date: str,
+    selected_expiration: str,
+    rows_loaded: int,
+    reason: str,
+) -> pl.DataFrame:
+    return _frame(
+        [
+            {
+                "selected_source_type": selected_source_type,
+                "selected_source_hash": selected_source_hash,
+                "selected_date": selected_date,
+                "selected_expiration": selected_expiration,
+                "rows_loaded": rows_loaded,
+                "reason": reason,
+            }
+        ],
+        _source_resolution_schema(),
+    )
+
+
+def _source_hash_from_frame(frame: pl.DataFrame) -> str:
+    payload = frame.head(200).write_csv().encode("utf-8")
+    import hashlib
+
+    return hashlib.sha256(payload).hexdigest()[:16]
+
+
+def _hash_file(path: Path) -> str:
+    try:
+        import hashlib
+
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(65536), b""):
+                digest.update(chunk)
+        return digest.hexdigest()[:16]
+    except OSError:
+        return ""
+
+
+def _best_text_column(frame: pl.DataFrame, column: str) -> str:
+    if frame.is_empty() or column not in frame.columns:
+        return ""
+    values = [_text(value) for value in frame.get_column(column).to_list()]
+    values = [value for value in values if value]
+    return values[-1] if values else ""
+
+
+def _best_float_column(frame: pl.DataFrame, column: str) -> float | None:
+    if frame.is_empty() or column not in frame.columns:
+        return None
+    values = [_float(value) for value in frame.get_column(column).to_list()]
+    values = [value for value in values if value is not None]
+    return values[-1] if values else None
+
+
+def _legacy_load_snapshot_input(*, output_root: Path, data_dir: Path) -> pl.DataFrame:
     manual = output_root / "quikstrike_intraday_volume_manual.csv"
     if manual.exists():
         frame = _read_optional(manual)
@@ -1083,6 +1629,17 @@ def _manual_schema() -> dict[str, Any]:
         "future_change": pl.Float64,
         "range_label": pl.Utf8,
         "notes": pl.Utf8,
+    }
+
+
+def _source_resolution_schema() -> dict[str, Any]:
+    return {
+        "selected_source_type": pl.Utf8,
+        "selected_source_hash": pl.Utf8,
+        "selected_date": pl.Utf8,
+        "selected_expiration": pl.Utf8,
+        "rows_loaded": pl.Int64,
+        "reason": pl.Utf8,
     }
 
 
