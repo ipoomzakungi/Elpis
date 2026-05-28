@@ -48,6 +48,11 @@ from research_xau_vol_oi.cme_wall_strategy_realism_audit import (
     cme_wall_strategy_realism_audit_report_lines,
     run_cme_wall_strategy_realism_audit,
 )
+from research_xau_vol_oi.cme_wall_realistic_backtest_v1 import (
+    CmeWallRealisticBacktestV1Result,
+    cme_wall_realistic_backtest_v1_report_lines,
+    run_cme_wall_realistic_backtest_v1,
+)
 from research_xau_vol_oi.guru_cme_hypothesis_lab import (
     GuruCmeHypothesisLabResult,
     guru_cme_hypothesis_report_lines,
@@ -542,6 +547,9 @@ def run_pipeline(
     cme_wall_strategy_realism_audit = run_cme_wall_strategy_realism_audit(
         output_dir=output_root,
     )
+    cme_wall_realistic_backtest_v1 = run_cme_wall_realistic_backtest_v1(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -601,6 +609,7 @@ def run_pipeline(
         fetched_cme_wall_state_tracker=fetched_cme_wall_state_tracker,
         cme_wall_strategy_performance=cme_wall_strategy_performance,
         cme_wall_strategy_realism_audit=cme_wall_strategy_realism_audit,
+        cme_wall_realistic_backtest_v1=cme_wall_realistic_backtest_v1,
         dukascopy_spot=dukascopy_spot,
         charts_dir=charts_dir,
     )
@@ -1145,6 +1154,9 @@ def run_dukascopy_only_pipeline(
     cme_wall_strategy_realism_audit = run_cme_wall_strategy_realism_audit(
         output_dir=output_root,
     )
+    cme_wall_realistic_backtest_v1 = run_cme_wall_realistic_backtest_v1(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     report_path.write_text(
         "\n".join(
@@ -1205,6 +1217,10 @@ def run_dukascopy_only_pipeline(
                 "",
                 *cme_wall_strategy_realism_audit_report_lines(
                     cme_wall_strategy_realism_audit,
+                ),
+                "",
+                *cme_wall_realistic_backtest_v1_report_lines(
+                    cme_wall_realistic_backtest_v1,
                 ),
             ]
         ),
@@ -1308,6 +1324,11 @@ def run_dukascopy_only_pipeline(
             name: path
             for name, path in cme_wall_strategy_realism_audit.paths.items()
             if name.endswith("_csv") or name.endswith("_md")
+        },
+        **{
+            name: path
+            for name, path in cme_wall_realistic_backtest_v1.paths.items()
+            if name.endswith("_csv") or name.endswith("_md") or name.endswith("_svg")
         },
     }
 
@@ -1501,6 +1522,7 @@ def write_research_report(
     fetched_cme_wall_state_tracker: FetchedCmeWallStateTrackerResult | None = None,
     cme_wall_strategy_performance: CmeWallStrategyPerformanceResult | None = None,
     cme_wall_strategy_realism_audit: CmeWallStrategyRealismAuditResult | None = None,
+    cme_wall_realistic_backtest_v1: CmeWallRealisticBacktestV1Result | None = None,
     dukascopy_spot: DukascopySpotIntegrationResult | None = None,
     charts_dir: Path,
 ) -> None:
@@ -1605,6 +1627,8 @@ def write_research_report(
         *cme_wall_strategy_performance_report_lines(cme_wall_strategy_performance),
         "",
         *cme_wall_strategy_realism_audit_report_lines(cme_wall_strategy_realism_audit),
+        "",
+        *cme_wall_realistic_backtest_v1_report_lines(cme_wall_realistic_backtest_v1),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",
