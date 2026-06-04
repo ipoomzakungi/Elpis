@@ -47,7 +47,27 @@ class XauVolatilitySource(StrEnum):
     IV = "iv"
     REALIZED_VOLATILITY = "realized_volatility"
     MANUAL = "manual"
+    CME_NATIVE = "cme_native"
+    DERIVED_FROM_IV = "derived_from_iv"
     UNAVAILABLE = "unavailable"
+
+
+class XauExpectedRangeSource(StrEnum):
+    CME_NATIVE = "cme_native"
+    DERIVED_FROM_IV = "derived_from_iv"
+    UNAVAILABLE = "unavailable"
+
+
+class XauExpectedRangeExtractionQuality(StrEnum):
+    COMPLETE = "complete"
+    PARTIAL = "partial"
+    UNAVAILABLE = "unavailable"
+
+
+class XauExpectedRangeSourceStatus(StrEnum):
+    PRELIMINARY = "preliminary"
+    FINAL = "final"
+    UNKNOWN = "unknown"
 
 
 class XauWallType(StrEnum):
@@ -204,12 +224,21 @@ class XauExpectedRange(XauBaseModel):
 
     source: XauVolatilitySource
     reference_price: float | None = Field(default=None, gt=0)
+    report_level_iv: float | None = Field(default=None, gt=0)
+    fractional_dte: float | None = Field(default=None, ge=0)
     expected_move: float | None = Field(default=None, ge=0)
+    cme_numeric_1sd: float | None = Field(default=None, ge=0)
+    cme_numeric_2sd: float | None = Field(default=None, ge=0)
+    cme_numeric_3sd: float | None = Field(default=None, ge=0)
     lower_1sd: float | None = None
     upper_1sd: float | None = None
     lower_2sd: float | None = None
     upper_2sd: float | None = None
+    lower_3sd: float | None = None
+    upper_3sd: float | None = None
     days_to_expiry: int | None = Field(default=None, ge=0)
+    range_source: XauExpectedRangeSource | None = None
+    extraction_quality: XauExpectedRangeExtractionQuality | None = None
     unavailable_reason: str | None = None
     notes: list[str] = Field(default_factory=list)
 
@@ -221,6 +250,92 @@ class XauExpectedRange(XauBaseModel):
             required = [self.reference_price, self.expected_move, self.lower_1sd, self.upper_1sd]
             if any(value is None for value in required):
                 raise ValueError("available ranges require reference_price and 1SD bounds")
+        return self
+
+
+class XauExpectedRangeSnapshot(XauBaseModel):
+    """Point-in-time CME expected-range context for XAU/GC research."""
+
+    source_report_id: str
+    source_view: str
+    capture_timestamp: datetime
+    official_release_ts: datetime | None = None
+    source_status: XauExpectedRangeSourceStatus = XauExpectedRangeSourceStatus.UNKNOWN
+    product: str
+    option_product_code: str
+    futures_symbol: str | None = None
+    expiration_code: str | None = None
+    expiry_date: date | None = None
+    reference_futures_price: float | None = Field(default=None, gt=0)
+    report_level_iv: float | None = Field(default=None, gt=0)
+    vol_settle: float | None = Field(default=None, gt=0)
+    fractional_dte: float | None = Field(default=None, ge=0)
+    cme_numeric_1sd: float | None = Field(default=None, ge=0)
+    cme_numeric_2sd: float | None = Field(default=None, ge=0)
+    cme_numeric_3sd: float | None = Field(default=None, ge=0)
+    upper_1sd: float | None = None
+    lower_1sd: float | None = None
+    upper_2sd: float | None = None
+    lower_2sd: float | None = None
+    upper_3sd: float | None = None
+    lower_3sd: float | None = None
+    range_source: XauExpectedRangeSource
+    extraction_quality: XauExpectedRangeExtractionQuality
+    limitations: list[str] = Field(default_factory=list)
+
+    @field_validator(
+        "source_report_id",
+        "source_view",
+        "product",
+        "option_product_code",
+        "futures_symbol",
+        "expiration_code",
+    )
+    @classmethod
+    def normalize_snapshot_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = " ".join(str(value).split())
+        if not normalized:
+            raise ValueError("expected-range snapshot text fields must not be blank")
+        return normalized
+
+    @field_validator("limitations")
+    @classmethod
+    def normalize_limitations(cls, values: list[str]) -> list[str]:
+        return _dedupe_strings(values)
+
+    @model_validator(mode="after")
+    def validate_range_state(self) -> "XauExpectedRangeSnapshot":
+        native_fields = [
+            self.cme_numeric_1sd,
+            self.cme_numeric_2sd,
+            self.cme_numeric_3sd,
+            self.upper_1sd,
+            self.lower_1sd,
+            self.upper_2sd,
+            self.lower_2sd,
+            self.upper_3sd,
+            self.lower_3sd,
+        ]
+        if self.range_source == XauExpectedRangeSource.CME_NATIVE and any(
+            value is None for value in native_fields
+        ):
+            raise ValueError("CME-native expected range requires numeric 1SD/2SD/3SD bands")
+        if self.range_source == XauExpectedRangeSource.DERIVED_FROM_IV:
+            required = [
+                self.reference_futures_price,
+                self.report_level_iv,
+                self.fractional_dte,
+                *native_fields,
+            ]
+            if any(value is None for value in required):
+                raise ValueError("IV-derived expected range requires reference, IV, DTE, and bands")
+        if (
+            self.range_source == XauExpectedRangeSource.UNAVAILABLE
+            and not self.limitations
+        ):
+            raise ValueError("unavailable expected range requires a limitation")
         return self
 
 
@@ -330,6 +445,7 @@ class XauVolOiReport(XauBaseModel):
     source_validation: XauOptionsImportReport
     basis_snapshot: XauBasisSnapshot | None = None
     expected_range: XauExpectedRange | None = None
+    expected_range_snapshot: XauExpectedRangeSnapshot | None = None
     source_row_count: int = Field(..., ge=0)
     accepted_row_count: int = Field(..., ge=0)
     rejected_row_count: int = Field(..., ge=0)
@@ -369,3 +485,14 @@ class XauWallTableResponse(XauBaseModel):
 class XauZoneTableResponse(XauBaseModel):
     report_id: str
     data: list[XauZone] = Field(default_factory=list)
+
+
+def _dedupe_strings(values: list[str]) -> list[str]:
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        normalized = " ".join(str(value).split())
+        if normalized and normalized not in seen:
+            deduped.append(normalized)
+            seen.add(normalized)
+    return deduped
