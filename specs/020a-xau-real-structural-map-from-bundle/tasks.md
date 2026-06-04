@@ -74,6 +74,17 @@
 
 ---
 
+## Phase 7: Source Lock And Real-Run Script
+
+- [X] T030 Add course doctrine index in `docs/course_source/COURSE_DOCTRINE_INDEX.md`
+- [X] T031 Add local bundle import README in `backend/data/imports/xau_quikstrike_20260602/README.md`
+- [X] T032 Add local bundle import `.gitignore` in `backend/data/imports/xau_quikstrike_20260602/.gitignore`
+- [X] T033 Add real-run script in `backend/scripts/generate_xau_map_from_local_bundle.py`
+- [X] T034 Add script/helper tests in `backend/tests/unit/test_generate_xau_map_from_local_bundle.py`
+- [X] T035 Document real-run command in `specs/020a-xau-real-structural-map-from-bundle/quickstart.md`
+
+---
+
 ## Dependencies & Execution Order
 
 - Phase 1 setup has no dependencies.

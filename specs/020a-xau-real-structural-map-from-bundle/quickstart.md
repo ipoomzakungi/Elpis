@@ -9,6 +9,8 @@ This feature turns saved local XAU QuikStrike/XAU Vol-OI artifacts into a persis
 
 ## Local Usage
 
+### Python Helper
+
 ```python
 from datetime import date
 from pathlib import Path
@@ -32,6 +34,22 @@ result = generate_xau_daily_structural_map_from_bundle(
 )
 ```
 
+### Real Local Bundle Script
+
+After copying the real bundle files into `backend/data/imports/xau_quikstrike_20260602/`,
+run from the repository root:
+
+```powershell
+python backend/scripts/generate_xau_map_from_local_bundle.py `
+  --input-dir backend/data/imports/xau_quikstrike_20260602 `
+  --session-date 2026-06-02 `
+  --expiration-code OG1M6 `
+  --traded-instrument XAUUSD `
+  --gc-reference-price 4549.2 `
+  --traded-reference-price YOUR_XAU_PRICE `
+  --session-open-price YOUR_SESSION_OPEN
+```
+
 Expected output:
 
 ```text
@@ -51,13 +69,14 @@ python -m pytest tests/unit/test_xau_daily_structural_map_store.py -q
 python -m pytest tests/unit/test_xau_daily_structural_map.py -q
 python -m pytest tests/unit/test_xau_expected_range_context_parity.py -q
 python -m pytest tests/unit/test_xau_daily_structural_map_bundle_adapter.py -q
+python -m pytest tests/unit/test_generate_xau_map_from_local_bundle.py -q
 python -c "from src.main import app; print('backend import ok')"
 ```
 
 Run ruff from `backend/`:
 
 ```powershell
-ruff check src/xau_daily_structural_map/bundle_adapter.py tests/unit/test_xau_daily_structural_map_bundle_adapter.py
+ruff check src/xau_daily_structural_map/bundle_adapter.py tests/unit/test_xau_daily_structural_map_bundle_adapter.py scripts/generate_xau_map_from_local_bundle.py tests/unit/test_generate_xau_map_from_local_bundle.py
 ```
 
 Expected results:
