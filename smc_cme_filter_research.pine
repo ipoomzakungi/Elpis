@@ -1,0 +1,101 @@
+//@version=5
+strategy("SMC + Manual CME Acceptance Filter - Research", overlay=true, initial_capital=10000, default_qty_type=strategy.fixed, default_qty_value=1, pyramiding=0, commission_type=strategy.commission.percent, commission_value=0.05, slippage=5)
+
+// Tuned SMC defaults from the local Python approximation.
+pivot_len_swing = input.int(6, "Swing Pivot Length", minval=3, maxval=15, group="SMC")
+pivot_len_internal = input.int(2, "Internal Pivot Length", minval=1, maxval=6, group="SMC")
+rr_ratio = input.float(4.0, "Risk-Reward Ratio", minval=1.0, maxval=9.0, step=0.05, group="SMC")
+risk_percent = input.float(0.5, "Risk Per Trade (%)", minval=0.1, maxval=5.0, step=0.1, group="SMC")
+allow_longs = input.bool(true, "Allow Longs", group="SMC")
+allow_shorts = input.bool(true, "Allow Shorts", group="SMC")
+
+// TradingView Pine cannot read the local CME CSV outputs directly.
+// Update this wall manually from the latest Elpis CME wall report before testing.
+cme_mode = input.string("Visual Only", "CME Mode", options=["Off", "Visual Only", "Strict Filter"], group="CME Filter")
+cme_wall_level = input.float(0.0, "CME Wall Level", step=0.1, group="CME Filter")
+cme_wall_side = input.string("Above", "CME Wall Side", options=["Above", "Below"], group="CME Filter")
+cme_acceptance_bars = input.int(2, "Acceptance Bars", minval=1, maxval=10, group="CME Filter")
+cme_max_distance = input.float(50.0, "Max Entry Distance From Wall (0 = off)", minval=0.0, step=0.1, group="CME Filter")
+
+// Use TradingView's confirmed pivots so the selected length is actually applied.
+swing_high_price = ta.pivothigh(high, pivot_len_swing, pivot_len_swing)
+swing_low_price = ta.pivotlow(low, pivot_len_swing, pivot_len_swing)
+
+swing_high = not na(swing_high_price)
+swing_low = not na(swing_low_price)
+
+var float last_swing_high = na
+var float last_swing_low = na
+
+if swing_high
+    last_swing_high := swing_high_price
+if swing_low
+    last_swing_low := swing_low_price
+
+// Break of structure.
+var float current_trend = 0
+bos_up = not na(last_swing_high) and close > last_swing_high and current_trend <= 0
+bos_down = not na(last_swing_low) and close < last_swing_low and current_trend >= 0
+
+if bos_up
+    current_trend := 1
+if bos_down
+    current_trend := -1
+
+// CME acceptance continuation filter:
+// Above wall + closes accepted above wall allows longs only.
+// Below wall + closes accepted below wall allows shorts only.
+cme_configured = cme_wall_level > 0
+cme_above_wall = cme_wall_side == "Above"
+cme_accepted_above = cme_configured and ta.lowest(close, cme_acceptance_bars) > cme_wall_level
+cme_accepted_below = cme_configured and ta.highest(close, cme_acceptance_bars) < cme_wall_level
+cme_near_wall = not cme_configured or cme_max_distance == 0 or math.abs(close - cme_wall_level) <= cme_max_distance
+cme_blocks_entries = cme_mode == "Strict Filter"
+cme_long_allowed = not cme_blocks_entries or (cme_above_wall and cme_accepted_above and cme_near_wall)
+cme_short_allowed = not cme_blocks_entries or (not cme_above_wall and cme_accepted_below and cme_near_wall)
+
+raw_long_signal = allow_longs and bos_up
+raw_short_signal = allow_shorts and bos_down
+longCondition = raw_long_signal and cme_long_allowed
+shortCondition = raw_short_signal and cme_short_allowed
+longBlockedByCme = raw_long_signal and not cme_long_allowed
+shortBlockedByCme = raw_short_signal and not cme_short_allowed
+
+calculate_qty(stop_price) =>
+    risk_amount = strategy.equity * (risk_percent / 100)
+    price_diff = math.abs(close - stop_price)
+    qty = price_diff > syminfo.mintick ? risk_amount / price_diff : na
+    qty
+
+if longCondition
+    stop_price = last_swing_low
+    take_profit = close + (close - stop_price) * rr_ratio
+    qty = calculate_qty(stop_price)
+    if not na(qty) and stop_price < close and strategy.position_size == 0
+        strategy.entry("Long", strategy.long, qty=qty)
+        strategy.exit("Exit Long", "Long", stop=stop_price, limit=take_profit)
+
+if shortCondition
+    stop_price = last_swing_high
+    take_profit = close - (stop_price - close) * rr_ratio
+    qty = calculate_qty(stop_price)
+    if not na(qty) and stop_price > close and strategy.position_size == 0
+        strategy.entry("Short", strategy.short, qty=qty)
+        strategy.exit("Exit Short", "Short", stop=stop_price, limit=take_profit)
+
+plotshape(longCondition, "Long Signal", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.normal, text="LONG")
+plotshape(shortCondition, "Short Signal", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.normal, text="SHORT")
+plotshape(longBlockedByCme, "Long Blocked By CME", style=shape.xcross, location=location.belowbar, color=color.gray, size=size.tiny, text="CME")
+plotshape(shortBlockedByCme, "Short Blocked By CME", style=shape.xcross, location=location.abovebar, color=color.gray, size=size.tiny, text="CME")
+plotshape(swing_high, "Swing High", style=shape.circle, location=location.abovebar, color=color.yellow, size=size.small)
+plotshape(swing_low, "Swing Low", style=shape.circle, location=location.belowbar, color=color.yellow, size=size.small)
+
+plot(last_swing_high, "Last Swing High", color=color.yellow, linewidth=2, style=plot.style_line)
+plot(last_swing_low, "Last Swing Low", color=color.yellow, linewidth=2, style=plot.style_line)
+plot(cme_configured ? cme_wall_level : na, "Manual CME Wall", color=color.orange, linewidth=2, style=plot.style_linebr)
+
+bgcolor(cme_mode != "Off" and cme_accepted_above ? color.new(color.green, 88) : na, title="CME Accepted Above")
+bgcolor(cme_mode != "Off" and cme_accepted_below ? color.new(color.red, 88) : na, title="CME Accepted Below")
+
+plot(strategy.position_size > 0 ? strategy.position_avg_price : na, "Long Entry", color=color.green, style=plot.style_linebr)
+plot(strategy.position_size < 0 ? strategy.position_avg_price : na, "Short Entry", color=color.red, style=plot.style_linebr)

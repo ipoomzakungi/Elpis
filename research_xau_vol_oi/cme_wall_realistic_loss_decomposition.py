@@ -364,7 +364,7 @@ def build_next_action_table(
     rows = [
         _answer("costs_explain_losses", "PARTIAL" if cost_dominant else "NO", _cost_summary(cost_drag)),
         _answer("exits_explain_losses", "YES", _exit_summary()),
-        _answer("entries_explain_losses", "PARTIAL", "Acceptance confirmation has weak follow-through; rejection variants are less severe but still negative after costs."),
+        _answer("entries_explain_losses", "PARTIAL", _entry_summary(loss_by_strategy)),
         _answer("worst_direction", _text(worst_direction.get("direction")), _row_summary(worst_direction)),
         _answer("worst_wall_type", _text(worst_wall.get("wall_type")), _row_summary(worst_wall)),
         _answer("worst_distance_bucket", _text(worst_distance.get("distance_bucket")), _row_summary(worst_distance)),
@@ -616,7 +616,7 @@ def _main_loss_driver_for_strategy(strategy: str, group: list[dict[str, Any]], n
         return "FILTER_ONLY"
     if not group:
         return "SAMPLE_TOO_SMALL"
-    if strategy == "WALL_ACCEPTANCE_CONTINUATION":
+    if strategy == "WALL_ACCEPTANCE_CONTINUATION" and net_pnl < 0:
         return "FALSE_BREAKOUTS"
     gross = sum(_float(row.get("gross_pnl_points")) or 0.0 for row in group)
     if gross > 0 and net_pnl < 0:
@@ -642,7 +642,7 @@ def _fixability_failure_mode(
 ) -> str:
     if strategy == "AVOID_DIRECT_WALL_TRADE_FILTER":
         return "SAMPLE_TOO_SMALL"
-    if strategy == "WALL_ACCEPTANCE_CONTINUATION":
+    if strategy == "WALL_ACCEPTANCE_CONTINUATION" and net < 0:
         return "FALSE_BREAKOUTS"
     if strategy == "SD_2_REJECTION_CONFIRMED_FADE" and net < 0 and profit_factor and profit_factor > 1:
         return "COST_DRAG"
@@ -696,7 +696,10 @@ def _fixability_reason(
     strategy_row: dict[str, Any],
 ) -> str:
     if strategy == "WALL_ACCEPTANCE_CONTINUATION":
-        return "Acceptance continuation has extreme negative net and weak target follow-through in the realistic replay."
+        net = _float(strategy_row.get("net_pnl")) or 0.0
+        if net < 0:
+            return "Acceptance continuation has negative net and weak target follow-through in the realistic replay."
+        return "Acceptance continuation no longer drives losses after favorable-target validation; keep it under forward research."
     if main_failure == "COST_DRAG":
         return "Gross replay survives zero-cost or half-cost assumptions but fails after base spread/slippage costs."
     if main_failure == "SAMPLE_TOO_SMALL":
@@ -723,6 +726,17 @@ def _cost_summary(cost_drag: pl.DataFrame) -> str:
 
 def _exit_summary() -> str:
     return "Exit reason grouping separates target hits, stops, invalidation, session close, and ambiguous same-candle outcomes."
+
+
+def _entry_summary(loss_by_strategy: pl.DataFrame) -> str:
+    rows = {_text(row.get("strategy_name")): row for row in loss_by_strategy.to_dicts()}
+    acceptance_net = _float(rows.get("WALL_ACCEPTANCE_CONTINUATION", {}).get("net_pnl")) or 0.0
+    rejection_net = _float(rows.get("WALL_REJECTION_CONFIRMED_FADE", {}).get("net_pnl")) or 0.0
+    if acceptance_net > 0 and rejection_net < 0:
+        return "Acceptance continuation improved after favorable-target validation; rejection fade remains weak and needs entry-direction review."
+    if acceptance_net < 0:
+        return "Acceptance confirmation has weak follow-through; rejection variants are less severe but still negative after costs."
+    return "Entry results are mixed; keep only research candidates with forward evidence."
 
 
 def _row_summary(row: dict[str, Any]) -> str:

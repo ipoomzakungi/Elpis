@@ -58,6 +58,11 @@ from research_xau_vol_oi.cme_wall_realistic_loss_decomposition import (
     cme_wall_realistic_loss_decomposition_report_lines,
     run_cme_wall_realistic_loss_decomposition,
 )
+from research_xau_vol_oi.cme_wall_entry_filter_audit import (
+    CmeWallEntryFilterAuditResult,
+    cme_wall_entry_filter_audit_report_lines,
+    run_cme_wall_entry_filter_audit,
+)
 from research_xau_vol_oi.guru_cme_hypothesis_lab import (
     GuruCmeHypothesisLabResult,
     guru_cme_hypothesis_report_lines,
@@ -558,6 +563,9 @@ def run_pipeline(
     cme_wall_realistic_loss_decomposition = run_cme_wall_realistic_loss_decomposition(
         output_dir=output_root,
     )
+    cme_wall_entry_filter_audit = run_cme_wall_entry_filter_audit(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     write_research_report(
         report_path,
@@ -619,6 +627,7 @@ def run_pipeline(
         cme_wall_strategy_realism_audit=cme_wall_strategy_realism_audit,
         cme_wall_realistic_backtest_v1=cme_wall_realistic_backtest_v1,
         cme_wall_realistic_loss_decomposition=cme_wall_realistic_loss_decomposition,
+        cme_wall_entry_filter_audit=cme_wall_entry_filter_audit,
         dukascopy_spot=dukascopy_spot,
         charts_dir=charts_dir,
     )
@@ -1169,6 +1178,9 @@ def run_dukascopy_only_pipeline(
     cme_wall_realistic_loss_decomposition = run_cme_wall_realistic_loss_decomposition(
         output_dir=output_root,
     )
+    cme_wall_entry_filter_audit = run_cme_wall_entry_filter_audit(
+        output_dir=output_root,
+    )
     report_path = output_root / "research_report.md"
     report_path.write_text(
         "\n".join(
@@ -1237,6 +1249,10 @@ def run_dukascopy_only_pipeline(
                 "",
                 *cme_wall_realistic_loss_decomposition_report_lines(
                     cme_wall_realistic_loss_decomposition,
+                ),
+                "",
+                *cme_wall_entry_filter_audit_report_lines(
+                    cme_wall_entry_filter_audit,
                 ),
             ]
         ),
@@ -1349,6 +1365,11 @@ def run_dukascopy_only_pipeline(
         **{
             name: path
             for name, path in cme_wall_realistic_loss_decomposition.paths.items()
+            if name.endswith("_csv") or name.endswith("_md")
+        },
+        **{
+            name: path
+            for name, path in cme_wall_entry_filter_audit.paths.items()
             if name.endswith("_csv") or name.endswith("_md")
         },
     }
@@ -1545,6 +1566,7 @@ def write_research_report(
     cme_wall_strategy_realism_audit: CmeWallStrategyRealismAuditResult | None = None,
     cme_wall_realistic_backtest_v1: CmeWallRealisticBacktestV1Result | None = None,
     cme_wall_realistic_loss_decomposition: CmeWallRealisticLossDecompositionResult | None = None,
+    cme_wall_entry_filter_audit: CmeWallEntryFilterAuditResult | None = None,
     dukascopy_spot: DukascopySpotIntegrationResult | None = None,
     charts_dir: Path,
 ) -> None:
@@ -1655,6 +1677,8 @@ def write_research_report(
         *cme_wall_realistic_loss_decomposition_report_lines(
             cme_wall_realistic_loss_decomposition,
         ),
+        "",
+        *cme_wall_entry_filter_audit_report_lines(cme_wall_entry_filter_audit),
         "",
         "## Market-Map And No-Trade Proof Pack",
         "",

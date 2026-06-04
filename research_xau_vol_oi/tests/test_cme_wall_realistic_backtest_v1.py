@@ -31,6 +31,21 @@ def test_target_and_stop_are_known_at_entry(tmp_path: Path) -> None:
     assert active.get_column("stop_price").null_count() == 0
 
 
+def test_acceptance_target_is_beyond_entry_price(tmp_path: Path) -> None:
+    result = run_cme_wall_realistic_backtest_v1(
+        output_dir=_fixture_outputs(tmp_path, mode="acceptance_target_behind_entry"),
+    )
+    row = result.trade_events.filter(
+        (pl.col("strategy_name") == "WALL_ACCEPTANCE_CONTINUATION")
+        & (pl.col("wall_level") == 90.0),
+    ).row(0, named=True)
+
+    assert row["direction"] == "SHORT"
+    assert row["target_price"] < row["entry_price"]
+    assert row["exit_reason"] == "TARGET_HIT"
+    assert row["gross_pnl_points"] > 0
+
+
 def test_target_stop_path_check_uses_after_entry_candles_only(tmp_path: Path) -> None:
     result = run_cme_wall_realistic_backtest_v1(
         output_dir=_fixture_outputs(tmp_path, mode="pre_entry_target_only"),
@@ -151,6 +166,24 @@ def _rankings(*, mode: str, duplicate: bool) -> pl.DataFrame:
         rows = [_ranking("2026-05-20T00:00:00+00:00", 110.0)]
     elif mode in {"pre_entry_target_only", "ambiguous"}:
         rows = [_ranking("2026-05-20T00:00:00+00:00", 110.0)]
+    elif mode == "acceptance_target_behind_entry":
+        rows = [
+            _ranking(
+                "2026-05-20T00:00:00+00:00",
+                90.0,
+                future_price=100.0,
+                side="BELOW",
+                wall_type="OI_WALL",
+            ),
+            _ranking(
+                "2026-05-20T00:00:00+00:00",
+                85.0,
+                future_price=100.0,
+                side="BELOW",
+                wall_type="OI_WALL",
+                rank=2,
+            ),
+        ]
     else:
         rows = [
             _ranking("2026-05-20T00:00:00+00:00", 110.0),
@@ -162,13 +195,21 @@ def _rankings(*, mode: str, duplicate: bool) -> pl.DataFrame:
     return pl.DataFrame(rows, infer_schema_length=None)
 
 
-def _ranking(timestamp: str, strike: float) -> dict[str, object]:
+def _ranking(
+    timestamp: str,
+    strike: float,
+    *,
+    future_price: float = 100.0,
+    side: str = "ABOVE",
+    wall_type: str = "CALL_VOLUME_WALL",
+    rank: int = 1,
+) -> dict[str, object]:
     return {
         "snapshot_timestamp": timestamp,
         "trade_date": timestamp[:10],
         "expiration": "2026-05-29",
         "dte": 1.0,
-        "future_price": 100.0,
+        "future_price": future_price,
         "strike": strike,
         "option_type": "call",
         "call_volume": 100.0,
@@ -176,12 +217,12 @@ def _ranking(timestamp: str, strike: float) -> dict[str, object]:
         "total_volume": 100.0,
         "open_interest": 1000.0,
         "implied_volatility": 0.2,
-        "distance_from_price": strike - 100.0,
-        "side_relative_to_price": "ABOVE",
-        "wall_type": "CALL_VOLUME_WALL",
+        "distance_from_price": strike - future_price,
+        "side_relative_to_price": side,
+        "wall_type": wall_type,
         "wall_score": 100.0,
-        "rank_overall": 1,
-        "rank_above": 1,
+        "rank_overall": rank,
+        "rank_above": rank if side == "ABOVE" else None,
         "rank_below": None,
         "active_threshold_passed": True,
         "context_threshold_passed": True,
@@ -209,6 +250,13 @@ def _price(*, mode: str) -> pl.DataFrame:
             _candle("2026-05-20T00:00:00+00:00", 100, 100, 100, 100),
             _candle("2026-05-20T00:15:00+00:00", 101, 111, 100, 108),
             _candle("2026-05-20T00:30:00+00:00", 108, 123, 99, 112),
+        ]
+    elif mode == "acceptance_target_behind_entry":
+        rows = [
+            _candle("2026-05-20T00:00:00+00:00", 100, 100, 100, 100),
+            _candle("2026-05-20T00:15:00+00:00", 88, 89, 84, 85),
+            _candle("2026-05-20T00:30:00+00:00", 84, 86, 82, 83),
+            _candle("2026-05-20T00:45:00+00:00", 80, 81, 74, 76),
         ]
     else:
         rows = [

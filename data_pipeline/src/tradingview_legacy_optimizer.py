@@ -22,8 +22,14 @@ from tradingview_optimizer import (
     load_frame,
     macd_list,
     midpoint,
+    build_sorted_report_sets,
+    in_target_frequency,
+    interesting_rejected,
+    is_low_frequency,
+    metric_sort_value,
     prefix_metrics,
     rejection_reasons,
+    robustness_gate_flags,
     resolve_max_workers,
     rolling_max,
     rolling_min,
@@ -34,7 +40,9 @@ from tradingview_optimizer import (
     slugify,
     sma_list,
     split_rows,
+    sorted_by_metric,
     summarize_trades,
+    validation_gate_flags,
     validation_score,
     write_csv,
 )
@@ -246,6 +254,7 @@ def optimize(
         write_csv(timeframe_dir / "top_results.csv", ranked_for_timeframe[:top_n])
         write_json(timeframe_dir / "best_presets.json", build_presets(ranked_for_timeframe[:top_n], config))
         write_pine_markdown(timeframe_dir / "pine_input_preset.md", ranked_for_timeframe[:top_n], config)
+        write_legacy_research_reports(timeframe_dir, ranked_for_timeframe, config)
         all_candidates.extend(candidates)
 
     ranked = sorted(all_candidates, key=lambda item: item["score"], reverse=True)
@@ -254,11 +263,19 @@ def optimize(
     write_csv(reports_dir / "top_results.csv", top)
     write_json(reports_dir / "best_presets.json", build_presets(top, config))
     write_pine_markdown(reports_dir / "pine_input_preset.md", top, config)
+    write_legacy_research_reports(reports_dir, ranked, config)
     return {
         "reports_dir": reports_dir,
         "evaluated": len(all_candidates),
         "accepted": sum(1 for item in all_candidates if item["accepted"]),
         "positive_validation": sum(1 for item in all_candidates if item["validation_net_pnl"] > 0),
+        "low_frequency": sum(1 for item in all_candidates if is_low_frequency(item, config)),
+        "target_frequency": sum(1 for item in all_candidates if in_target_frequency(item, config)),
+        "positive_target_frequency": sum(
+            1
+            for item in all_candidates
+            if in_target_frequency(item, config) and item["validation_net_pnl"] > 0
+        ),
         "ge500_positive_validation": sum(
             1 for item in all_candidates if item["validation_trades_per_year"] >= 500 and item["validation_net_pnl"] > 0
         ),
@@ -313,12 +330,14 @@ def run_diagnostics(
         write_csv(case_dir / "top_results.csv", ranked_case[:top_n])
         write_json(case_dir / "best_presets.json", build_presets(ranked_case[:top_n], case_config))
         write_pine_markdown(case_dir / "pine_input_preset.md", ranked_case[:top_n], case_config)
+        write_legacy_research_reports(case_dir, ranked_case, case_config)
         summary_rows.append(summarize_rows(ranked_case, fee_name, "all"))
         all_rows.extend(case_rows)
 
     ranked_all = sorted(all_rows, key=lambda item: item["score"], reverse=True)
     write_csv(reports_root / "all_results.csv", ranked_all)
     write_csv(reports_root / "top_results.csv", ranked_all[:top_n])
+    write_legacy_research_reports(reports_root, ranked_all, base_config)
     write_csv(reports_root / "summary.csv", summary_rows)
     payload = {
         "reports_dir": reports_root,
@@ -329,6 +348,13 @@ def run_diagnostics(
         "total_evaluated": len(all_rows),
         "accepted": sum(1 for row in all_rows if row["accepted"]),
         "positive_validation": sum(1 for row in all_rows if row["validation_net_pnl"] > 0),
+        "low_frequency": sum(1 for row in all_rows if is_low_frequency(row, base_config)),
+        "target_frequency": sum(1 for row in all_rows if in_target_frequency(row, base_config)),
+        "positive_target_frequency": sum(
+            1
+            for row in all_rows
+            if in_target_frequency(row, base_config) and row["validation_net_pnl"] > 0
+        ),
         "ge500_positive_validation": sum(
             1 for row in all_rows if row["validation_trades_per_year"] >= 500 and row["validation_net_pnl"] > 0
         ),
@@ -487,6 +513,9 @@ def evaluate_candidate(
     reject = config["reject"]
     reject_reasons = rejection_reasons(validation, reject)
     robust_reasons = robustness_reasons(scenario_results, config.get("robustness", {}))
+    validation_gates = validation_gate_flags(validation, reject)
+    robustness_gates = robustness_gate_flags(scenario_results, config.get("robustness", {}))
+    pass_test_net_gate = test["net_pnl"] > 0
     train_stable = train["profit_factor"] is not None and train["profit_factor"] >= 1.0 and train["net_pnl"] > 0
     test_not_collapsed = test["net_pnl"] >= -abs(validation["net_pnl"]) * 0.75
     score = validation_score(validation, reject, scenario_results)
@@ -505,6 +534,9 @@ def evaluate_candidate(
         **prefix_metrics("validation", validation),
         **prefix_metrics("test", test),
         "accepted": not all_reasons,
+        **validation_gates,
+        "pass_test_net_gate": pass_test_net_gate,
+        **robustness_gates,
         "train_stable": train_stable,
         "test_not_collapsed": test_not_collapsed,
         "reject_reasons": "; ".join(all_reasons),
@@ -1293,6 +1325,148 @@ def build_presets(top: list[dict[str, Any]], config: dict[str, Any]) -> dict[str
     }
 
 
+def legacy_candidate_summary_line(row: dict[str, Any]) -> str:
+    return (
+        f"- `{row.get('config_id')}` `{row.get('timeframe')}` "
+        f"engine=`{row.get('engineMode')}` side=`{row.get('sideMode')}` "
+        f"accepted=`{row.get('accepted')}` "
+        f"val_pnl=`{format_float(row.get('validation_net_pnl'))}` "
+        f"test_pnl=`{format_float(row.get('test_net_pnl'))}` "
+        f"val_pf=`{format_float(row.get('validation_profit_factor'))}` "
+        f"val_tpy=`{format_float(row.get('validation_trades_per_year'))}` "
+        f"avg_net_trade=`{format_float(row.get('validation_avg_net_trade'))}` "
+        f"reject=`{row.get('reject_reasons') or 'none'}`"
+    )
+
+
+def append_legacy_candidate_section(
+    lines: list[str],
+    title: str,
+    rows: list[dict[str, Any]],
+    empty_text: str,
+    limit: int = 5,
+) -> None:
+    lines.extend([f"## {title}", ""])
+    if not rows:
+        lines.extend([empty_text, ""])
+        return
+    lines.extend(legacy_candidate_summary_line(row) for row in rows[:limit])
+    lines.append("")
+
+
+def write_legacy_research_summary(path: Path, rows: list[dict[str, Any]], config: dict[str, Any]) -> None:
+    top = rows[0] if rows else None
+    reject = config.get("reject", {})
+    execution = config.get("execution", {})
+    accepted_rows = sorted_by_metric([row for row in rows if row.get("accepted")], "validation_net_pnl")
+    rejected_interesting = sorted_by_metric([row for row in rows if interesting_rejected(row)], "validation_net_pnl")
+    low_frequency = sorted_by_metric([row for row in rows if is_low_frequency(row, config)], "validation_net_pnl")
+    target_frequency = sorted_by_metric([row for row in rows if in_target_frequency(row, config)], "validation_net_pnl")
+    positive_target_frequency = [
+        row for row in target_frequency if metric_sort_value(row, "validation_net_pnl") > 0.0
+    ]
+    lines = [
+        "# Tradingview.pine Legacy Research Summary",
+        "",
+        f"Created at: {datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')}",
+        "",
+        "This is a research artifact. It is not evidence of live-trading readiness, safety, or profitability.",
+        "",
+        "## Research Controls",
+        "",
+        f"- Source Pine: `{config.get('data', {}).get('source_pine', '../Tradingview.pine')}`",
+        f"- Position sizing mode: `{execution.get('position_size_mode', execution.get('size_mode', 'fixed'))}`",
+        f"- Validation trade/year floor: `{reject.get('min_trades_per_year')}`",
+        f"- Validation trade/year cap: `{reject.get('max_trades_per_year')}`",
+        "",
+        "## Run Outcome",
+        "",
+        f"- Evaluated candidates: `{len(rows)}`",
+        f"- Accepted candidates: `{sum(1 for row in rows if row.get('accepted'))}`",
+        f"- Positive validation candidates: `{sum(1 for row in rows if (row.get('validation_net_pnl') or 0.0) > 0.0)}`",
+        f"- Low-frequency candidates: `{len(low_frequency)}`",
+        f"- Target-frequency candidates: `{len(target_frequency)}`",
+        f"- Positive target-frequency candidates: `{len(positive_target_frequency)}`",
+        "",
+    ]
+    if top:
+        lines.extend(
+            [
+                "## Best Ranked Candidate",
+                "",
+                f"- Config: `{top.get('config_id')}`",
+                f"- Timeframe: `{top.get('timeframe')}`",
+                f"- Engine: `{top.get('engineMode')}`",
+                f"- Side: `{top.get('sideMode')}`",
+                f"- Accepted: `{top.get('accepted')}`",
+                f"- Validation net P&L: `{format_float(top.get('validation_net_pnl'))}`",
+                f"- Test net P&L: `{format_float(top.get('test_net_pnl'))}`",
+                f"- Validation PF: `{format_float(top.get('validation_profit_factor'))}`",
+                f"- Validation trades/year: `{format_float(top.get('validation_trades_per_year'))}`",
+                f"- Validation average net trade: `{format_float(top.get('validation_avg_net_trade'))}`",
+                f"- Validation average fee cost: `{format_float(top.get('validation_avg_fee_cost'))}`",
+                f"- Worst-fee validation net P&L: `{format_float(top.get('worst_fee_validation_net_pnl'))}`",
+                f"- Reject reasons: `{top.get('reject_reasons') or 'none'}`",
+                "",
+            ]
+        )
+    append_legacy_candidate_section(
+        lines,
+        "Best Raw Candidates",
+        sorted_by_metric(rows, "validation_net_pnl"),
+        "No raw candidates were written.",
+    )
+    append_legacy_candidate_section(
+        lines,
+        "Best Accepted Candidates",
+        accepted_rows,
+        "No candidates passed all acceptance gates.",
+    )
+    append_legacy_candidate_section(
+        lines,
+        "Best Rejected-But-Interesting Candidates",
+        rejected_interesting,
+        "No rejected candidates had positive validation net P&L.",
+    )
+    append_legacy_candidate_section(
+        lines,
+        "Low-Frequency Candidates",
+        low_frequency,
+        "No candidates were below the configured minimum trade frequency.",
+    )
+    append_legacy_candidate_section(
+        lines,
+        "Target-Frequency Candidates",
+        target_frequency,
+        "No candidates were inside the configured target trade-frequency band.",
+    )
+    lines.extend(
+        [
+            "## Report Files",
+            "",
+            "- `all_results.csv`: all sampled candidates with split, cost, and robustness metrics.",
+            "- `top_results.csv`: best ranked candidates.",
+            "- `top_by_validation_pnl_all.csv`: all candidates sorted by validation net P&L.",
+            "- `top_by_test_pnl_all.csv`: all candidates sorted by test net P&L.",
+            "- `top_by_avg_net_trade_all.csv`: all candidates sorted by validation average net trade.",
+            "- `top_positive_validation_rejected.csv`: rejected candidates with positive validation net P&L.",
+            "- `top_low_frequency_candidates.csv`: candidates below the configured minimum trade frequency.",
+            "- `top_target_frequency_candidates.csv`: candidates inside the configured target trade-frequency band.",
+            "",
+            "Read negative or empty results as a useful rejection signal. Do not tune around fees by weakening the net-P&L gates.",
+            "",
+        ]
+    )
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def write_legacy_research_reports(reports_dir: Path, rows: list[dict[str, Any]], config: dict[str, Any]) -> None:
+    report_columns = list(rows[0].keys()) if rows else None
+    for filename, report_rows in build_sorted_report_sets(rows, config).items():
+        write_csv(reports_dir / filename, report_rows, columns=report_columns)
+    write_legacy_research_summary(reports_dir / "research_summary.md", rows, config)
+
+
 def write_pine_markdown(path: Path, top: list[dict[str, Any]], config: dict[str, Any]) -> None:
     ordered_params = configured_parameter_order(config)
     lines = [
@@ -1361,6 +1535,9 @@ def main() -> None:
             "Tradingview.pine legacy diagnostics complete: "
             f"evaluated={payload['total_evaluated']}, accepted={payload['accepted']}, "
             f"positive_validation={payload['positive_validation']}, "
+            f"low_frequency={payload['low_frequency']}, "
+            f"target_frequency={payload['target_frequency']}, "
+            f"positive_target_frequency={payload['positive_target_frequency']}, "
             f"ge500_positive_validation={payload['ge500_positive_validation']}"
         )
         if best:
@@ -1385,6 +1562,9 @@ def main() -> None:
         "Tradingview.pine legacy optimization complete: "
         f"evaluated={payload['evaluated']}, accepted={payload['accepted']}, "
         f"positive_validation={payload['positive_validation']}, "
+        f"low_frequency={payload['low_frequency']}, "
+        f"target_frequency={payload['target_frequency']}, "
+        f"positive_target_frequency={payload['positive_target_frequency']}, "
         f"ge500_positive_validation={payload['ge500_positive_validation']}"
     )
     if best:

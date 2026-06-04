@@ -1,0 +1,83 @@
+//@version=5
+strategy("SMC Strategy", overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=100)
+
+// Input parameters
+pivot_len_swing = input.int(5, "Swing Pivot Length", minval=3, maxval=15)
+pivot_len_internal = input.int(2, "Internal Pivot Length", minval=1, maxval=6)
+rr_ratio = input.float(1.5, "Risk-Reward Ratio", minval=1.0, maxval=9.0, step=0.1)
+risk_percent = input.float(1.0, "Risk Per Trade (%)", minval=0.1, maxval=100.0, step=0.1)
+
+// Function to detect swing highs and lows
+is_swing_high(len) =>
+    high[len] > high[len + 1] and high[len] > high[len - 1] and high[len] > high[len + 2] and high[len] > high[len - 2]
+
+is_swing_low(len) =>
+    low[len] < low[len + 1] and low[len] < low[len - 1] and low[len] < low[len + 2] and low[len] < low[len - 2]
+// Detect swings
+swing_high = is_swing_high(pivot_len_swing)
+swing_low = is_swing_low(pivot_len_swing)
+
+// Store pivot values
+var float last_swing_high = na
+var float last_swing_low = na
+
+if swing_high
+    last_swing_high := high[pivot_len_swing]
+if swing_low
+    last_swing_low := low[pivot_len_swing]
+
+// Detect BOS (Break of Structure)
+var float current_trend = 0
+bos_up = close > last_swing_high and current_trend <= 0
+bos_down = close < last_swing_low and current_trend >= 0
+
+if bos_up
+    current_trend := 1
+if bos_down
+    current_trend := -1
+
+// Entry Conditions
+longCondition = bos_up
+shortCondition = bos_down
+
+// Calculate position size based on risk
+calculate_qty(stop_price) =>
+    risk_amount = strategy.equity * (risk_percent / 100)
+    price_diff = math.abs(close - stop_price)
+    qty = risk_amount / price_diff
+    qty
+
+// Trading Logic
+if (longCondition)
+    stop_price = last_swing_low
+    take_profit = close + (close - stop_price) * rr_ratio
+    qty = calculate_qty(stop_price)
+    strategy.entry("Long", strategy.long, qty=qty)
+    strategy.exit("Exit Long", "Long", stop=stop_price, limit=take_profit)
+
+if (shortCondition)
+    stop_price = last_swing_high
+    take_profit = close - (stop_price - close) * rr_ratio
+    qty = calculate_qty(stop_price)
+    strategy.entry("Short", strategy.short, qty=qty)
+    strategy.exit("Exit Short", "Short", stop=stop_price, limit=take_profit)
+
+// Plot Signals
+plotshape(longCondition, "Long Signal", style=shape.triangleup, location=location.belowbar,
+         color=color.green, size=size.normal, text="LONG")
+plotshape(shortCondition, "Short Signal", style=shape.triangledown, location=location.abovebar,
+         color=color.red, size=size.normal, text="SHORT")
+plotshape(swing_high, "Swing High", style=shape.circle, location=location.abovebar,
+         color=color.yellow, size=size.small)
+plotshape(swing_low, "Swing Low", style=shape.circle, location=location.belowbar,
+         color=color.yellow, size=size.small)
+
+// Plot levels
+plot(last_swing_high, "Last Swing High", color=color.yellow, linewidth=2, style=plot.style_line)
+plot(last_swing_low, "Last Swing Low", color=color.yellow, linewidth=2, style=plot.style_line)
+
+// Plot entry/exit prices when in position
+plot(strategy.position_size > 0 ? strategy.position_avg_price : na, "Long Entry",
+     color=color.green, style=plot.style_linebr)
+plot(strategy.position_size < 0 ? strategy.position_avg_price : na, "Short Entry",
+     color=color.red, style=plot.style_linebr)

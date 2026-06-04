@@ -235,6 +235,15 @@ Outputs:
 ```text
 data/reports/tradingview_optimizer/top_results.csv
 data/reports/tradingview_optimizer/all_results.csv
+data/reports/tradingview_optimizer/fee_attribution.csv
+data/reports/tradingview_optimizer/sleeve_comparison.csv
+data/reports/tradingview_optimizer/top_by_validation_pnl_all.csv
+data/reports/tradingview_optimizer/top_by_test_pnl_all.csv
+data/reports/tradingview_optimizer/top_by_avg_net_trade_all.csv
+data/reports/tradingview_optimizer/top_positive_validation_rejected.csv
+data/reports/tradingview_optimizer/top_low_frequency_candidates.csv
+data/reports/tradingview_optimizer/top_target_frequency_candidates.csv
+data/reports/tradingview_optimizer/research_summary.md
 data/reports/tradingview_optimizer/best_presets.json
 data/reports/tradingview_optimizer/pine_input_preset.md
 data/reports/tradingview_optimizer/<timeframe>/top_results.csv
@@ -242,16 +251,20 @@ data/reports/tradingview_optimizer/<timeframe>/all_results.csv
 ```
 
 The optimizer approximates Donchian breakouts, SD mean reversion, score
-thresholds, Bybit/MEXC/custom fee models, slippage, funding, TP1, runner,
-stops, and time exits. It uses walk-forward train/validation/test splits and
-rejects validation configs outside the configured trade-frequency,
-profit-factor, average-win/loss, and commission-drag thresholds.
+thresholds, Bybit/MEXC/custom fee models, slippage, spread, funding, optional
+impact and volatility-slippage assumptions, TP1, runner, stops, dynamic
+no-play zones, risk-based sizing, and time exits. It uses walk-forward
+train/validation/test splits and rejects validation configs outside the
+configured trade-frequency, profit-factor, average-win/loss, and
+commission-drag thresholds.
 
 The default config explores M15, M30, H1, and H2. It samples strategy mode,
 long/short permissions, strictness preset, grid/Donchian lengths, regime
 thresholds, RSI/MACD/EMA lengths, ATR stop behavior, TP quantities, TP/runner
-levels, MR TP2, breakeven behavior, and fee-multiple gates. It requires at
-least 500 trades/year but does not cap the maximum trade count.
+levels, MR TP2, breakeven behavior, dynamic no-play behavior, and
+fee-multiple gates. The default research config now searches a lower-turnover
+range instead of forcing 500+ trades/year, because high-frequency candidates
+can look useful before costs while failing after realistic execution costs.
 
 Robustness checks are enabled by default. Each candidate is evaluated with the
 base fee model and an additional worst-case taker/slippage/funding scenario.
@@ -263,6 +276,24 @@ the candidate parameter blocks back into TradingView.
 These presets are candidates to paste back into Pine and re-test in
 TradingView. They are not proof of profitability, predictive power, safety, or
 live readiness.
+
+## Optimize Legacy TradingView Strategy Inputs
+
+For the older strategy in `Tradingview.pine`, use the legacy Python
+approximation:
+
+```powershell
+python src/tradingview_legacy_optimizer.py --config configs/tradingview_legacy_optimizer_config.yaml --iterations 250 --workers 0
+```
+
+The legacy optimizer writes the same visibility-first sorted reports as the
+newer optimizer: every sampled candidate is evaluated across
+train/validation/test, written to `all_results.csv`, and then labeled with gate
+flags and reject reasons. The sorted report files include
+`top_by_validation_pnl_all.csv`, `top_by_test_pnl_all.csv`,
+`top_by_avg_net_trade_all.csv`, `top_positive_validation_rejected.csv`,
+`top_low_frequency_candidates.csv`, `top_target_frequency_candidates.csv`, and
+`research_summary.md`.
 
 ## Diagnose TradingView Strategy Edge
 
@@ -277,7 +308,7 @@ The diagnostics compare:
 
 ```text
 Fee profiles: zero cost, Bybit maker+taker, Bybit taker+taker, MEXC low cost, worst-case taker
-Strategy slices: auto, MR only, breakout only, long only, short only
+Strategy slices: auto, MR only, breakout only, long-breakout only, long only, short only
 Timeframes: M15, M30, H1, H2
 ```
 
@@ -295,3 +326,26 @@ Use this before deeper optimization. If zero-cost works but real-fee cases
 fail, the strategy has gross signal edge but not enough edge after execution
 costs. If MR-only or short-only fail even at zero cost, those engines should
 not be tuned blindly.
+
+## Backtest SMC Pine Prototype
+
+For the lightweight `smc.pine` strategy, run the local Python approximation:
+
+```powershell
+python src/smc_pine_backtest.py --config configs/smc_pine_backtest_config.yaml
+```
+
+Outputs:
+
+```text
+data/reports/smc_pine_backtest/all_results.csv
+data/reports/smc_pine_backtest/top_results.csv
+data/reports/smc_pine_backtest/research_summary.md
+data/reports/smc_pine_backtest/pine_input_preset.md
+data/reports/smc_pine_backtest/best_config.yaml
+```
+
+The SMC approximation uses confirmed swing pivots, next-bar-open entries,
+risk-based sizing, configured spread/slippage, stop-first ambiguous candles,
+and train/validation/test splits. Use its presets as research candidates only,
+then re-test the same inputs in TradingView on the matching timeframe.

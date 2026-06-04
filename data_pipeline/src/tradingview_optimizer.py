@@ -24,6 +24,10 @@ BASE_PARAMETER_ORDER = [
     "entrySd",
     "stopSd",
     "noTradeSd",
+    "useDynamicNoPlay",
+    "costNoPlayK",
+    "volNoPlayK",
+    "maxNoPlaySd",
     "mrMinScoreLong",
     "mrMinScoreShort",
     "breakoutMinScore",
@@ -31,6 +35,7 @@ BASE_PARAMETER_ORDER = [
     "donFastLen",
     "donSlowLen",
     "minFeeMultipleForTP",
+    "minAtrRewardMult",
     "brkTp1R",
     "brkRunnerR",
     "mrMaxBars",
@@ -93,6 +98,10 @@ PARAMETER_STEPS = {
     "atrStopMult": 0.25,
     "brkTp1Qty": 5.0,
     "mrTp1Qty": 5.0,
+    "costNoPlayK": 0.05,
+    "volNoPlayK": 0.05,
+    "maxNoPlaySd": 0.05,
+    "minAtrRewardMult": 0.05,
     "softMajorityPct": 0.01,
     "majorityPct": 0.01,
     "regimeAdxLevel": 0.5,
@@ -196,6 +205,7 @@ def optimize(
     write_csv(reports_dir / "top_results.csv", top)
     write_json(reports_dir / "best_presets.json", build_presets(top, config))
     write_pine_markdown(reports_dir / "pine_input_preset.md", top, config)
+    write_research_reports(reports_dir, ranked, config)
     return {
         "reports_dir": reports_dir,
         "evaluated": len(all_candidates),
@@ -338,7 +348,16 @@ def sample_params(parameter_space: dict[str, list[Any]], rng: random.Random) -> 
 
 def coerce_sampled_params(params: dict[str, Any]) -> dict[str, Any]:
     coerced = dict(params)
+    coerced.setdefault("useDynamicNoPlay", False)
+    coerced.setdefault("costNoPlayK", 0.0)
+    coerced.setdefault("volNoPlayK", 0.0)
+    coerced.setdefault("maxNoPlaySd", max(float(coerced.get("noTradeSd", 0.0)), 0.9))
+    coerced.setdefault("minAtrRewardMult", 0.0)
     coerced["stopSd"] = max(float(coerced["stopSd"]), float(coerced["entrySd"]) + 0.25)
+    coerced["noTradeSd"] = max(float(coerced["noTradeSd"]), 0.0)
+    coerced["maxNoPlaySd"] = max(float(coerced["maxNoPlaySd"]), float(coerced["noTradeSd"]))
+    coerced["minFeeMultipleForTP"] = max(float(coerced.get("minFeeMultipleForTP", 0.0)), 0.0)
+    coerced["minAtrRewardMult"] = max(float(coerced.get("minAtrRewardMult", 0.0)), 0.0)
     if "donFastLen" in coerced and "donSlowLen" in coerced:
         coerced["donSlowLen"] = max(int(coerced["donSlowLen"]), int(coerced["donFastLen"]) + 2)
     if "macdFastLen" in coerced and "macdSlowLen" in coerced:
@@ -417,10 +436,13 @@ def evaluate_candidate(
     validation = run_backtest(splits["validation"], params, config)
     test = run_backtest(splits["test"], params, config)
     scenario_results = evaluate_fee_scenarios(params, splits, config)
+    validation_gates = validation_gate_flags(validation, config["reject"])
+    robustness_gates = robustness_gate_flags(scenario_results, config.get("robustness", {}))
     reject_reasons = rejection_reasons(validation, config["reject"])
     robust_reasons = robustness_reasons(scenario_results, config.get("robustness", {}))
     train_stable = train["profit_factor"] is not None and train["profit_factor"] >= 1.0
     test_not_collapsed = test["net_pnl"] >= -abs(validation["net_pnl"]) * 0.75
+    pass_test_net_gate = test["net_pnl"] > 0
     score = validation_score(validation, config["reject"], scenario_results)
     all_reasons = reject_reasons + robust_reasons
     if all_reasons:
@@ -438,6 +460,9 @@ def evaluate_candidate(
         **prefix_metrics("validation", validation),
         **prefix_metrics("test", test),
         "accepted": not all_reasons,
+        **validation_gates,
+        "pass_test_net_gate": pass_test_net_gate,
+        **robustness_gates,
         "train_stable": train_stable,
         "test_not_collapsed": test_not_collapsed,
         "reject_reasons": "; ".join(all_reasons),
@@ -494,6 +519,83 @@ def fee_scenarios(config: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
     return scenarios
 
 
+def dynamic_cost_points(
+    price: float,
+    row: dict[str, Any],
+    fee_model: dict[str, float],
+    use_spread: bool,
+    atr: float | None = None,
+) -> float:
+    base_points = price * fee_model["round_trip_cost_pct"] / 100.0
+    spread_points = abs(float(row.get("spread_close") or 0.0)) if use_spread else 0.0
+    volatility_slippage_points = max(float(atr or 0.0), 0.0) * fee_model.get("volatility_slippage_atr_mult", 0.0)
+    return max(base_points + spread_points + volatility_slippage_points, 0.0)
+
+
+def required_reward_points(
+    price: float,
+    row: dict[str, Any],
+    fee_model: dict[str, float],
+    params: dict[str, Any],
+    use_spread: bool,
+    atr: float | None = None,
+) -> float:
+    cost_floor = dynamic_cost_points(price, row, fee_model, use_spread, atr) * float(params["minFeeMultipleForTP"])
+    atr_floor = max(float(atr or 0.0), 0.0) * float(params.get("minAtrRewardMult", 0.0))
+    return max(cost_floor, atr_floor)
+
+
+def effective_no_play_sd(
+    params: dict[str, Any],
+    cost_points: float,
+    grid_dev: float | None,
+    atr_ratio: float | None,
+) -> float:
+    base = max(float(params.get("noTradeSd", 0.0)), 0.0)
+    if not bool(params.get("useDynamicNoPlay", False)):
+        return base
+    denominator = max(float(grid_dev or 0.0), float(params.get("tickSize", 0.01)), 1e-9)
+    cost_component = float(params.get("costNoPlayK", 0.0)) * ((cost_points / denominator) ** (1.0 / 3.0))
+    vol_component = float(params.get("volNoPlayK", 0.0)) * max(float(atr_ratio or 1.0) - 1.0, 0.0)
+    cap = max(float(params.get("maxNoPlaySd", base)), base)
+    return min(max(base + cost_component + vol_component, base), cap)
+
+
+def configured_position_qty(
+    config: dict[str, Any],
+    params: dict[str, Any],
+    equity: float,
+    entry_price: float,
+    stop_price: float,
+) -> float:
+    execution = config.get("execution", {})
+    mode = str(params.get("sizeMode", execution.get("size_mode", execution.get("sizeMode", "fixed")))).lower()
+    fixed_qty = float(execution.get("fixed_qty", 1.0))
+    if mode not in {"risk", "risk_based", "stop_risk", "stop_distance"}:
+        return max(fixed_qty, 0.0)
+
+    stop_distance = abs(entry_price - stop_price)
+    point_value = max(float(params.get("pointValue", execution.get("point_value", 1.0))), 1e-12)
+    min_risk_unit = max(float(execution.get("min_risk_unit", 0.01)), 1e-12)
+    if "riskFraction" in params or "risk_per_trade_fraction" in execution:
+        risk_fraction = float(params.get("riskFraction", execution.get("risk_per_trade_fraction", 0.0025)))
+    else:
+        risk_fraction = float(params.get("riskPct", execution.get("risk_per_trade_pct", 0.25))) / 100.0
+    risk_budget = max(equity, 0.0) * max(risk_fraction, 0.0)
+    raw_qty = risk_budget / max(stop_distance * point_value, min_risk_unit)
+
+    max_notional_pct = execution.get("max_notional_pct")
+    if max_notional_pct not in (None, "", 0, "none", "null"):
+        cap_value = float(max_notional_pct)
+        cap_fraction = cap_value if cap_value <= 1.0 else cap_value / 100.0
+        raw_qty = min(raw_qty, max(equity, 0.0) * cap_fraction / max(entry_price, 1e-12))
+
+    max_qty = execution.get("max_notional_qty")
+    if max_qty not in (None, "", 0, "none", "null"):
+        raw_qty = min(raw_qty, float(max_qty))
+    return max(raw_qty, 0.0)
+
+
 def run_backtest(
     rows: list[dict[str, Any]],
     params: dict[str, Any],
@@ -504,7 +606,6 @@ def run_backtest(
     indicators = build_indicators(rows, effective)
     fee_model = fee_model_from_config(fee_config or config["fees"])
     initial_cash = float(config["execution"].get("initial_cash", 100000))
-    fixed_qty = float(config["execution"].get("fixed_qty", 1.0))
     use_spread = bool(config["execution"].get("use_spread", True))
     cash = initial_cash
     peak = initial_cash
@@ -542,7 +643,7 @@ def run_backtest(
 
         if position is None and index >= min_bars and index < len(rows) - 1:
             if last_close_index is None or index - last_close_index >= int(effective["cooldownBars"]):
-                signal = signal_at(index, rows, indicators, effective, fee_model)
+                signal = signal_at(index, rows, indicators, effective, fee_model, use_spread)
                 if signal is not None:
                     entry_row = rows[index + 1]
                     entry_price = execution_price(
@@ -553,14 +654,18 @@ def run_backtest(
                         fee_model=fee_model,
                         use_spread=use_spread,
                     )
+                    qty = configured_position_qty(config, effective, cash, entry_price, float(signal["stop"]))
+                    if qty <= 0:
+                        continue
                     position = open_position(
                         signal=signal,
                         entry_index=index + 1,
                         entry_row=entry_row,
                         entry_price=entry_price,
-                        qty=fixed_qty,
+                        qty=qty,
                         fee_model=fee_model,
                         params=effective,
+                        use_spread=use_spread,
                     )
                     cash -= position.entry_fee + position.funding_cost
 
@@ -582,12 +687,17 @@ def signal_at(
     ind: dict[str, list[Any]],
     params: dict[str, Any],
     fee_model: dict[str, float],
+    use_spread: bool,
 ) -> dict[str, Any] | None:
     trade_mode = str(params.get("tradeMode", "auto")).lower()
-    allow_breakout = trade_mode in {"auto", "don_only", "breakout", "donchian", "donchian_breakout_only"}
+    allow_breakout = trade_mode in {"auto", "don_only", "breakout", "donchian", "donchian_breakout_only", "long_breakout_only"}
     allow_mr = trade_mode in {"auto", "sd_only", "mr", "mean_reversion", "sd_mean_reversion_only"}
     allow_longs = bool(params.get("allowLongs", True))
     allow_shorts = bool(params.get("allowShorts", True))
+    if trade_mode == "long_breakout_only":
+        allow_longs = True
+        allow_shorts = False
+        allow_mr = False
     close = float(rows[index]["close"])
     high = float(rows[index]["high"])
     low = float(rows[index]["low"])
@@ -595,14 +705,15 @@ def signal_at(
     grid_mid = ind["grid_mid"][index]
     grid_dev = ind["grid_dev"][index]
     exit_atr = ind["exit_atr"][index]
+    atr_ratio = ind["atr_ratio"][index]
     don_upper_prev = ind["don_upper_prev"][index]
     don_lower_prev = ind["don_lower_prev"][index]
     don_slow_mid_prev = ind["don_slow_mid_prev"][index]
     if any(value is None for value in [grid_mid, grid_dev, exit_atr, don_upper_prev, don_lower_prev]):
         return None
 
-    round_trip_points = close * fee_model["round_trip_cost_pct"] / 100.0
-    required_reward = round_trip_points * float(params["minFeeMultipleForTP"])
+    cost_points = dynamic_cost_points(close, rows[index], fee_model, use_spread, exit_atr)
+    required_reward = required_reward_points(close, rows[index], fee_model, params, use_spread, exit_atr)
 
     bull_breakout = close > don_upper_prev
     bear_breakout = close < don_lower_prev
@@ -628,7 +739,7 @@ def signal_at(
     )
     slow_bias_long = don_slow_mid_prev is not None and close > don_slow_mid_prev
     slow_bias_short = don_slow_mid_prev is not None and close < don_slow_mid_prev
-    breakout_reward = max((ind["don_width_prev"][index] or 0.0) * 0.5, (exit_atr or 0.0) * 3.0)
+    breakout_reward = max((ind["don_width_prev"][index] or 0.0) * 0.5, (exit_atr or 0.0) * float(params.get("brkTp1R", 1.2)))
     breakout_cost_ok = breakout_reward >= required_reward
 
     breakout_long_score = 0.0
@@ -659,8 +770,10 @@ def signal_at(
         return {"side": "short", "type": "breakout", "signal_index": index, "stop": stop}
 
     sigma = (close - grid_mid) / grid_dev if grid_dev else 0.0
-    lower_entry = grid_mid - grid_dev * float(params["entrySd"])
-    upper_entry = grid_mid + grid_dev * float(params["entrySd"])
+    no_play_sd = effective_no_play_sd(params, cost_points, grid_dev, atr_ratio)
+    entry_sd_eff = max(float(params["entrySd"]), no_play_sd)
+    lower_entry = grid_mid - grid_dev * entry_sd_eff
+    upper_entry = grid_mid + grid_dev * entry_sd_eff
     lower_stop = grid_mid - grid_dev * float(params["stopSd"])
     upper_stop = grid_mid + grid_dev * float(params["stopSd"])
     low_trap = bool(ind["low_trap"][index])
@@ -673,8 +786,8 @@ def signal_at(
     mr_cost_ok = mr_reward >= required_reward
 
     mr_long_score = 0.0
-    mr_long_score += 2.0 if sigma <= -float(params["entrySd"]) else 0.0
-    mr_long_score += 1.0 if sigma <= -(float(params["entrySd"]) + 0.25) else 0.0
+    mr_long_score += 2.0 if sigma <= -entry_sd_eff else 0.0
+    mr_long_score += 1.0 if sigma <= -(entry_sd_eff + 0.25) else 0.0
     mr_long_score += 1.0 if low <= lower_entry and close > lower_entry else 0.0
     mr_long_score += 1.0 if low_trap else 0.0
     mr_long_score += 1.0 if close > open_ else 0.0
@@ -687,8 +800,8 @@ def signal_at(
     mr_long_score -= 1.0 if atr_hard else 0.0
 
     mr_short_score = 0.0
-    mr_short_score += 2.0 if sigma >= float(params["entrySd"]) else 0.0
-    mr_short_score += 1.0 if sigma >= float(params["entrySd"]) + 0.25 else 0.0
+    mr_short_score += 2.0 if sigma >= entry_sd_eff else 0.0
+    mr_short_score += 1.0 if sigma >= entry_sd_eff + 0.25 else 0.0
     mr_short_score += 1.0 if high >= upper_entry and close < upper_entry else 0.0
     mr_short_score += 1.0 if high_trap else 0.0
     mr_short_score += 1.0 if close < open_ else 0.0
@@ -718,6 +831,7 @@ def signal_at(
             "stop": lower_stop,
             "grid_mid": grid_mid,
             "grid_dev": grid_dev,
+            "no_play_sd": no_play_sd,
         }
     if (
         mr_cost_ok
@@ -735,6 +849,7 @@ def signal_at(
             "stop": upper_stop,
             "grid_mid": grid_mid,
             "grid_dev": grid_dev,
+            "no_play_sd": no_play_sd,
         }
     return None
 
@@ -747,11 +862,18 @@ def open_position(
     qty: float,
     fee_model: dict[str, float],
     params: dict[str, Any],
+    use_spread: bool,
 ) -> Position:
     stop = float(signal["stop"])
     risk = abs(entry_price - stop)
-    round_trip_points = entry_price * fee_model["round_trip_cost_pct"] / 100.0
-    required_reward = round_trip_points * float(params["minFeeMultipleForTP"])
+    required_reward = required_reward_points(
+        entry_price,
+        entry_row,
+        fee_model,
+        params,
+        use_spread,
+        None,
+    )
     entry_fee = abs(entry_price * qty) * fee_model["entry_fee_pct"] / 100.0
     funding_cost = abs(entry_price * qty) * fee_model["funding_pct"] / 100.0
     side = signal["side"]
@@ -773,9 +895,9 @@ def open_position(
         tp1 = grid_mid
         runner_target = None
         tp2 = (
-            grid_mid + grid_dev * float(params["noTradeSd"])
+            grid_mid + grid_dev * float(signal.get("no_play_sd", params["noTradeSd"]))
             if side == "long"
-            else grid_mid - grid_dev * float(params["noTradeSd"])
+            else grid_mid - grid_dev * float(signal.get("no_play_sd", params["noTradeSd"]))
         )
         tp1_qty_pct = float(params.get("mrTp1Qty", 75.0)) if bool(params.get("mrUseTp2", True)) else 100.0
 
@@ -818,13 +940,16 @@ def update_position(
     if position.trade_type == "mr":
         grid_mid = indicators["grid_mid"][index]
         grid_dev = indicators["grid_dev"][index]
+        exit_atr = indicators["exit_atr"][index]
+        atr_ratio = indicators["atr_ratio"][index]
         if grid_mid is not None and position.tp1 is None:
             target_reward = grid_mid - position.entry_price if side == "long" else position.entry_price - grid_mid
-            required = position.entry_price * fee_model["round_trip_cost_pct"] / 100.0 * float(params["minFeeMultipleForTP"])
+            required = required_reward_points(position.entry_price, row, fee_model, params, use_spread, exit_atr)
             if target_reward >= required:
                 position.tp1 = grid_mid
         if grid_mid is not None and grid_dev is not None:
-            no_trade = float(params["noTradeSd"])
+            cost_points = dynamic_cost_points(position.entry_price, row, fee_model, use_spread, exit_atr)
+            no_trade = effective_no_play_sd(params, cost_points, grid_dev, atr_ratio)
             position.tp2 = grid_mid + grid_dev * no_trade if side == "long" else grid_mid - grid_dev * no_trade
 
     if position.tp1 is not None and not position.tp1_hit:
@@ -972,12 +1097,19 @@ def fee_model_from_config(config: dict[str, Any]) -> dict[str, float]:
     exit_fee = maker if mode == "maker_maker" else taker
     slippage = float(config.get("slippage_pct_per_side", 0.010))
     funding = float(config.get("expected_funding_pct", 0.0))
+    impact_gamma_bps = float(config.get("impact_gamma_bps", 0.0))
+    impact_notional = max(float(config.get("impact_notional_usd", 0.0)), 0.0)
+    venue_adv = max(float(config.get("venue_adv_notional_usd", 1.0)), 1.0)
+    impact_pct = (impact_gamma_bps * math.sqrt(impact_notional / venue_adv)) / 100.0 if impact_notional else 0.0
+    effective_slippage = slippage + impact_pct
     return {
         "entry_fee_pct": entry_fee,
         "exit_fee_pct": exit_fee,
-        "slippage_pct": slippage,
+        "slippage_pct": effective_slippage,
         "funding_pct": funding,
-        "round_trip_cost_pct": entry_fee + exit_fee + slippage * 2.0 + funding,
+        "round_trip_cost_pct": entry_fee + exit_fee + effective_slippage * 2.0 + funding,
+        "impact_pct_per_side": impact_pct,
+        "volatility_slippage_atr_mult": float(config.get("volatility_slippage_atr_mult", 0.0)),
     }
 
 
@@ -1083,6 +1215,7 @@ def build_indicators(rows: list[dict[str, Any]], params: dict[str, Any]) -> dict
         "macd_signal": macd_signal,
         "macd_hist": macd_hist,
         "exit_atr": exit_atr,
+        "atr_ratio": atr_ratio,
         "atr_expanding": atr_expanding,
         "atr_expansion_hard": atr_expansion_hard,
         "trend_up": trend_up,
@@ -1111,6 +1244,7 @@ def summarize_trades(
     losses = [trade for trade in trades if trade["net_pnl"] < 0]
     gross_profit = sum(trade["gross_pnl"] for trade in trades if trade["gross_pnl"] > 0)
     gross_loss = abs(sum(trade["gross_pnl"] for trade in trades if trade["gross_pnl"] < 0))
+    gross_pnl = sum(trade["gross_pnl"] for trade in trades)
     net_pnl = sum(trade["net_pnl"] for trade in trades)
     total_fees = sum(trade["fees"] for trade in trades)
     average_win = sum(trade["net_pnl"] for trade in wins) / len(wins) if wins else None
@@ -1126,11 +1260,16 @@ def summarize_trades(
         "total_trades": len(trades),
         "trades_per_year": len(trades) / years,
         "net_pnl": net_pnl,
+        "net_return_pct": net_pnl / initial_cash * 100.0 if initial_cash else None,
+        "annualized_return_pct": net_pnl / initial_cash / years * 100.0 if initial_cash else None,
         "profit_factor": gross_profit / gross_loss if gross_loss else None,
         "win_rate": len(wins) / len(trades) if trades else None,
         "avg_win": average_win,
         "avg_loss": -average_loss_abs if average_loss_abs is not None else None,
         "avg_win_loss": avg_win_loss,
+        "avg_net_trade": net_pnl / len(trades) if trades else None,
+        "avg_gross_trade": gross_pnl / len(trades) if trades else None,
+        "avg_fee_cost": total_fees / len(trades) if trades else None,
         "max_drawdown": max_drawdown,
         "max_drawdown_pct": max_drawdown * 100.0,
         "commission_drag": total_fees,
@@ -1146,24 +1285,48 @@ def summarize_trades(
 
 def rejection_reasons(metrics: dict[str, Any], reject: dict[str, Any]) -> list[str]:
     reasons: list[str] = []
-    min_net_pnl = reject.get("min_validation_net_pnl")
-    if min_net_pnl is not None and metrics["net_pnl"] <= float(min_net_pnl):
+    gates = validation_gate_flags(metrics, reject)
+    if not gates["pass_validation_net_gate"]:
         reasons.append("validation net P&L below minimum")
     if metrics["trades_per_year"] < float(reject["min_trades_per_year"]):
         reasons.append("trades/year below minimum")
-    max_trades = reject.get("max_trades_per_year")
-    if max_trades not in (None, "", 0, "none", "null") and metrics["trades_per_year"] > float(max_trades):
+    if not gates["pass_max_trade_year_gate"]:
         reasons.append("trades/year above maximum")
-    if metrics["profit_factor"] is None or metrics["profit_factor"] < float(reject["min_validation_profit_factor"]):
+    if not gates["pass_validation_profit_factor_gate"]:
         reasons.append("validation profit factor below minimum")
-    if metrics["avg_win_loss"] is None or metrics["avg_win_loss"] < float(reject["min_avg_win_loss"]):
+    if not gates["pass_avg_win_loss_gate"]:
         reasons.append("avg win/loss below minimum")
-    if (
-        metrics["commission_to_gross_profit"] is None
-        or metrics["commission_to_gross_profit"] > float(reject["max_commission_to_gross_profit"])
-    ):
+    if not gates["pass_commission_drag_gate"]:
         reasons.append("commission drag too high")
     return reasons
+
+
+def validation_gate_flags(metrics: dict[str, Any], reject: dict[str, Any]) -> dict[str, bool]:
+    min_net_pnl = reject.get("min_validation_net_pnl")
+    min_trades = float(reject.get("min_trades_per_year", 0.0))
+    max_trades = reject.get("max_trades_per_year")
+    max_trades_enabled = max_trades not in (None, "", 0, "none", "null")
+    pass_min_trades = metrics["trades_per_year"] >= min_trades
+    pass_max_trades = not max_trades_enabled or metrics["trades_per_year"] <= float(max_trades)
+    pass_trade_year = pass_min_trades and pass_max_trades
+    return {
+        "pass_trade_year_gate": pass_trade_year,
+        "pass_min_trade_year_gate": pass_min_trades,
+        "pass_max_trade_year_gate": pass_max_trades,
+        "pass_validation_net_gate": min_net_pnl is None or metrics["net_pnl"] > float(min_net_pnl),
+        "pass_validation_profit_factor_gate": (
+            metrics["profit_factor"] is not None
+            and metrics["profit_factor"] >= float(reject["min_validation_profit_factor"])
+        ),
+        "pass_avg_win_loss_gate": (
+            metrics["avg_win_loss"] is not None
+            and metrics["avg_win_loss"] >= float(reject["min_avg_win_loss"])
+        ),
+        "pass_commission_drag_gate": (
+            metrics["commission_to_gross_profit"] is not None
+            and metrics["commission_to_gross_profit"] <= float(reject["max_commission_to_gross_profit"])
+        ),
+    }
 
 
 def robustness_reasons(scenario_results: list[dict[str, Any]], robustness: dict[str, Any]) -> list[str]:
@@ -1184,6 +1347,40 @@ def robustness_reasons(scenario_results: list[dict[str, Any]], robustness: dict[
         if require_test_positive and test["net_pnl"] <= 0:
             reasons.append(f"{name} test net P&L not positive")
     return reasons
+
+
+def robustness_gate_flags(scenario_results: list[dict[str, Any]], robustness: dict[str, Any]) -> dict[str, bool]:
+    require_validation_positive = bool(robustness.get("require_validation_net_pnl_positive", True))
+    require_test_positive = bool(robustness.get("require_test_net_pnl_positive", False))
+    min_validation_pf = robustness.get("min_validation_profit_factor", 1.0)
+    if not robustness.get("enabled", False) or not scenario_results:
+        return {
+            "pass_worst_fee_gate": True,
+            "pass_worst_fee_validation_net_gate": True,
+            "pass_worst_fee_profit_factor_gate": True,
+            "pass_worst_fee_test_net_gate": True,
+        }
+
+    pass_validation_net = True
+    pass_profit_factor = True
+    pass_test_net = True
+    for scenario in scenario_results:
+        validation = scenario["validation"]
+        test = scenario["test"]
+        if require_validation_positive and validation["net_pnl"] <= 0:
+            pass_validation_net = False
+        if min_validation_pf is not None and (
+            validation["profit_factor"] is None or validation["profit_factor"] < float(min_validation_pf)
+        ):
+            pass_profit_factor = False
+        if require_test_positive and test["net_pnl"] <= 0:
+            pass_test_net = False
+    return {
+        "pass_worst_fee_gate": pass_validation_net and pass_profit_factor and pass_test_net,
+        "pass_worst_fee_validation_net_gate": pass_validation_net,
+        "pass_worst_fee_profit_factor_gate": pass_profit_factor,
+        "pass_worst_fee_test_net_gate": pass_test_net,
+    }
 
 
 def validation_score(
@@ -1214,11 +1411,16 @@ def prefix_metrics(prefix: str, metrics: dict[str, Any]) -> dict[str, Any]:
         "total_trades",
         "trades_per_year",
         "net_pnl",
+        "net_return_pct",
+        "annualized_return_pct",
         "profit_factor",
         "win_rate",
         "avg_win",
         "avg_loss",
         "avg_win_loss",
+        "avg_net_trade",
+        "avg_gross_trade",
+        "avg_fee_cost",
         "max_drawdown_pct",
         "commission_drag",
         "commission_to_gross_profit",
@@ -1241,6 +1443,8 @@ def build_presets(top: list[dict[str, Any]], config: dict[str, Any]) -> dict[str
             "order_fee_mode": config.get("fees", {}).get("order_fee_mode"),
             "slippage_pct_per_side": config.get("fees", {}).get("slippage_pct_per_side"),
             "expected_funding_pct": config.get("fees", {}).get("expected_funding_pct"),
+            "size_mode": config.get("execution", {}).get("size_mode", "fixed"),
+            "risk_per_trade_pct": config.get("execution", {}).get("risk_per_trade_pct"),
         },
         "notes": [
             "Use these as candidate Pine inputs, not as proof of profitability.",
@@ -1263,9 +1467,320 @@ def build_presets(top: list[dict[str, Any]], config: dict[str, Any]) -> dict[str
     }
 
 
+def infer_sleeve(row: dict[str, Any]) -> str:
+    trade_mode = str(row.get("tradeMode") or "auto").lower()
+    allow_longs = row.get("allowLongs")
+    allow_shorts = row.get("allowShorts")
+    if trade_mode in {"long_breakout_only"}:
+        return "long_breakout_only"
+    if trade_mode in {"don_only", "breakout", "donchian", "donchian_breakout_only"} and allow_longs is True and allow_shorts is False:
+        return "long_breakout_only"
+    if trade_mode in {"don_only", "breakout", "donchian", "donchian_breakout_only"}:
+        return "breakout_only"
+    if trade_mode in {"sd_only", "mr", "mean_reversion", "sd_mean_reversion_only"}:
+        return "mr_only"
+    if allow_longs is True and allow_shorts is False:
+        return "long_only"
+    if allow_longs is False and allow_shorts is True:
+        return "short_only"
+    return "auto_all"
+
+
+def summarize_result_group(rows: list[dict[str, Any]], group: dict[str, Any]) -> dict[str, Any]:
+    best_score = max(rows, key=lambda row: row.get("score") or -math.inf)
+    best_pnl = max(rows, key=lambda row: row.get("validation_net_pnl") or -math.inf)
+    positive = [row for row in rows if (row.get("validation_net_pnl") or 0.0) > 0.0]
+    accepted = [row for row in rows if row.get("accepted")]
+    return {
+        **group,
+        "evaluated": len(rows),
+        "accepted": len(accepted),
+        "positive_validation": len(positive),
+        "best_score_config": best_score.get("config_id"),
+        "best_score_validation_net_pnl": best_score.get("validation_net_pnl"),
+        "best_score_validation_profit_factor": best_score.get("validation_profit_factor"),
+        "best_score_validation_trades_per_year": best_score.get("validation_trades_per_year"),
+        "best_score_validation_avg_net_trade": best_score.get("validation_avg_net_trade"),
+        "best_score_validation_avg_fee_cost": best_score.get("validation_avg_fee_cost"),
+        "best_score_worst_fee_validation_net_pnl": best_score.get("worst_fee_validation_net_pnl"),
+        "best_pnl_config": best_pnl.get("config_id"),
+        "best_pnl_validation_net_pnl": best_pnl.get("validation_net_pnl"),
+        "best_pnl_validation_profit_factor": best_pnl.get("validation_profit_factor"),
+        "best_pnl_validation_trades_per_year": best_pnl.get("validation_trades_per_year"),
+        "best_pnl_validation_avg_net_trade": best_pnl.get("validation_avg_net_trade"),
+        "best_pnl_validation_avg_fee_cost": best_pnl.get("validation_avg_fee_cost"),
+        "best_pnl_worst_fee_validation_net_pnl": best_pnl.get("worst_fee_validation_net_pnl"),
+    }
+
+
+def build_sleeve_comparison(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in rows:
+        key = (infer_sleeve(row), str(row.get("timeframe") or "all"))
+        grouped.setdefault(key, []).append(row)
+    return [
+        summarize_result_group(items, {"strategy_sleeve": sleeve, "timeframe": timeframe})
+        for (sleeve, timeframe), items in sorted(grouped.items())
+    ]
+
+
+def build_fee_attribution(rows: list[dict[str, Any]], config: dict[str, Any]) -> list[dict[str, Any]]:
+    scenario_names = [name for name, _ in fee_scenarios(config)]
+    attribution: list[dict[str, Any]] = []
+    for row in rows:
+        base_validation = row.get("validation_net_pnl")
+        base_test = row.get("test_net_pnl")
+        for scenario in scenario_names:
+            validation_key = f"{scenario}_validation_net_pnl"
+            test_key = f"{scenario}_test_net_pnl"
+            if validation_key not in row:
+                continue
+            scenario_validation = row.get(validation_key)
+            scenario_test = row.get(test_key)
+            attribution.append(
+                {
+                    "config_id": row.get("config_id"),
+                    "timeframe": row.get("timeframe"),
+                    "strategy_sleeve": infer_sleeve(row),
+                    "fee_scenario": scenario,
+                    "base_validation_net_pnl": base_validation,
+                    "scenario_validation_net_pnl": scenario_validation,
+                    "validation_fee_drag": (
+                        base_validation - scenario_validation
+                        if base_validation is not None and scenario_validation is not None
+                        else None
+                    ),
+                    "base_test_net_pnl": base_test,
+                    "scenario_test_net_pnl": scenario_test,
+                    "test_fee_drag": (
+                        base_test - scenario_test
+                        if base_test is not None and scenario_test is not None
+                        else None
+                    ),
+                    "base_validation_avg_net_trade": row.get("validation_avg_net_trade"),
+                    "base_validation_avg_fee_cost": row.get("validation_avg_fee_cost"),
+                    "scenario_validation_avg_net_trade": row.get(f"{scenario}_validation_avg_net_trade"),
+                    "scenario_validation_avg_fee_cost": row.get(f"{scenario}_validation_avg_fee_cost"),
+                }
+            )
+    return sorted(
+        attribution,
+        key=lambda item: (
+            str(item["fee_scenario"]),
+            float(item["validation_fee_drag"] or 0.0),
+        ),
+        reverse=True,
+    )
+
+
+def metric_sort_value(row: dict[str, Any], key: str) -> float:
+    value = row.get(key)
+    if value is None:
+        return -math.inf
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return -math.inf
+    if not math.isfinite(numeric):
+        return -math.inf
+    return numeric
+
+
+def target_frequency_bounds(config: dict[str, Any]) -> tuple[float, float | None]:
+    reject = config.get("reject", {})
+    min_trades = float(reject.get("min_trades_per_year", 0.0))
+    max_trades = reject.get("max_trades_per_year")
+    if max_trades in (None, "", 0, "none", "null"):
+        return min_trades, None
+    return min_trades, float(max_trades)
+
+
+def in_target_frequency(row: dict[str, Any], config: dict[str, Any]) -> bool:
+    min_trades, max_trades = target_frequency_bounds(config)
+    trades = metric_sort_value(row, "validation_trades_per_year")
+    if trades < min_trades:
+        return False
+    return max_trades is None or trades <= max_trades
+
+
+def is_low_frequency(row: dict[str, Any], config: dict[str, Any]) -> bool:
+    min_trades, _ = target_frequency_bounds(config)
+    return metric_sort_value(row, "validation_trades_per_year") < min_trades
+
+
+def interesting_rejected(row: dict[str, Any]) -> bool:
+    return not bool(row.get("accepted")) and metric_sort_value(row, "validation_net_pnl") > 0.0
+
+
+def sorted_by_metric(rows: list[dict[str, Any]], key: str) -> list[dict[str, Any]]:
+    return sorted(rows, key=lambda row: metric_sort_value(row, key), reverse=True)
+
+
+def build_sorted_report_sets(rows: list[dict[str, Any]], config: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    return {
+        "top_by_validation_pnl_all.csv": sorted_by_metric(rows, "validation_net_pnl"),
+        "top_by_test_pnl_all.csv": sorted_by_metric(rows, "test_net_pnl"),
+        "top_by_avg_net_trade_all.csv": sorted_by_metric(
+            [row for row in rows if row.get("validation_avg_net_trade") is not None],
+            "validation_avg_net_trade",
+        ),
+        "top_positive_validation_rejected.csv": sorted_by_metric(
+            [row for row in rows if interesting_rejected(row)],
+            "validation_net_pnl",
+        ),
+        "top_low_frequency_candidates.csv": sorted_by_metric(
+            [row for row in rows if is_low_frequency(row, config)],
+            "validation_net_pnl",
+        ),
+        "top_target_frequency_candidates.csv": sorted_by_metric(
+            [row for row in rows if in_target_frequency(row, config)],
+            "validation_net_pnl",
+        ),
+    }
+
+
+def candidate_summary_line(row: dict[str, Any]) -> str:
+    return (
+        f"- `{row.get('config_id')}` `{row.get('timeframe')}` `{infer_sleeve(row)}` "
+        f"accepted=`{row.get('accepted')}` "
+        f"val_pnl=`{format_float(row.get('validation_net_pnl'))}` "
+        f"test_pnl=`{format_float(row.get('test_net_pnl'))}` "
+        f"val_pf=`{format_float(row.get('validation_profit_factor'))}` "
+        f"val_tpy=`{format_float(row.get('validation_trades_per_year'))}` "
+        f"avg_net_trade=`{format_float(row.get('validation_avg_net_trade'))}` "
+        f"reject=`{row.get('reject_reasons') or 'none'}`"
+    )
+
+
+def append_candidate_section(lines: list[str], title: str, rows: list[dict[str, Any]], empty_text: str, limit: int = 5) -> None:
+    lines.extend([f"## {title}", ""])
+    if not rows:
+        lines.extend([empty_text, ""])
+        return
+    lines.extend(candidate_summary_line(row) for row in rows[:limit])
+    lines.append("")
+
+
+def write_research_summary(path: Path, rows: list[dict[str, Any]], config: dict[str, Any]) -> None:
+    top = rows[0] if rows else None
+    reject = config.get("reject", {})
+    execution = config.get("execution", {})
+    accepted_rows = sorted_by_metric([row for row in rows if row.get("accepted")], "validation_net_pnl")
+    rejected_interesting = sorted_by_metric([row for row in rows if interesting_rejected(row)], "validation_net_pnl")
+    low_frequency = sorted_by_metric([row for row in rows if is_low_frequency(row, config)], "validation_net_pnl")
+    target_frequency = sorted_by_metric([row for row in rows if in_target_frequency(row, config)], "validation_net_pnl")
+    positive_target_frequency = [
+        row for row in target_frequency if metric_sort_value(row, "validation_net_pnl") > 0.0
+    ]
+    lines = [
+        "# TradingView Strategy Research Summary",
+        "",
+        f"Created at: {datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')}",
+        "",
+        "This is a research artifact. It is not evidence of live-trading readiness, safety, or profitability.",
+        "",
+        "## Research Controls",
+        "",
+        f"- Position sizing mode: `{execution.get('size_mode', execution.get('sizeMode', 'fixed'))}`",
+        f"- Validation trade/year floor: `{reject.get('min_trades_per_year')}`",
+        f"- Validation trade/year cap: `{reject.get('max_trades_per_year')}`",
+        f"- Minimum TP fee multiple search/default: `{config.get('parameters', {}).get('minFeeMultipleForTP')}`",
+        f"- Dynamic no-play search/default: `{config.get('parameters', {}).get('useDynamicNoPlay')}`",
+        "",
+        "## Run Outcome",
+        "",
+        f"- Evaluated candidates: `{len(rows)}`",
+        f"- Accepted candidates: `{sum(1 for row in rows if row.get('accepted'))}`",
+        f"- Positive validation candidates: `{sum(1 for row in rows if (row.get('validation_net_pnl') or 0.0) > 0.0)}`",
+        f"- Low-frequency candidates: `{len(low_frequency)}`",
+        f"- Target-frequency candidates: `{len(target_frequency)}`",
+        f"- Positive target-frequency candidates: `{len(positive_target_frequency)}`",
+        "",
+    ]
+    if top:
+        lines.extend(
+            [
+                "## Best Ranked Candidate",
+                "",
+                f"- Config: `{top.get('config_id')}`",
+                f"- Timeframe: `{top.get('timeframe')}`",
+                f"- Sleeve: `{infer_sleeve(top)}`",
+                f"- Accepted: `{top.get('accepted')}`",
+                f"- Validation net P&L: `{format_float(top.get('validation_net_pnl'))}`",
+                f"- Validation PF: `{format_float(top.get('validation_profit_factor'))}`",
+                f"- Validation trades/year: `{format_float(top.get('validation_trades_per_year'))}`",
+                f"- Validation average net trade: `{format_float(top.get('validation_avg_net_trade'))}`",
+                f"- Validation average fee cost: `{format_float(top.get('validation_avg_fee_cost'))}`",
+                f"- Worst-fee validation net P&L: `{format_float(top.get('worst_fee_validation_net_pnl'))}`",
+                f"- Reject reasons: `{top.get('reject_reasons') or 'none'}`",
+                "",
+            ]
+        )
+    append_candidate_section(
+        lines,
+        "Best Raw Candidates",
+        sorted_by_metric(rows, "validation_net_pnl"),
+        "No raw candidates were written.",
+    )
+    append_candidate_section(
+        lines,
+        "Best Accepted Candidates",
+        accepted_rows,
+        "No candidates passed all acceptance gates.",
+    )
+    append_candidate_section(
+        lines,
+        "Best Rejected-But-Interesting Candidates",
+        rejected_interesting,
+        "No rejected candidates had positive validation net P&L.",
+    )
+    append_candidate_section(
+        lines,
+        "Low-Frequency Candidates",
+        low_frequency,
+        "No candidates were below the configured minimum trade frequency.",
+    )
+    append_candidate_section(
+        lines,
+        "Target-Frequency Candidates",
+        target_frequency,
+        "No candidates were inside the configured target trade-frequency band.",
+    )
+    lines.extend(
+        [
+            "## Report Files",
+            "",
+            "- `all_results.csv`: all sampled candidates with split, cost, and robustness metrics.",
+            "- `top_results.csv`: best ranked candidates.",
+            "- `top_by_validation_pnl_all.csv`: all candidates sorted by validation net P&L.",
+            "- `top_by_test_pnl_all.csv`: all candidates sorted by test net P&L.",
+            "- `top_by_avg_net_trade_all.csv`: all candidates sorted by validation average net trade.",
+            "- `top_positive_validation_rejected.csv`: rejected candidates with positive validation net P&L.",
+            "- `top_low_frequency_candidates.csv`: candidates below the configured minimum trade frequency.",
+            "- `top_target_frequency_candidates.csv`: candidates inside the configured target trade-frequency band.",
+            "- `fee_attribution.csv`: base fee profile versus robustness fee scenarios.",
+            "- `sleeve_comparison.csv`: validation summary by strategy sleeve and timeframe.",
+            "",
+            "Read negative or empty results as a useful rejection signal. Do not tune around fees by weakening the net-P&L gates.",
+            "",
+        ]
+    )
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def write_research_reports(reports_dir: Path, rows: list[dict[str, Any]], config: dict[str, Any]) -> None:
+    write_csv(reports_dir / "fee_attribution.csv", build_fee_attribution(rows, config))
+    write_csv(reports_dir / "sleeve_comparison.csv", build_sleeve_comparison(rows))
+    report_columns = list(rows[0].keys()) if rows else None
+    for filename, report_rows in build_sorted_report_sets(rows, config).items():
+        write_csv(reports_dir / filename, report_rows, columns=report_columns)
+    write_research_summary(reports_dir / "research_summary.md", rows, config)
+
+
 def write_pine_markdown(path: Path, top: list[dict[str, Any]], config: dict[str, Any]) -> None:
     fixed = config.get("fixed") or {}
     fees = config.get("fees", {})
+    execution = config.get("execution", {})
     ordered_params = parameter_order(config)
     lines = [
         "# Pine Input Presets",
@@ -1282,6 +1797,8 @@ def write_pine_markdown(path: Path, top: list[dict[str, Any]], config: dict[str,
         f"orderFeeMode = {fees.get('order_fee_mode', 'maker_taker')}",
         f"slippagePctPerSide = {fees.get('slippage_pct_per_side', 0.0)}",
         f"expectedFundingPct = {fees.get('expected_funding_pct', 0.0)}",
+        f"sizeMode = {execution.get('size_mode', 'fixed')}",
+        f"riskPerTradePct = {execution.get('risk_per_trade_pct', 'n/a')}",
         "```",
         "",
     ]
@@ -1314,12 +1831,16 @@ def write_pine_markdown(path: Path, top: list[dict[str, Any]], config: dict[str,
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
-def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+def write_csv(path: Path, rows: list[dict[str, Any]], columns: list[str] | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if not rows:
-        path.write_text("", encoding="utf-8")
+        if columns:
+            with path.open("w", newline="", encoding="utf-8") as handle:
+                csv.DictWriter(handle, fieldnames=columns).writeheader()
+        else:
+            path.write_text("", encoding="utf-8")
         return
-    columns = list(rows[0].keys())
+    columns = columns or list(rows[0].keys())
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=columns)
         writer.writeheader()

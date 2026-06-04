@@ -809,7 +809,11 @@ def _confirmed_wall_acceptance_trade(
         entry = price[entry_index]
         levels = snapshot_levels.get(_text(wall.get("snapshot_timestamp")), [])
         target = _next_snapshot_wall(levels, wall_level, direction)
-        if target is None:
+        if target is None or not _target_is_beyond_entry(
+            target_price=target,
+            entry_price=entry.open,
+            direction=direction,
+        ):
             target = _grid_target(entry.open, direction, FULL_BLOCK)
         stop = wall_level
         path = evaluate_after_entry_path(
@@ -1225,6 +1229,14 @@ def _next_snapshot_wall(levels: list[float], wall_level: float, direction: str) 
         return min(candidates) if candidates else None
     candidates = [level for level in levels if level < wall_level]
     return max(candidates) if candidates else None
+
+
+def _target_is_beyond_entry(*, target_price: float, entry_price: float, direction: str) -> bool:
+    if direction == "LONG":
+        return target_price > entry_price
+    if direction == "SHORT":
+        return target_price < entry_price
+    return False
 
 
 def _price_series(inputs: dict[str, pl.DataFrame]) -> list[PriceCandle]:

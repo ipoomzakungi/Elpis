@@ -47,6 +47,7 @@ data/reports/
 data/*.duckdb
 data/*.duckdb.wal
 outputs/
+facebook-group-export/
 backend/data/raw/
 backend/data/processed/
 backend/data/reports/xau_quikstrike_fusion/
@@ -80,3 +81,4 @@ htmlcov/
 *.tsbuildinfo
 next-env.d.ts
 /.agents/skills
+/Extension

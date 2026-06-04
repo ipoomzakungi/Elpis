@@ -76,6 +76,7 @@ SLICES: dict[str, dict[str, Any]] = {
     "auto_all": {"tradeMode": "auto", "allowLongs": True, "allowShorts": True},
     "mr_only": {"tradeMode": "sd_only", "allowLongs": True, "allowShorts": True},
     "breakout_only": {"tradeMode": "don_only", "allowLongs": True, "allowShorts": True},
+    "long_breakout_only": {"tradeMode": "don_only", "allowLongs": True, "allowShorts": False},
     "long_only": {"tradeMode": "auto", "allowLongs": True, "allowShorts": False},
     "short_only": {"tradeMode": "auto", "allowLongs": False, "allowShorts": True},
 }
