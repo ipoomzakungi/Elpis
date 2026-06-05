@@ -11,6 +11,7 @@ from scripts.generate_xau_map_from_local_bundle import (
     WALLS_PARQUET_FILENAME,
     LocalBundleRunConfig,
     generate_from_local_bundle,
+    main,
 )
 from src.models.xau import XauDailyStructuralMap
 from src.xau_daily_structural_map.report_store import XauDailyStructuralMapReportStore
@@ -44,6 +45,34 @@ def test_missing_required_report_json_gives_clear_error(tmp_path: Path) -> None:
                 traded_instrument="XAUUSD",
             )
         )
+
+
+def test_cli_missing_report_json_prints_clean_error(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    input_dir = tmp_path / "bundle"
+    input_dir.mkdir()
+
+    exit_code = main(
+        [
+            "--input-dir",
+            str(input_dir),
+            "--session-date",
+            "2026-06-02",
+            "--expiration-code",
+            "OG1M6",
+            "--traded-instrument",
+            "XAUUSD",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "error: Missing required XAU Vol-OI report JSON" in captured.err
+    assert REPORT_JSON_FILENAME in captured.err
+    assert "Traceback" not in captured.err
 
 
 def test_temp_bundle_writes_structural_map_artifacts_and_roundtrips(

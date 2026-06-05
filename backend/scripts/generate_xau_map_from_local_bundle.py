@@ -103,22 +103,26 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    result = generate_from_local_bundle(
-        LocalBundleRunConfig(
-            input_dir=args.input_dir,
-            session_date=args.session_date,
-            expiration_code=args.expiration_code,
-            traded_instrument=args.traded_instrument,
-            gc_reference_price=args.gc_reference_price,
-            traded_reference_price=args.traded_reference_price,
-            manual_basis=args.manual_basis,
-            session_open_price=args.session_open_price,
-            session_open_source=args.session_open_source,
-            output_root=args.output_root,
-            map_id=args.map_id,
-            overwrite_allowed=args.overwrite_allowed,
+    try:
+        result = generate_from_local_bundle(
+            LocalBundleRunConfig(
+                input_dir=args.input_dir,
+                session_date=args.session_date,
+                expiration_code=args.expiration_code,
+                traded_instrument=args.traded_instrument,
+                gc_reference_price=args.gc_reference_price,
+                traded_reference_price=args.traded_reference_price,
+                manual_basis=args.manual_basis,
+                session_open_price=args.session_open_price,
+                session_open_source=args.session_open_source,
+                output_root=args.output_root,
+                map_id=args.map_id,
+                overwrite_allowed=args.overwrite_allowed,
+            )
         )
-    )
+    except (FileNotFoundError, NotADirectoryError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
     print(f"map_id={result.metadata.map_id}")
     print(f"readiness={result.metadata.readiness.value}")
     print(f"wall_count={result.metadata.wall_count}")
