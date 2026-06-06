@@ -1,9 +1,11 @@
 import json
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import polars as pl
+from pydantic import ValidationError
 
 from src.config import get_settings
 from src.models.xau_reaction import (
@@ -25,6 +27,8 @@ from src.reports.writer import (
     compose_xau_reaction_report_json,
     compose_xau_reaction_report_markdown,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class XauReactionReportStore:
@@ -182,10 +186,17 @@ class XauReactionReportStore:
     def list_reports(self) -> XauReactionReportListResponse:
         if not self.xau_reaction_dir.exists():
             return XauReactionReportListResponse(reports=[])
-        reports = [
-            self.read_report(metadata_path.parent.name)
-            for metadata_path in self.xau_reaction_dir.glob("*/metadata.json")
-        ]
+        reports = []
+        for metadata_path in self.xau_reaction_dir.glob("*/metadata.json"):
+            try:
+                reports.append(self.read_report(metadata_path.parent.name))
+            except (ValueError, ValidationError) as exc:
+                logger.warning(
+                    "Skipping unreadable XAU reaction report metadata at %s: %s",
+                    metadata_path,
+                    exc,
+                )
+                continue
         summaries = [
             XauReactionReportSummary(
                 report_id=report.report_id,

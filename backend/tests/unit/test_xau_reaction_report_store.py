@@ -98,6 +98,38 @@ def test_reaction_report_store_persists_metadata_rows_json_and_markdown(tmp_path
     assert [summary.report_id for summary in listed.reports] == [saved.report_id]
 
 
+def test_reaction_report_store_list_skips_legacy_unreadable_metadata(tmp_path):
+    store = XauReactionReportStore(reports_dir=tmp_path / "reports")
+    legacy_dir = store.report_root() / "xau_reaction_legacy"
+    legacy_dir.mkdir(parents=True)
+    (legacy_dir / "metadata.json").write_text(
+        """
+        {
+          "report_id": "xau_reaction_legacy",
+          "source_report_id": "xau_vol_oi_legacy",
+          "status": "partial",
+          "created_at": "2026-06-07T00:00:00Z",
+          "reaction_count": 2,
+          "no_trade_count": 2,
+          "risk_plan_count": 2,
+          "reactions": [],
+          "risk_plans": [],
+          "artifacts": []
+        }
+        """,
+        encoding="utf-8",
+    )
+    report = assemble_reaction_report(
+        request=sample_xau_reaction_full_context_request(),
+        source_report=sample_feature006_xau_report(),
+    )
+    saved = store.save_report(report)
+
+    listed = store.list_reports()
+
+    assert [summary.report_id for summary in listed.reports] == [saved.report_id]
+
+
 def test_reaction_report_store_blocks_report_id_collisions_and_unisolated_smoke_ids(
     tmp_path,
 ):

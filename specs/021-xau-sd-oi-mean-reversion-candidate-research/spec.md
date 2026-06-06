@@ -2,7 +2,7 @@
 
 **Feature Branch**: `021-xau-sd-oi-mean-reversion-candidate-research`
 **Created**: 2026-06-07
-**Status**: Draft
+**Status**: Completed
 **Input**: User description: "Turn the course 2SD-3SD mean-reversion hypothesis into timestamp-safe XAU research candidates using the existing daily structural map, OI walls, IV/flow/price-confirmation context, and explicit no-signal guardrails."
 
 ## User Scenarios & Testing

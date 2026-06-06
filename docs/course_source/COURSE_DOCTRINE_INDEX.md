@@ -27,6 +27,8 @@ This index locks the local course-source files that should guide future XAU/CME 
 - Feature 018 creates a daily structural map with readiness and no-signal reasons.
 - Feature 019 persists structural maps as local research artifacts.
 - Feature 020A reads local bundle-shaped XAU artifacts and persists a structural map.
+- Feature 021 creates research-only 2SD-3SD SD/OI candidate labels while keeping
+  `signal_allowed=false` and `research_only=true`.
 
 ## Forbidden For Current Phase
 
@@ -35,3 +37,12 @@ This index locks the local course-source files that should guide future XAU/CME 
 - CME strikes placed on XAU/GO charts without basis mapping.
 - Live trading, broker execution, alerts, PnL, or strategy automation.
 - 2SD/3.5SD entry-stop logic before real maps and forward outcomes exist.
+
+## Current Next Milestone
+
+Feature 022 should connect the existing components into a research-only daily
+orchestrator and local inspection API/page. It should fetch or load CME data,
+resolve reference prices and basis, capture session open, build the structural
+map, run Feature 021 candidate classification, persist candidate artifacts, and
+show missing inputs/no-signal reasons. It must not add live signals, orders,
+alerts, PnL, paper trading, or execution behavior.

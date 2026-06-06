@@ -1,9 +1,11 @@
 import json
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import polars as pl
+from pydantic import ValidationError
 
 from src.config import get_settings
 from src.models.xau import (
@@ -21,6 +23,8 @@ from src.reports.collision_guard import (
     resolve_report_source_kind_for_write,
 )
 from src.reports.writer import compose_xau_report_json, compose_xau_report_markdown
+
+logger = logging.getLogger(__name__)
 
 
 class XauReportStore:
@@ -112,7 +116,15 @@ class XauReportStore:
             return XauVolOiReportListResponse(reports=[])
         summaries = []
         for metadata_path in sorted(self.xau_dir.glob("*/metadata.json"), reverse=True):
-            report = self._read_report(metadata_path.parent.name)
+            try:
+                report = self._read_report(metadata_path.parent.name)
+            except (ValueError, ValidationError) as exc:
+                logger.warning(
+                    "Skipping unreadable XAU Vol-OI report metadata at %s: %s",
+                    metadata_path,
+                    exc,
+                )
+                continue
             summaries.append(
                 XauVolOiReportSummary(
                     report_id=report.report_id,
