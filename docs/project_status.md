@@ -25,11 +25,13 @@ Feature 022 now wraps the existing local CME/XAU pieces into one daily workflow:
 
 - load a local XAU bundle or latest existing structural map
 - apply manual/static GC, traded reference, and session-open inputs
+- record provider statuses and a basis snapshot
 - build or read the persisted daily structural map
 - run Feature 021 candidate classification
 - persist candidate sidecars beside the map
 - persist a workbench run artifact
-- expose local API endpoints for run/latest/map/candidate review
+- expose local API endpoints for run/latest/run-detail/map/candidate review
+- expose a local CLI script for fixture/local-bundle/latest-existing runs
 
 Every output remains:
 
@@ -187,8 +189,15 @@ Implemented local endpoints:
 ```text
 POST /api/v1/research/xau/workbench/run
 GET  /api/v1/research/xau/workbench/latest
+GET  /api/v1/research/xau/workbench/runs/{run_id}
 GET  /api/v1/research/xau/workbench/maps/{map_id}
 GET  /api/v1/research/xau/workbench/candidates/{map_id}
+```
+
+Local script:
+
+```text
+backend/scripts/run_xau_daily_research_workbench.py
 ```
 
 Persisted workbench artifacts:

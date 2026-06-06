@@ -25,6 +25,9 @@ Runs one workbench request.
   "gc_reference_price": 4549.2,
   "traded_reference_price": 4536.7,
   "session_open_price": 4538.0,
+  "confirmation_state": "rejection",
+  "iv_state": "stable",
+  "flow_state": "not_breakout_confirmed",
   "run_candidates": true,
   "research_only_acknowledged": true
 }
@@ -41,12 +44,25 @@ Key response fields:
 - `daily_map`
 - `candidate_set`
 - `candidate_metadata`
+- `provider_statuses`
+- `basis_snapshot`
 
 ## GET /api/v1/research/xau/workbench/latest
 
 Returns the latest persisted workbench run, or a blocked empty-state response when none exists.
 
 Response model: `XauDailyWorkbenchLatestResponse`.
+
+## GET /api/v1/research/xau/workbench/runs/{run_id}
+
+Reads one persisted workbench run.
+
+Response model: `XauDailyWorkbenchRunResult`.
+
+Errors:
+
+- `400 VALIDATION_ERROR` for unsafe run ids.
+- `404 NOT_FOUND` when the run does not exist.
 
 ## GET /api/v1/research/xau/workbench/maps/{map_id}
 

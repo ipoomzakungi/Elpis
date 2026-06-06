@@ -20,6 +20,9 @@
 - [X] T008 Add workbench request/result/API models in `backend/src/models/xau_daily_workbench.py`
 - [X] T009 Add workbench report store in `backend/src/xau_daily_workbench/report_store.py`
 - [X] T010 Add package exports in `backend/src/xau_daily_workbench/__init__.py`
+- [X] T010A Add provider status and missing-input models in `backend/src/models/xau_daily_workbench.py`
+- [X] T010B Add provider abstractions in `backend/src/xau_daily_workbench/providers.py`
+- [X] T010C Add basis snapshot builder in `backend/src/xau_daily_workbench/basis.py`
 
 ## Phase 3: User Story 1 - Run One Daily Workbench
 
@@ -28,6 +31,8 @@
 - [X] T013 [US1] Implement local bundle source and latest-existing source in `backend/src/xau_daily_workbench/service.py`
 - [X] T014 [US1] Persist workbench run artifacts under `data/reports/xau_daily_workbench/`
 - [X] T015 [US1] Persist candidate sidecars beside the structural map
+- [X] T015A [US1] Add candidate store in `backend/src/xau_daily_workbench/candidate_store.py`
+- [X] T015B [US1] Add CLI script in `backend/scripts/run_xau_daily_research_workbench.py`
 
 ## Phase 4: User Story 2 - Preserve Missing Context
 
@@ -42,6 +47,7 @@
 - [X] T021 [P] [US3] Add API run/latest/map/candidate contract tests
 - [X] T022 [US3] Add `backend/src/api/routes/xau_daily_workbench.py`
 - [X] T023 [US3] Register the workbench router in `backend/src/main.py`
+- [X] T023A [US3] Add run-detail endpoint `/research/xau/workbench/runs/{run_id}`
 
 ## Phase 6: Polish & Validation
 
@@ -50,6 +56,8 @@
 - [X] T026 Run backend import check
 - [X] T027 Run ruff on touched Python files
 - [X] T028 Confirm no live trading, paper trading, broker integration, private keys, endpoint replay, Rust, ClickHouse, PostgreSQL, Kafka, Kubernetes, ML training, buy/sell live signal, alert, PnL, or execution was added
+- [X] T029 Run provider, candidate-store, API, and CLI tests
+- [X] T030 Run CLI help
 
 ## Dependencies & Execution Order
 

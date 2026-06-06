@@ -29,6 +29,9 @@ This index locks the local course-source files that should guide future XAU/CME 
 - Feature 020A reads local bundle-shaped XAU artifacts and persists a structural map.
 - Feature 021 creates research-only 2SD-3SD SD/OI candidate labels while keeping
   `signal_allowed=false` and `research_only=true`.
+- Feature 022 connects the local XAU/CME components into a research-only daily
+  workbench with provider statuses, basis snapshots, candidate sidecars, CLI,
+  and API inspection while keeping `signal_allowed=false`.
 
 ## Forbidden For Current Phase
 
@@ -40,9 +43,6 @@ This index locks the local course-source files that should guide future XAU/CME 
 
 ## Current Next Milestone
 
-Feature 022 should connect the existing components into a research-only daily
-orchestrator and local inspection API/page. It should fetch or load CME data,
-resolve reference prices and basis, capture session open, build the structural
-map, run Feature 021 candidate classification, persist candidate artifacts, and
-show missing inputs/no-signal reasons. It must not add live signals, orders,
-alerts, PnL, paper trading, or execution behavior.
+Feature 023 should attach source-backed forward outcomes or build the local
+workbench dashboard. Either path must remain research-only and must not add live
+signals, orders, alerts, PnL, paper trading, or execution behavior.

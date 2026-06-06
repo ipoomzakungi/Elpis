@@ -63,7 +63,7 @@ def test_missing_cme_source_fails_cleanly(tmp_path: Path) -> None:
 
     assert result.readiness == XauDailyWorkbenchReadiness.BLOCKED
     assert result.map_id is None
-    assert "input_dir" in result.missing_inputs
+    assert "input_dir" in _missing_names(result)
     assert result.signal_allowed is False
     assert result.research_only is True
 
@@ -86,7 +86,7 @@ def test_missing_basis_gives_blocked_no_trade_candidate(tmp_path: Path) -> None:
     assert result.candidate_set is not None
     candidate = result.candidate_set.candidates[0]
     assert candidate.side == XauSdOiCandidateSide.NO_TRADE
-    assert "basis" in result.missing_inputs
+    assert "basis" in _missing_names(result)
     assert candidate.signal_allowed is False
 
 
@@ -108,7 +108,103 @@ def test_missing_session_open_gives_blocked_no_trade_candidate(tmp_path: Path) -
     assert result.candidate_set is not None
     candidate = result.candidate_set.candidates[0]
     assert candidate.side == XauSdOiCandidateSide.NO_TRADE
-    assert "session_open_price" in result.missing_inputs
+    assert "session_open_price" in _missing_names(result)
+    assert candidate.signal_allowed is False
+
+
+def test_inside_two_sd_is_monitor_only(tmp_path: Path) -> None:
+    service = XauDailyWorkbenchService(reports_dir=tmp_path / "data" / "reports")
+    input_dir = _write_temp_bundle(tmp_path)
+
+    result = service.run(
+        _request(
+            input_dir=input_dir,
+            map_id="test_xau_workbench_inside_2sd",
+            gc_reference_price=4549.2,
+            traded_reference_price=4536.7,
+            session_open_price=4538.0,
+            confirmation_state="neutral",
+            iv_state="stable",
+            flow_state="neutral",
+        )
+    )
+
+    assert result.candidate_set is not None
+    candidate = result.candidate_set.candidates[0]
+    assert candidate.side == XauSdOiCandidateSide.NO_TRADE
+    assert candidate.signal_allowed is False
+
+
+def test_upper_two_to_three_sd_rejection_creates_short_candidate(tmp_path: Path) -> None:
+    service = XauDailyWorkbenchService(reports_dir=tmp_path / "data" / "reports")
+    input_dir = _write_temp_bundle(tmp_path)
+
+    result = service.run(
+        _request(
+            input_dir=input_dir,
+            map_id="test_xau_workbench_upper_rejection",
+            gc_reference_price=4812.5,
+            traded_reference_price=4800.0,
+            session_open_price=4538.0,
+            confirmation_state="rejection",
+            iv_state="stable",
+            flow_state="not_breakout_confirmed",
+        )
+    )
+
+    assert result.candidate_set is not None
+    candidate = result.candidate_set.candidates[0]
+    assert candidate.side == XauSdOiCandidateSide.SHORT_REVERSION_CANDIDATE
+    assert candidate.target_1 is not None
+    assert candidate.stop_reference is not None
+    assert candidate.signal_allowed is False
+
+
+def test_lower_two_to_three_sd_rejection_creates_long_candidate(tmp_path: Path) -> None:
+    service = XauDailyWorkbenchService(reports_dir=tmp_path / "data" / "reports")
+    input_dir = _write_temp_bundle(tmp_path)
+
+    result = service.run(
+        _request(
+            input_dir=input_dir,
+            map_id="test_xau_workbench_lower_rejection",
+            gc_reference_price=4262.5,
+            traded_reference_price=4250.0,
+            session_open_price=4538.0,
+            confirmation_state="close_back_inside",
+            iv_state="compressing",
+            flow_state="not_breakout_confirmed",
+        )
+    )
+
+    assert result.candidate_set is not None
+    candidate = result.candidate_set.candidates[0]
+    assert candidate.side == XauSdOiCandidateSide.LONG_REVERSION_CANDIDATE
+    assert candidate.target_1 is not None
+    assert candidate.stop_reference is not None
+    assert candidate.signal_allowed is False
+
+
+def test_breakout_context_marks_breakout_risk(tmp_path: Path) -> None:
+    service = XauDailyWorkbenchService(reports_dir=tmp_path / "data" / "reports")
+    input_dir = _write_temp_bundle(tmp_path)
+
+    result = service.run(
+        _request(
+            input_dir=input_dir,
+            map_id="test_xau_workbench_breakout_risk",
+            gc_reference_price=4912.5,
+            traded_reference_price=4900.0,
+            session_open_price=4538.0,
+            confirmation_state="acceptance",
+            iv_state="expanding",
+            flow_state="flow_through_wall",
+        )
+    )
+
+    assert result.candidate_set is not None
+    candidate = result.candidate_set.candidates[0]
+    assert candidate.side == XauSdOiCandidateSide.BREAKOUT_RISK
     assert candidate.signal_allowed is False
 
 
@@ -158,6 +254,9 @@ def test_signal_allowed_false_everywhere(tmp_path: Path) -> None:
     assert all(candidate.signal_allowed is False for candidate in result.candidate_set.candidates)
     assert result.candidate_metadata is not None
     assert result.candidate_metadata.signal_allowed is False
+    assert result.provider_statuses
+    assert result.map_artifact_paths
+    assert result.candidate_artifact_paths
 
 
 def _request(
@@ -167,6 +266,9 @@ def _request(
     gc_reference_price: float | None = 4549.2,
     traded_reference_price: float | None = 4536.7,
     session_open_price: float | None = 4538.0,
+    confirmation_state: str = "unavailable",
+    iv_state: str = "unavailable",
+    flow_state: str = "unavailable",
 ) -> XauDailyWorkbenchRunRequest:
     return XauDailyWorkbenchRunRequest(
         session_date=date(2026, 6, 2),
@@ -178,9 +280,16 @@ def _request(
         gc_reference_price=gc_reference_price,
         traded_reference_price=traded_reference_price,
         session_open_price=session_open_price,
+        confirmation_state=confirmation_state,
+        iv_state=iv_state,
+        flow_state=flow_state,
         run_candidates=True,
         research_only_acknowledged=True,
     )
+
+
+def _missing_names(result) -> set[str]:
+    return {item.input_name for item in result.missing_inputs}
 
 
 def _write_temp_bundle(tmp_path: Path) -> Path:

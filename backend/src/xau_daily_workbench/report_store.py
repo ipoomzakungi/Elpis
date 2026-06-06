@@ -87,9 +87,15 @@ class XauDailyWorkbenchReportStore:
         return XauDailyWorkbenchRunResult.model_validate_json(path.read_text(encoding="utf-8"))
 
     def latest_result(self) -> XauDailyWorkbenchRunResult | None:
+        results = self.list_results()
+        if not results:
+            return None
+        return max(results, key=lambda result: result.created_at)
+
+    def list_results(self) -> list[XauDailyWorkbenchRunResult]:
         root = self.report_root()
         if not root.exists():
-            return None
+            return []
         results: list[XauDailyWorkbenchRunResult] = []
         for path in root.glob("*/workbench.json"):
             try:
@@ -100,9 +106,7 @@ class XauDailyWorkbenchReportStore:
                 )
             except (OSError, ValueError):
                 continue
-        if not results:
-            return None
-        return max(results, key=lambda result: result.created_at)
+        return sorted(results, key=lambda result: result.created_at, reverse=True)
 
     def serialize_json(self, payload: Any) -> str:
         return json.dumps(_jsonable(payload), indent=2, sort_keys=True)
@@ -186,7 +190,10 @@ def _workbench_markdown(result: XauDailyWorkbenchRunResult) -> str:
         "## Missing Inputs",
     ]
     if result.missing_inputs:
-        lines.extend(f"- {item}" for item in result.missing_inputs)
+        lines.extend(
+            f"- {item.input_name}: {item.message} ({item.severity.value})"
+            for item in result.missing_inputs
+        )
     else:
         lines.append("- None.")
     lines.extend(["", "## No-Signal Reasons"])

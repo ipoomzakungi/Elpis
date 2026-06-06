@@ -11,7 +11,9 @@
 - [X] Plan records constitution checks.
 - [X] Data model documents request, result, providers, and artifacts.
 - [X] API contract documents run/latest/map/candidate endpoints.
+- [X] API contract documents run-detail endpoint.
 - [X] Quickstart documents local usage and validation.
+- [X] Quickstart documents CLI usage.
 - [X] Tasks are dependency ordered.
 
 ## Research-Only Guardrails
@@ -35,4 +37,9 @@
 - [X] Candidate artifacts round-trip.
 - [X] API run returns map and candidate ids.
 - [X] Latest endpoint handles empty state.
+- [X] API run-detail endpoint returns persisted run.
+- [X] Provider abstractions are tested.
+- [X] CLI help and fixture run are tested.
+- [X] Candidate store is tested.
+- [X] Upper/lower 2SD-3SD and breakout-risk pass-through are tested.
 - [X] Signal-disabled invariant is tested.

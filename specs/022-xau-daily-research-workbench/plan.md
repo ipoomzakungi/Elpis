@@ -5,7 +5,7 @@
 
 ## Summary
 
-Add a backend-only daily research workbench that orchestrates existing XAU components: local bundle loading, structural-map persistence, Feature 021 candidate classification, candidate sidecar persistence, workbench run persistence, and local FastAPI endpoints. The feature stays research-only and signal-disabled.
+Add a backend-first daily research workbench that orchestrates existing XAU components: local bundle/latest artifact loading, provider status reporting, basis snapshot calculation, structural-map persistence, Feature 021 candidate classification, candidate sidecar persistence, workbench run persistence, a local CLI, and local FastAPI endpoints. The feature stays research-only and signal-disabled.
 
 ## Technical Context
 
@@ -54,11 +54,20 @@ backend/
 |   |-- models/xau_daily_workbench.py
 |   `-- xau_daily_workbench/
 |       |-- __init__.py
+|       |-- basis.py
+|       |-- candidate_store.py
+|       |-- providers.py
 |       |-- report_store.py
 |       `-- service.py
+|-- scripts/run_xau_daily_research_workbench.py
 `-- tests/
     |-- contract/test_xau_daily_workbench_api_contracts.py
-    `-- unit/test_xau_daily_workbench_service.py
+    `-- unit/
+        |-- test_run_xau_daily_research_workbench_script.py
+        |-- test_xau_daily_workbench_api.py
+        |-- test_xau_daily_workbench_candidate_store.py
+        |-- test_xau_daily_workbench_providers.py
+        `-- test_xau_daily_workbench_service.py
 ```
 
 ## Design Decisions
@@ -66,9 +75,10 @@ backend/
 - Reuse Feature 020A local bundle generation for map creation.
 - Reuse Feature 019 structural-map report store for map artifacts.
 - Reuse Feature 021 classifier for candidate labels.
-- Add a separate workbench report store so daily run metadata can be listed independently.
-- Persist candidate sidecars beside `map.json` for map-centered review.
+- Add a separate workbench report store so daily run metadata can be listed independently and by id.
+- Persist candidate sidecars beside `map.json` for map-centered review through a candidate store.
 - Return blocked workbench results for missing sources instead of raising tracebacks.
+- Keep optional Yahoo as unavailable/limited research fallback; tests do not require network.
 - Defer frontend page changes until the API contract is stable.
 
 ## Test Strategy
@@ -82,6 +92,10 @@ backend/
 - API latest empty state.
 - API map and candidate roundtrip.
 - Signal-disabled invariant.
+- CLI help and fixture run.
+- Provider unavailable/fixture/manual cases.
+- Candidate store roundtrip.
+- Upper/lower 2SD-3SD and breakout-risk context pass-through.
 
 ## Post-Design Constitution Check
 

@@ -45,7 +45,7 @@ As an XAU researcher, I want local API endpoints for running the workbench, read
 
 ## Edge Cases
 
-- `local_bundle` source is selected without `input_dir`.
+- `local_bundle` or `fixture` source is selected without `input_dir`.
 - Bundle directory or required report JSON is missing.
 - `api_only` is selected before an API fetcher is configured.
 - `latest_existing` has no matching structural map.
@@ -54,18 +54,20 @@ As an XAU researcher, I want local API endpoints for running the workbench, read
 - Traded price is unavailable.
 - Candidate sidecar files are missing.
 - Repeated runs use generated workbench run ids and path-safe artifact writes.
+- Optional Yahoo research fallback is unavailable or not installed.
+- Confirmation, IV, or flow state is omitted and remains `unavailable`.
 
 ## Requirements
 
 ### Functional Requirements
 
 - **FR-001**: The system MUST provide `run_xau_daily_research_workbench(...)`.
-- **FR-002**: The run request MUST accept `session_date`, `expiration_code`, `traded_instrument`, `cme_source`, optional `input_dir`, optional GC/traded/session-open references, optional `output_root`, and `run_candidates`.
+- **FR-002**: The run request MUST accept `session_date`, `expiration_code`, `traded_instrument`, `cme_source`, optional `input_dir`, optional GC/traded/session-open references, optional manual basis, optional confirmation/IV/flow states, optional `output_root`, and `run_candidates`.
 - **FR-003**: The system MUST support `cme_source=local_bundle`.
 - **FR-004**: The system MUST support `cme_source=latest_existing`.
 - **FR-005**: The system MUST return a clean blocked response for unconfigured `cme_source=api_only`.
 - **FR-006**: The system MUST define provider interfaces for CME data, GC/futures price, traded price, and session open.
-- **FR-007**: The system MUST implement local bundle, latest-existing artifact, and static fixture price providers without live trading access.
+- **FR-007**: The system MUST implement local bundle, latest-existing artifact, fixture CME, manual price, static fixture price, and optional Yahoo research fallback providers without live trading access.
 - **FR-008**: The system MUST build or load a persisted `XauDailyStructuralMap`.
 - **FR-009**: The system MUST run Feature 021 candidate classification when `run_candidates=true`.
 - **FR-010**: The system MUST persist `candidates.json`, `candidates.md`, and `candidate_metadata.json` beside the structural map.
@@ -73,9 +75,11 @@ As an XAU researcher, I want local API endpoints for running the workbench, read
 - **FR-012**: Every API response MUST include `research_only`, `signal_allowed`, `readiness`, `missing_inputs`, `no_signal_reasons`, and `artifact_paths`.
 - **FR-013**: The system MUST expose `POST /api/v1/research/xau/workbench/run`.
 - **FR-014**: The system MUST expose `GET /api/v1/research/xau/workbench/latest`.
-- **FR-015**: The system MUST expose `GET /api/v1/research/xau/workbench/maps/{map_id}`.
-- **FR-016**: The system MUST expose `GET /api/v1/research/xau/workbench/candidates/{map_id}`.
-- **FR-017**: The feature MUST NOT implement live trading, paper trading, alerts, broker access, order routing, PnL, position sizing, automatic trade placement, or buy/sell instructions.
+- **FR-015**: The system MUST expose `GET /api/v1/research/xau/workbench/runs/{run_id}`.
+- **FR-016**: The system MUST expose `GET /api/v1/research/xau/workbench/maps/{map_id}`.
+- **FR-017**: The system MUST expose `GET /api/v1/research/xau/workbench/candidates/{map_id}`.
+- **FR-018**: The system MUST provide a CLI script for local workbench runs.
+- **FR-019**: The feature MUST NOT implement live trading, paper trading, alerts, broker access, order routing, PnL, position sizing, automatic trade placement, or buy/sell instructions.
 
 ## Success Criteria
 
@@ -87,6 +91,8 @@ As an XAU researcher, I want local API endpoints for running the workbench, read
 - **SC-006**: API run returns `map_id` and `candidate_set_id`.
 - **SC-007**: Latest endpoint handles empty state.
 - **SC-008**: `signal_allowed=false` everywhere.
+- **SC-009**: CLI help and fixture runs work without credentials or network.
+- **SC-010**: Upper/lower 2SD-3SD rejection and breakout-risk contexts flow through Feature 021.
 
 ## Assumptions
 

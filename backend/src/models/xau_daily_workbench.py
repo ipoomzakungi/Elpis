@@ -11,6 +11,9 @@ from src.models.xau_daily_structural_map import XauDailyStructuralMapReportMetad
 from src.models.xau_sd_oi_candidate import (
     RESEARCH_ONLY_NO_SIGNAL_REASON,
     XauSdOiCandidateSet,
+    XauSdOiConfirmationState,
+    XauSdOiFlowState,
+    XauSdOiIvState,
 )
 
 DAILY_WORKBENCH_NO_SIGNAL_REASON = (
@@ -28,6 +31,7 @@ class XauDailyWorkbenchCmeSource(StrEnum):
     LOCAL_BUNDLE = "local_bundle"
     API_ONLY = "api_only"
     LATEST_EXISTING = "latest_existing"
+    FIXTURE = "fixture"
 
 
 class XauDailyWorkbenchPriceProvider(StrEnum):
@@ -41,6 +45,100 @@ class XauDailyWorkbenchReadiness(StrEnum):
     BLOCKED = "blocked"
 
 
+class XauDailyWorkbenchProviderType(StrEnum):
+    CME_DATA_SOURCE = "cme_data_source"
+    FUTURES_PRICE = "futures_price"
+    TRADED_PRICE = "traded_price"
+    SESSION_OPEN = "session_open"
+    BASIS = "basis"
+    CANDIDATE_STORE = "candidate_store"
+
+
+class XauDailyWorkbenchProviderState(StrEnum):
+    AVAILABLE = "available"
+    UNAVAILABLE = "unavailable"
+    PARTIAL = "partial"
+    ERROR = "error"
+
+
+class XauDailyWorkbenchSourceQuality(StrEnum):
+    OFFICIAL = "official"
+    LOCAL_BUNDLE = "local_bundle"
+    LATEST_EXISTING = "latest_existing"
+    RESEARCH_FALLBACK = "research_fallback"
+    MANUAL_OVERRIDE = "manual_override"
+    FIXTURE = "fixture"
+
+
+class XauDailyWorkbenchMissingInputSeverity(StrEnum):
+    INFO = "info"
+    WARNING = "warning"
+    BLOCKING = "blocking"
+
+
+class XauDailyWorkbenchProviderStatus(XauDailyWorkbenchBaseModel):
+    provider_name: str
+    provider_type: XauDailyWorkbenchProviderType
+    status: XauDailyWorkbenchProviderState
+    source_quality: XauDailyWorkbenchSourceQuality
+    message: str
+    limitations: list[str] = Field(default_factory=list)
+
+    @field_validator("provider_name", "message")
+    @classmethod
+    def normalize_required_text(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("provider status text fields must not be blank")
+        return normalized
+
+    @field_validator("limitations")
+    @classmethod
+    def normalize_text_list(cls, values: list[str]) -> list[str]:
+        return _dedupe(values)
+
+
+class XauDailyWorkbenchMissingInput(XauDailyWorkbenchBaseModel):
+    input_name: str
+    severity: XauDailyWorkbenchMissingInputSeverity = (
+        XauDailyWorkbenchMissingInputSeverity.BLOCKING
+    )
+    message: str
+
+    @field_validator("input_name", "message")
+    @classmethod
+    def normalize_required_text(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("missing input text fields must not be blank")
+        return normalized
+
+
+class XauDailyWorkbenchBasisSnapshot(XauDailyWorkbenchBaseModel):
+    timestamp: datetime
+    gc_reference_price: float | None = Field(default=None, gt=0)
+    traded_reference_price: float | None = Field(default=None, gt=0)
+    traded_instrument: str
+    basis: float | None = None
+    formula: str
+    source: XauDailyWorkbenchSourceQuality
+    alignment_status: str = "unknown"
+    limitations: list[str] = Field(default_factory=list)
+
+    @field_validator("traded_instrument", "formula", "alignment_status")
+    @classmethod
+    def normalize_required_text(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("basis snapshot text fields must not be blank")
+        return normalized
+
+    @field_validator("limitations")
+    @classmethod
+    def normalize_text_list(cls, values: list[str]) -> list[str]:
+        return _dedupe(values)
+
+
 class XauDailyWorkbenchRunRequest(XauDailyWorkbenchBaseModel):
     session_date: date | None = None
     expiration_code: str | None = None
@@ -52,6 +150,9 @@ class XauDailyWorkbenchRunRequest(XauDailyWorkbenchBaseModel):
     session_open_price: float | None = Field(default=None, gt=0)
     session_open_source: str | None = "manual_research_input"
     manual_basis: float | None = None
+    confirmation_state: XauSdOiConfirmationState = XauSdOiConfirmationState.UNAVAILABLE
+    iv_state: XauSdOiIvState = XauSdOiIvState.UNAVAILABLE
+    flow_state: XauSdOiFlowState = XauSdOiFlowState.UNAVAILABLE
     price_provider: XauDailyWorkbenchPriceProvider | None = (
         XauDailyWorkbenchPriceProvider.STATIC_FIXTURE
     )
@@ -91,7 +192,7 @@ class XauDailyWorkbenchCandidateMetadata(XauDailyWorkbenchBaseModel):
     candidate_count: int = Field(ge=0)
     readiness: XauDailyWorkbenchReadiness
     no_signal_reasons: list[str] = Field(default_factory=list)
-    missing_inputs: list[str] = Field(default_factory=list)
+    missing_inputs: list[XauDailyWorkbenchMissingInput] = Field(default_factory=list)
     research_only: bool = True
     signal_allowed: bool = False
 
@@ -103,7 +204,7 @@ class XauDailyWorkbenchCandidateMetadata(XauDailyWorkbenchBaseModel):
             raise ValueError("candidate metadata ids must not be blank")
         return normalized
 
-    @field_validator("no_signal_reasons", "missing_inputs")
+    @field_validator("no_signal_reasons")
     @classmethod
     def normalize_text_list(cls, values: list[str]) -> list[str]:
         return _dedupe(values)
@@ -129,11 +230,16 @@ class XauDailyWorkbenchRunResult(XauDailyWorkbenchBaseModel):
     map_id: str | None = None
     candidate_set_id: str | None = None
     readiness: XauDailyWorkbenchReadiness
-    missing_inputs: list[str] = Field(default_factory=list)
+    map_artifact_paths: dict[str, str] = Field(default_factory=dict)
+    candidate_artifact_paths: dict[str, str] = Field(default_factory=dict)
+    missing_inputs: list[XauDailyWorkbenchMissingInput] = Field(default_factory=list)
+    provider_statuses: list[XauDailyWorkbenchProviderStatus] = Field(default_factory=list)
     no_signal_reasons: list[str] = Field(
         default_factory=lambda: [DAILY_WORKBENCH_NO_SIGNAL_REASON]
     )
+    limitations: list[str] = Field(default_factory=list)
     artifact_paths: dict[str, str] = Field(default_factory=dict)
+    basis_snapshot: XauDailyWorkbenchBasisSnapshot | None = None
     map_metadata: XauDailyStructuralMapReportMetadata | None = None
     daily_map: XauDailyStructuralMap | None = None
     candidate_set: XauSdOiCandidateSet | None = None
@@ -157,12 +263,12 @@ class XauDailyWorkbenchRunResult(XauDailyWorkbenchBaseModel):
             raise ValueError("traded_instrument must not be blank")
         return normalized
 
-    @field_validator("missing_inputs", "no_signal_reasons")
+    @field_validator("no_signal_reasons", "limitations")
     @classmethod
     def normalize_text_list(cls, values: list[str]) -> list[str]:
         return _dedupe(values)
 
-    @field_validator("artifact_paths")
+    @field_validator("artifact_paths", "map_artifact_paths", "candidate_artifact_paths")
     @classmethod
     def normalize_artifact_paths(cls, values: dict[str, str]) -> dict[str, str]:
         return {str(key): str(value).replace("\\", "/") for key, value in values.items()}
@@ -182,12 +288,14 @@ class XauDailyWorkbenchRunResult(XauDailyWorkbenchBaseModel):
 
 class XauDailyWorkbenchLatestResponse(XauDailyWorkbenchBaseModel):
     readiness: XauDailyWorkbenchReadiness
-    missing_inputs: list[str] = Field(default_factory=list)
+    missing_inputs: list[XauDailyWorkbenchMissingInput] = Field(default_factory=list)
     no_signal_reasons: list[str] = Field(
         default_factory=lambda: [DAILY_WORKBENCH_NO_SIGNAL_REASON]
     )
     artifact_paths: dict[str, str] = Field(default_factory=dict)
     latest_run: XauDailyWorkbenchRunResult | None = None
+    available_runs: list[str] = Field(default_factory=list)
+    message: str
     research_only: bool = True
     signal_allowed: bool = False
 
@@ -200,10 +308,14 @@ class XauDailyWorkbenchLatestResponse(XauDailyWorkbenchBaseModel):
         return self
 
 
+class XauDailyWorkbenchLatestState(XauDailyWorkbenchLatestResponse):
+    """Named latest-state model for the workbench contract."""
+
+
 class XauDailyWorkbenchMapResponse(XauDailyWorkbenchBaseModel):
     map_id: str
     readiness: XauDailyWorkbenchReadiness
-    missing_inputs: list[str] = Field(default_factory=list)
+    missing_inputs: list[XauDailyWorkbenchMissingInput] = Field(default_factory=list)
     no_signal_reasons: list[str] = Field(
         default_factory=lambda: [DAILY_WORKBENCH_NO_SIGNAL_REASON]
     )
@@ -226,7 +338,7 @@ class XauDailyWorkbenchCandidateResponse(XauDailyWorkbenchBaseModel):
     map_id: str
     candidate_set_id: str
     readiness: XauDailyWorkbenchReadiness
-    missing_inputs: list[str] = Field(default_factory=list)
+    missing_inputs: list[XauDailyWorkbenchMissingInput] = Field(default_factory=list)
     no_signal_reasons: list[str] = Field(
         default_factory=lambda: [DAILY_WORKBENCH_NO_SIGNAL_REASON]
     )
@@ -255,6 +367,40 @@ def research_only_no_signal_reasons(*extra: str) -> list[str]:
     )
 
 
+def missing_input(
+    input_name: str,
+    message: str,
+    *,
+    severity: XauDailyWorkbenchMissingInputSeverity = (
+        XauDailyWorkbenchMissingInputSeverity.BLOCKING
+    ),
+) -> XauDailyWorkbenchMissingInput:
+    return XauDailyWorkbenchMissingInput(
+        input_name=input_name,
+        severity=severity,
+        message=message,
+    )
+
+
+def provider_status(
+    *,
+    provider_name: str,
+    provider_type: XauDailyWorkbenchProviderType,
+    status: XauDailyWorkbenchProviderState,
+    source_quality: XauDailyWorkbenchSourceQuality,
+    message: str,
+    limitations: list[str] | None = None,
+) -> XauDailyWorkbenchProviderStatus:
+    return XauDailyWorkbenchProviderStatus(
+        provider_name=provider_name,
+        provider_type=provider_type,
+        status=status,
+        source_quality=source_quality,
+        message=message,
+        limitations=limitations or [],
+    )
+
+
 def _dedupe(values: list[str]) -> list[str]:
     output: list[str] = []
     seen: set[str] = set()
@@ -268,14 +414,24 @@ def _dedupe(values: list[str]) -> list[str]:
 
 __all__ = [
     "DAILY_WORKBENCH_NO_SIGNAL_REASON",
+    "XauDailyWorkbenchBasisSnapshot",
     "XauDailyWorkbenchCandidateMetadata",
     "XauDailyWorkbenchCandidateResponse",
     "XauDailyWorkbenchCmeSource",
     "XauDailyWorkbenchLatestResponse",
+    "XauDailyWorkbenchLatestState",
     "XauDailyWorkbenchMapResponse",
+    "XauDailyWorkbenchMissingInput",
+    "XauDailyWorkbenchMissingInputSeverity",
     "XauDailyWorkbenchPriceProvider",
+    "XauDailyWorkbenchProviderState",
+    "XauDailyWorkbenchProviderStatus",
+    "XauDailyWorkbenchProviderType",
     "XauDailyWorkbenchReadiness",
     "XauDailyWorkbenchRunRequest",
     "XauDailyWorkbenchRunResult",
+    "XauDailyWorkbenchSourceQuality",
+    "missing_input",
+    "provider_status",
     "research_only_no_signal_reasons",
 ]

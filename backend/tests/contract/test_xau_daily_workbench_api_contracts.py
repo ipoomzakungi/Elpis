@@ -28,6 +28,7 @@ def test_xau_daily_workbench_routes_are_registered_in_openapi() -> None:
     paths = response.json()["paths"]
     assert "/api/v1/research/xau/workbench/run" in paths
     assert "/api/v1/research/xau/workbench/latest" in paths
+    assert "/api/v1/research/xau/workbench/runs/{run_id}" in paths
     assert "/api/v1/research/xau/workbench/maps/{map_id}" in paths
     assert "/api/v1/research/xau/workbench/candidates/{map_id}" in paths
 
@@ -71,7 +72,7 @@ def test_latest_endpoint_handles_empty_state(client_and_service) -> None:
     payload = response.json()
     assert payload["readiness"] == "blocked"
     assert payload["latest_run"] is None
-    assert payload["missing_inputs"] == ["xau_daily_workbench_run"]
+    assert payload["missing_inputs"][0]["input_name"] == "xau_daily_workbench_run"
     assert payload["signal_allowed"] is False
     assert payload["research_only"] is True
 
@@ -102,7 +103,12 @@ def test_map_and_candidate_endpoints_roundtrip(client_and_service) -> None:
     candidate_response = client.get(
         f"/api/v1/research/xau/workbench/candidates/{created['map_id']}"
     )
+    run_response = client.get(
+        f"/api/v1/research/xau/workbench/runs/{created['run_id']}"
+    )
 
+    assert run_response.status_code == 200
+    assert run_response.json()["run_id"] == created["run_id"]
     assert map_response.status_code == 200
     assert map_response.json()["daily_map"]["signal_allowed"] is False
     assert candidate_response.status_code == 200

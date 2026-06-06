@@ -9,6 +9,7 @@ from src.models.xau_daily_workbench import (
     XauDailyWorkbenchRunRequest,
     XauDailyWorkbenchRunResult,
 )
+from src.xau_daily_workbench.report_store import validate_xau_daily_workbench_safe_id
 from src.xau_daily_workbench.service import XauDailyWorkbenchService
 
 router = APIRouter()
@@ -41,6 +42,25 @@ async def get_latest_xau_daily_workbench(
     """Read the latest local research-only XAU daily workbench run."""
 
     return service.latest()
+
+
+@router.get(
+    "/research/xau/workbench/runs/{run_id}",
+    response_model=XauDailyWorkbenchRunResult,
+)
+async def get_xau_daily_workbench_run(
+    run_id: str,
+    service: XauDailyWorkbenchService = Depends(get_xau_daily_workbench_service),
+) -> XauDailyWorkbenchRunResult:
+    """Read one persisted XAU daily workbench run."""
+
+    _validate_run_id(run_id)
+    try:
+        return service.read_run(run_id)
+    except FileNotFoundError:
+        _not_found("XAU daily workbench run", run_id)
+
+    raise RuntimeError("unreachable")
 
 
 @router.get(
@@ -84,6 +104,13 @@ async def get_xau_daily_workbench_candidates(
 def _validate_map_id(map_id: str) -> None:
     try:
         validate_xau_daily_structural_map_safe_id(map_id, "map_id")
+    except ValueError as exc:
+        api_error(400, "VALIDATION_ERROR", str(exc))
+
+
+def _validate_run_id(run_id: str) -> None:
+    try:
+        validate_xau_daily_workbench_safe_id(run_id, "run_id")
     except ValueError as exc:
         api_error(400, "VALIDATION_ERROR", str(exc))
 
