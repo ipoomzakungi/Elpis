@@ -17,6 +17,7 @@ from src.api.routes import (
     research,
     research_execution,
     xau,
+    xau_daily_workbench,
     xau_forward_journal,
     xau_quikstrike_fusion,
     xau_reaction,
@@ -53,6 +54,11 @@ app.include_router(quikstrike_matrix.router, prefix="/api/v1", tags=["quikstrike
 app.include_router(research.router, prefix="/api/v1", tags=["research"])
 app.include_router(research_execution.router, prefix="/api/v1", tags=["research-execution"])
 app.include_router(xau.router, prefix="/api/v1", tags=["xau"])
+app.include_router(
+    xau_daily_workbench.router,
+    prefix="/api/v1",
+    tags=["xau-daily-workbench"],
+)
 app.include_router(xau_reaction.router, prefix="/api/v1", tags=["xau-reaction"])
 app.include_router(
     xau_quikstrike_fusion.router,

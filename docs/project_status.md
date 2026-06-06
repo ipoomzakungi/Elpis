@@ -11,13 +11,9 @@ orders, position sizing, or PnL logic.
 
 ## Current Result
 
-Feature 021 is implemented and committed:
+Feature 022 is implemented as a backend local XAU daily research workbench.
 
-```text
-4f120fc feat: add xau sd oi research candidates
-```
-
-Feature 021 adds the first research-only 2SD-3SD XAU SD/OI mean-reversion
+Feature 021 remains the research-only 2SD-3SD XAU SD/OI mean-reversion
 candidate classifier. It supports:
 
 - `long_reversion_candidate`
@@ -25,10 +21,15 @@ candidate classifier. It supports:
 - `no_trade`
 - `breakout_risk`
 
-The classifier tracks stretch zone, nearest mapped wall context, OI change,
-volume, expected-range source, 1SD/2SD/3SD/derived 3.5SD references, targets,
-stop reference, confirmation state, IV state, flow state, OI wall state, and
-readiness state.
+Feature 022 now wraps the existing local CME/XAU pieces into one daily workflow:
+
+- load a local XAU bundle or latest existing structural map
+- apply manual/static GC, traded reference, and session-open inputs
+- build or read the persisted daily structural map
+- run Feature 021 candidate classification
+- persist candidate sidecars beside the map
+- persist a workbench run artifact
+- expose local API endpoints for run/latest/map/candidate review
 
 Every output remains:
 
@@ -41,12 +42,15 @@ Default no-signal behavior remains explicit:
 
 ```text
 Feature 021 is research-only; signal generation is disabled.
+Feature 022 is a research-only daily workbench; signal generation is disabled.
 ```
 
 ## Latest XAU Smoke Validation
 
 Validated on 2026-06-07 against existing local CME/QuikStrike XAU artifacts.
-This validation did not use the BTC/Binance quickstart path.
+This validation did not use the BTC/Binance quickstart path. Current testing is
+focused on XAU/CME local artifacts. Yahoo Finance is not the active XAU source
+for this daily workbench slice.
 
 Local XAU API inventory:
 
@@ -142,6 +146,8 @@ Operational fix from this smoke:
   preserving missing context.
 - Feature 021 consumes those maps and labels research candidates without
   creating signals.
+- Feature 022 orchestrates local XAU workbench runs and persists map, candidate,
+  and workbench artifacts for API review.
 
 ## What Feature 021 Means
 
@@ -168,14 +174,50 @@ Price beyond 3SD
 = breakout_risk
 ```
 
-The caller still must supply confirmation, IV, flow, traded price, basis, session
-open, and expected-range context. These inputs are not fully automated end to
-end yet.
+Feature 022 automates the local backend handoff from saved XAU bundle/map
+artifacts to candidate sidecars. The caller still must supply or already have
+source-backed traded price, GC reference, session open, and source bundle/map
+context. Confirmation, IV state, and flow state are still `unavailable` in this
+slice and need a later context-state engine.
+
+## Feature 022 Workbench API
+
+Implemented local endpoints:
+
+```text
+POST /api/v1/research/xau/workbench/run
+GET  /api/v1/research/xau/workbench/latest
+GET  /api/v1/research/xau/workbench/maps/{map_id}
+GET  /api/v1/research/xau/workbench/candidates/{map_id}
+```
+
+Persisted workbench artifacts:
+
+```text
+data/reports/xau_daily_workbench/{run_id}/workbench.json
+data/reports/xau_daily_workbench/{run_id}/workbench.md
+```
+
+Persisted candidate sidecars:
+
+```text
+data/reports/xau_daily_structural_map/{map_id}/candidates.json
+data/reports/xau_daily_structural_map/{map_id}/candidates.md
+data/reports/xau_daily_structural_map/{map_id}/candidate_metadata.json
+```
+
+Dashboard status:
+
+```text
+backend API implemented
+frontend workbench page not implemented in this slice
+```
 
 ## Missing Before Systematic Trading
 
-- One-button daily orchestration for CME fetch/load, price references, basis,
-  session open, structural map, candidate classification, and artifact saving.
+- Frontend workbench page for the new Feature 022 API.
+- API-only CME fetch path integration for the workbench after source readiness
+  and credential handling are validated.
 - Weekday fresh-data runs and freshness validation.
 - Automatic traded-price, GC reference, and XAU/GO/broker-side reference
   providers.
@@ -203,7 +245,8 @@ end yet.
 | M4 Structural map persistence | Done | Map artifacts are persisted locally. |
 | M5 Real bundle adapter | Done, data-dependent | Needs real bundle files and map verification. |
 | M6 Candidate research classifier | Done | Feature 021, research-only. |
-| M7 Daily orchestrator + local dashboard | Not done | Recommended next feature. |
+| M7 Daily workbench API | Backend done | Feature 022, local bundle/latest-existing sources, candidate sidecars. |
+| M7B Local workbench dashboard | Not done | Needs frontend page wired to Feature 022 API. |
 | M8 Candle / IV / flow state engine | Not done | Turns raw data into candidate context states. |
 | M9 Forward outcome labels | Not done | Required before evaluating the hypothesis. |
 | M10 Research backtest | Not done | Required before any strategy claim. |
@@ -213,47 +256,29 @@ end yet.
 
 ## Next Recommended Feature
 
-Create Feature 022:
+Create Feature 023:
 
 ```text
-022-xau-daily-orchestrator-and-map-dashboard
+023-xau-workbench-dashboard-page
 ```
 
 Purpose:
 
 ```text
-Run Daily XAU Map
--> fetch or load CME/QuikStrike data
--> get GC reference price
--> get XAU/GO/traded reference price
--> calculate basis
--> get session open
--> build/persist daily structural map
--> run Feature 021 candidate classifier
--> persist candidate set
--> expose local research-only API/page for inspection
+Render the Feature 022 API in the local dashboard:
+freshness/status -> map summary -> candidate state -> missing inputs -> artifact links
 ```
 
-Feature 022 must remain research-only. It must not implement buy/sell live
-signals, broker orders, PnL, alerts, execution, paper trading, or real position
-sizing.
+Alternative next research slice:
 
-## Suggested Feature 022 Scope
+```text
+023-xau-candle-iv-flow-state-engine
+```
 
-- Add a daily orchestrator service with `session_date`, `expiration_code`,
-  `traded_instrument`, optional manual reference prices, optional manual session
-  open, and provider selection.
-- Add provider interfaces for CME options data, futures/reference price, traded
-  price, and session open.
-- Wrap existing local bundle and QuikStrike API paths only where safe.
-- Persist candidate artifacts next to map artifacts:
-  `candidates.json`, `candidates.md`, and `candidate_metadata.json`.
-- Add research-only API endpoints for daily run, latest run, map lookup, and
-  candidate lookup.
-- Include `signal_allowed=false`, `research_only=true`, `missing_inputs`, and
-  `no_signal_reasons` in every response.
-- Add tests for fixture daily run, missing CME files, missing basis, missing
-  session open, signal-disabled output, and API research-only fields.
+That slice would convert source-backed price/IV/flow observations into the
+Feature 021 confirmation, IV, and flow states. It must still remain
+research-only and must not implement signals, alerts, PnL, broker orders,
+paper trading, live trading, or position sizing.
 
 ## Current System Stage
 

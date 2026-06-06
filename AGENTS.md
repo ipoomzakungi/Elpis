@@ -437,5 +437,5 @@ After smoke test passes:
 - report files changed, commands run, results, commit hash, and remaining risks.
 
 <!-- SPECKIT START -->
-Active Speckit plan: specs/021-xau-sd-oi-mean-reversion-candidate-research/plan.md
+Active Speckit plan: specs/022-xau-daily-research-workbench/plan.md
 <!-- SPECKIT END -->
