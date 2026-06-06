@@ -13,6 +13,7 @@ from src.quikstrike.conversion import convert_to_xau_vol_oi_rows
 from src.quikstrike.dom_metadata import parse_dom_metadata
 from src.quikstrike.extraction import build_extraction_from_request
 from src.quikstrike.highcharts_reader import parse_highcharts_chart
+from src.quikstrike.range_bands import build_range_bands_payload
 from src.quikstrike.report_store import QuikStrikeReportStore
 from src.reports.collision_guard import ReportIdCollisionError, ReportSourceKindIsolationError
 
@@ -108,6 +109,77 @@ def test_report_store_persists_and_reads_report_artifacts(tmp_path: Path):
     assert saved_report.extraction_id == "quikstrike_report"
     assert saved_rows == bundle.rows
     assert saved_conversion_rows == conversion.rows
+
+
+def test_report_store_persists_optional_range_bands_artifact(tmp_path: Path):
+    view = QuikStrikeViewType.OPEN_INTEREST
+    request = QuikStrikeExtractionRequest(
+        requested_views=[view],
+        dom_metadata_by_view={
+            view: parse_dom_metadata(
+                "Gold (OG|GC) OG3K6 (2.59 DTE) vs 4722.6 - Open Interest",
+                selector_text="OG3K6 15 May 2026",
+                selected_view_type=view,
+            )
+        },
+        highcharts_by_view={
+            view: parse_highcharts_chart(
+                {
+                    "series": [
+                        {
+                            "name": "Put",
+                            "data": [
+                                {
+                                    "x": 4700,
+                                    "y": 120,
+                                    "name": "4700",
+                                    "category": "4700",
+                                }
+                            ],
+                        },
+                        {
+                            "name": "Call",
+                            "data": [
+                                {
+                                    "x": 4700,
+                                    "y": 95,
+                                    "name": "4700",
+                                    "category": "4700",
+                                }
+                            ],
+                        },
+                        {"name": "Ranges", "data": [{"x": 4650, "x2": 4750}]},
+                    ]
+                },
+                view,
+            )
+        },
+        research_only_acknowledged=True,
+    )
+    bundle = build_extraction_from_request(
+        request,
+        extraction_id="quikstrike_range_report",
+        capture_timestamp=datetime(2026, 5, 13, tzinfo=UTC),
+    )
+    store = QuikStrikeReportStore(reports_dir=tmp_path / "data" / "reports")
+    range_bands_payload = build_range_bands_payload(
+        extraction_id=bundle.result.extraction_id,
+        request=request,
+        created_at=bundle.result.created_at,
+    )
+
+    report = store.persist_report(
+        extraction_result=bundle.result,
+        normalized_rows=bundle.rows,
+        range_bands_payload=range_bands_payload,
+    )
+
+    report_dir = tmp_path / "data" / "reports" / "quikstrike" / "quikstrike_range_report"
+    assert (report_dir / "range_bands.json").exists()
+    assert any(
+        artifact.artifact_type == QuikStrikeArtifactType.RANGE_BANDS_JSON
+        for artifact in report.artifacts
+    )
 
 
 def test_report_store_blocks_report_id_collisions_and_unisolated_smoke_ids(

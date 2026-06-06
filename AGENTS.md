@@ -94,6 +94,31 @@ Do not add:
 
 These may be added only in later phases after the constitution/spec is updated.
 
+### Approved local research credential exception
+
+The project owner has approved a narrow v0 exception for read-only research data
+ingestion credentials, including CME/QuikStrike-style data access, when the goal
+is automated market-data collection and not trading, orders, account balances,
+wallets, broker access, or position management.
+
+Rules for this exception:
+
+- Secrets MUST NOT be committed to git or written to tracked files.
+- Plain encoded passwords in repo files are not acceptable; encoding is reversible
+  and is treated as secret material.
+- Preferred storage is the local OS credential store. Ignored local-only secret
+  files may be used only when explicitly requested and must stay covered by
+  `.gitignore`.
+- Scripts may read approved local secrets at runtime, but logs, reports, tests,
+  diagnostics, network captures, and generated research artifacts MUST redact or
+  omit credentials, cookies, tokens, headers, viewstate, private URLs, and
+  replayable session material.
+- The allowed use is read-only data ingestion. The exception does not permit
+  live trading, paper trading, broker/exchange private account access, order
+  placement, wallet/private-key handling, or real position management.
+- Any implementation using this exception MUST document the storage location,
+  rotation/removal steps, and failure behavior when credentials are missing.
+
 ## 7. Data-source rules
 
 The project must support a data-provider architecture.
@@ -242,6 +267,8 @@ git commit -m "test: add smoke validation script"
 Do not commit:
 
 .env
+.env.local
+.env.*.local
 .venv
 node_modules
 data/raw
@@ -410,5 +437,5 @@ After smoke test passes:
 - report files changed, commands run, results, commit hash, and remaining risks.
 
 <!-- SPECKIT START -->
-Active Speckit plan: specs/016-xau-forward-journal-outcome-price-updater/plan.md
+Active Speckit plan: specs/020a-xau-real-structural-map-from-bundle/plan.md
 <!-- SPECKIT END -->

@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 from datetime import UTC, date, datetime, time, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from src.models.xau_forward_journal import (
@@ -19,6 +20,12 @@ from src.models.xau_forward_journal import (
     XauForwardJournalNote,
 )
 from src.models.xau_quikstrike_fusion import XauQuikStrikeFusionRequest
+from src.quikstrike.network_diagnostics import (
+    build_network_diagnostics_report,
+    collect_browser_network_diagnostics,
+    default_network_diagnostics_path,
+    write_network_diagnostics_report,
+)
 from src.quikstrike.playwright_local import (
     DEFAULT_CDP_URL,
     QuikStrikeBrowserPageNotReadyError,
@@ -32,6 +39,7 @@ from src.quikstrike_matrix.playwright_local import (
     QuikStrikeMatrixBrowserPageNotReadyError,
     QuikStrikeMatrixCdpConnectionError,
     QuikStrikeMatrixPlaywrightUnavailableError,
+    collect_supplemental_views_from_cdp,
 )
 from src.quikstrike_matrix.playwright_local import (
     extract_from_cdp as extract_matrix_from_cdp,
@@ -46,7 +54,7 @@ def main() -> int:
     )
     parser.add_argument("--cdp-url", default=DEFAULT_CDP_URL)
     parser.add_argument("--wait-seconds", type=int, default=900)
-    parser.add_argument("--poll-seconds", type=int, default=5)
+    parser.add_argument("--poll-seconds", type=float, default=0.5)
     parser.add_argument("--capture-session", default=None)
     parser.add_argument("--xauusd-spot-reference", type=float, default=None)
     parser.add_argument("--gc-futures-reference", type=float, default=None)
@@ -71,6 +79,28 @@ def main() -> int:
     )
     parser.add_argument("--force-create", action="store_true")
     parser.add_argument("--no-prompt", action="store_true")
+    parser.add_argument(
+        "--network-diagnostics-path",
+        default=None,
+        help=(
+            "Optional local JSON artifact path for sanitized browser-level network "
+            "diagnostics. The report excludes headers, cookies, bodies, HAR, full URLs, "
+            "query values, screenshots, and viewstate."
+        ),
+    )
+    parser.add_argument(
+        "--network-diagnostics-analyze",
+        action="store_true",
+        help="Include an API-only feasibility summary in the sanitized diagnostics report.",
+    )
+    parser.add_argument(
+        "--skip-matrix-supplemental-views",
+        action="store_true",
+        help=(
+            "Skip supplemental sanitized Matrix side-nav captures for Settlements and "
+            "Futures Volume & OI."
+        ),
+    )
     args = parser.parse_args()
     run_started_at = datetime.now(UTC)
     data_date = _resolve_data_date(
@@ -78,12 +108,24 @@ def main() -> int:
         policy=args.data_date_policy,
         capture_time=run_started_at,
     )
+    network_diagnostics_path = _resolve_network_diagnostics_path(
+        args.network_diagnostics_path
+    )
+    network_diagnostics_snapshots: list[dict] = []
+    network_diagnostics_report = None
+    matrix_supplemental_views_path = None
+    matrix_supplemental_views_status = "skipped"
+    matrix_supplemental_views = []
 
     try:
         if not args.no_prompt:
             _prompt(
                 "Log in manually in the CDP browser, then press Enter. The runner "
                 "will navigate to Gold QUIKOPTIONS VOL2VOL."
+            )
+        if network_diagnostics_path:
+            network_diagnostics_snapshots.append(
+                _collect_network_diagnostics(args.cdp_url, "before_vol2vol_capture")
             )
         vol2vol = extract_vol2vol_from_cdp(
             cdp_url=args.cdp_url,
@@ -92,6 +134,10 @@ def main() -> int:
             poll_seconds=args.poll_seconds,
             auto_prepare=True,
         )
+        if network_diagnostics_path:
+            network_diagnostics_snapshots.append(
+                _collect_network_diagnostics(args.cdp_url, "after_vol2vol_capture")
+            )
 
         if not args.no_prompt:
             _prompt(
@@ -107,6 +153,21 @@ def main() -> int:
             wait_seconds=args.wait_seconds,
             poll_seconds=args.poll_seconds,
         )
+        if not args.skip_matrix_supplemental_views:
+            (
+                matrix_supplemental_views_path,
+                matrix_supplemental_views_status,
+                matrix_supplemental_views,
+            ) = _capture_matrix_supplemental_views(
+                cdp_url=args.cdp_url,
+                matrix_report_id=matrix.report.extraction_id,
+                wait_seconds=args.wait_seconds,
+                poll_seconds=args.poll_seconds,
+            )
+        if network_diagnostics_path:
+            network_diagnostics_snapshots.append(
+                _collect_network_diagnostics(args.cdp_url, "after_matrix_capture")
+            )
     except (
         QuikStrikeBrowserPageNotReadyError,
         QuikStrikeCdpConnectionError,
@@ -115,6 +176,15 @@ def main() -> int:
         QuikStrikeMatrixCdpConnectionError,
         QuikStrikeMatrixPlaywrightUnavailableError,
     ) as exc:
+        if network_diagnostics_path:
+            network_diagnostics_snapshots.append(
+                _collect_network_diagnostics(args.cdp_url, "capture_failed")
+            )
+            network_diagnostics_report = _write_network_diagnostics(
+                network_diagnostics_snapshots,
+                network_diagnostics_path,
+                analyze=args.network_diagnostics_analyze,
+            )
         raise SystemExit(str(exc)) from exc
 
     fusion = create_xau_quikstrike_fusion_report(
@@ -179,6 +249,16 @@ def main() -> int:
             "XAU reaction reports were not both created."
         )
 
+    if network_diagnostics_path:
+        network_diagnostics_snapshots.append(
+            _collect_network_diagnostics(args.cdp_url, "after_report_persistence")
+        )
+        network_diagnostics_report = _write_network_diagnostics(
+            network_diagnostics_snapshots,
+            network_diagnostics_path,
+            analyze=args.network_diagnostics_analyze,
+        )
+
     summary = _summary(
         vol2vol.report,
         matrix.report,
@@ -188,6 +268,11 @@ def main() -> int:
         journal_create_status=journal_create_status,
         previous_journal_id=previous_journal_id,
         content_fingerprint=content_fingerprint,
+        network_diagnostics_path=network_diagnostics_path,
+        network_diagnostics_report=network_diagnostics_report,
+        matrix_supplemental_views_path=matrix_supplemental_views_path,
+        matrix_supplemental_views_status=matrix_supplemental_views_status,
+        matrix_supplemental_views=matrix_supplemental_views,
     )
     print(json.dumps(summary, indent=2))
     return 0
@@ -199,6 +284,105 @@ def _prompt(message: str) -> None:
 
 def _prompt_matrix_view(view: object) -> None:
     input(f"\nSelect QuikStrike Matrix view '{view.value}', then press Enter to capture.\n")
+
+
+def _resolve_network_diagnostics_path(raw_path: str | None) -> Path | None:
+    if raw_path is None:
+        return None
+    if not raw_path.strip():
+        return default_network_diagnostics_path(
+            repo_backend_dir=Path(__file__).resolve().parents[1]
+        )
+    path = Path(raw_path)
+    if path.is_absolute():
+        return path
+    return Path.cwd() / path
+
+
+def _collect_network_diagnostics(cdp_url: str, phase: str) -> dict:
+    try:
+        snapshot = collect_browser_network_diagnostics(cdp_url=cdp_url, phase=phase)
+        snapshot["status"] = "completed"
+        return snapshot
+    except Exception as exc:
+        return {
+            "phase": phase,
+            "collected_at": datetime.now(UTC).isoformat(),
+            "status": "failed",
+            "error": str(exc),
+        }
+
+
+def _write_network_diagnostics(
+    snapshots: list[dict],
+    output_path: Path,
+    *,
+    analyze: bool,
+) -> dict:
+    report = build_network_diagnostics_report(snapshots, analyze=analyze)
+    write_network_diagnostics_report(report, output_path)
+    return report
+
+
+def _capture_matrix_supplemental_views(
+    *,
+    cdp_url: str,
+    matrix_report_id: str,
+    wait_seconds: int,
+    poll_seconds: float,
+) -> tuple[Path | None, str, list[str]]:
+    output_path = (
+        Path(__file__).resolve().parents[1]
+        / "data"
+        / "reports"
+        / "quikstrike_matrix"
+        / matrix_report_id
+        / "supplemental_views.json"
+    )
+    try:
+        payloads = collect_supplemental_views_from_cdp(
+            cdp_url=cdp_url,
+            wait_seconds=wait_seconds,
+            poll_seconds=poll_seconds,
+        )
+    except Exception as exc:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            json.dumps(
+                {
+                    "status": "failed",
+                    "matrix_report_id": matrix_report_id,
+                    "created_at": datetime.now(UTC).isoformat(),
+                    "error": str(exc),
+                    "limitations": _matrix_supplemental_limitations(),
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        return output_path, "failed", []
+
+    output = {
+        "status": "completed",
+        "matrix_report_id": matrix_report_id,
+        "created_at": datetime.now(UTC).isoformat(),
+        "views": payloads,
+        "view_count": len(payloads),
+        "limitations": _matrix_supplemental_limitations(),
+    }
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(output, indent=2), encoding="utf-8")
+    return output_path, "completed", list(payloads)
+
+
+def _matrix_supplemental_limitations() -> list[str]:
+    return [
+        "Supplemental Matrix views are sanitized local research artifacts only.",
+        "Captured views are not converted into XAU Vol-OI rows yet because table "
+        "layouts differ from the heatmap strike/expiration parser.",
+        "No credentials, cookies, headers, HAR, screenshots, viewstate, full URLs, "
+        "request bodies, or response bodies are saved.",
+    ]
 
 
 def _resolve_data_date(
@@ -227,11 +411,22 @@ def _summary(
     journal_create_status: str | None = None,
     previous_journal_id: str | None = None,
     content_fingerprint: str | None = None,
+    network_diagnostics_path: Path | None = None,
+    network_diagnostics_report: dict | None = None,
+    matrix_supplemental_views_path: Path | None = None,
+    matrix_supplemental_views_status: str | None = None,
+    matrix_supplemental_views: list[str] | None = None,
 ) -> dict:
     downstream = fusion.downstream_result
+    network_analysis = (
+        (network_diagnostics_report or {}).get("analysis", {})
+        if isinstance(network_diagnostics_report, dict)
+        else {}
+    )
     return {
         "vol2vol_report_id": vol2vol.extraction_id,
         "vol2vol_rows": vol2vol.row_count,
+        "vol2vol_range_bands_path": _artifact_path(vol2vol, "range_bands_json"),
         "matrix_report_id": matrix.extraction_id,
         "matrix_rows": matrix.row_count,
         "matrix_strikes": matrix.strike_count,
@@ -255,6 +450,17 @@ def _summary(
         "journal_blocker": blocker,
         "fusion_artifacts": [artifact.path for artifact in fusion.artifacts],
         "journal_artifacts": [artifact.path for artifact in journal.artifacts] if journal else [],
+        "network_diagnostics_path": str(network_diagnostics_path)
+        if network_diagnostics_path
+        else None,
+        "network_diagnostics_api_only_assessment": network_analysis.get(
+            "api_only_assessment"
+        ),
+        "matrix_supplemental_views_path": str(matrix_supplemental_views_path)
+        if matrix_supplemental_views_path
+        else None,
+        "matrix_supplemental_views_status": matrix_supplemental_views_status,
+        "matrix_supplemental_views": matrix_supplemental_views or [],
         "limitations": [
             "Local-only research workflow.",
             "Manual QuikStrike authentication is required; product and view navigation "
@@ -267,8 +473,19 @@ def _summary(
                 "No credentials, cookies, headers, HAR, screenshots, viewstate, "
                 "or private URLs are saved."
             ),
+            (
+                "Optional network diagnostics store only sanitized browser resource "
+                "metadata and cannot prove endpoint replayability."
+            ),
         ],
     }
+
+
+def _artifact_path(report: object, artifact_type: str) -> str | None:
+    for artifact in getattr(report, "artifacts", []):
+        if getattr(getattr(artifact, "artifact_type", None), "value", None) == artifact_type:
+            return artifact.path
+    return None
 
 
 if __name__ == "__main__":

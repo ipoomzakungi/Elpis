@@ -6,7 +6,7 @@ param(
     [string]$ProfileDirectory = "",
     [string]$StartUrl = "https://cmegroup-sso.quikstrike.net//User/QuikStrikeView.aspx?mode=",
     [int]$WaitSeconds = 900,
-    [int]$PollSeconds = 5,
+    [double]$PollSeconds = 0.5,
     [string]$CaptureSession = "",
     [double]$XauUsdSpotReference = 0,
     [double]$GcFuturesReference = 0,
@@ -15,8 +15,18 @@ param(
     [switch]$SkipBrowserLaunch,
     [switch]$ManualPrompts,
     [switch]$ForceCreate,
+    [switch]$NetworkDiagnostics,
+    [string]$NetworkDiagnosticsPath = "",
+    [switch]$SkipNetworkDiagnosticsAnalysis,
+    [switch]$SkipMatrixSupplementalViews,
+    [switch]$Fast,
     [switch]$KeepBrowserOpen,
-    [switch]$CloseBrowser
+    [switch]$CloseBrowser,
+    [switch]$SkipAutoLogin,
+    [switch]$ApiOnly,
+    [string]$ApiStartUrl = "https://cmegroup-sso.quikstrike.net/User/QuikStrikeView.aspx?pid=40&pf=6",
+    [string]$EnvFile = ".env",
+    [int]$AutoLoginWaitSeconds = 90
 )
 
 $ErrorActionPreference = "Stop"
@@ -29,7 +39,7 @@ function New-DefaultRunnerConfig {
         [string]$DefaultProfilePath,
         [string]$DefaultProfileDirectory,
         [int]$DefaultWaitSeconds,
-        [int]$DefaultPollSeconds
+        [double]$DefaultPollSeconds
     )
     if (Test-Path -LiteralPath $Path) {
         return
@@ -243,8 +253,40 @@ if (-not $PSBoundParameters.ContainsKey("ProfileDirectory") -and $runnerConfig.C
 if (-not $PSBoundParameters.ContainsKey("WaitSeconds") -and $runnerConfig.ContainsKey("QUIKSTRIKE_WAIT_SECONDS")) {
     $WaitSeconds = [int]$runnerConfig["QUIKSTRIKE_WAIT_SECONDS"]
 }
-if (-not $PSBoundParameters.ContainsKey("PollSeconds") -and $runnerConfig.ContainsKey("QUIKSTRIKE_POLL_SECONDS")) {
-    $PollSeconds = [int]$runnerConfig["QUIKSTRIKE_POLL_SECONDS"]
+if ($PSBoundParameters.ContainsKey("PollSeconds")) {
+    $PollSeconds = [Math]::Max(0.1, $PollSeconds)
+}
+else {
+    $PollSeconds = 0.5
+}
+
+if ($Fast) {
+    if (-not $PSBoundParameters.ContainsKey("WaitSeconds")) {
+        $WaitSeconds = 180
+    }
+    if (-not $PSBoundParameters.ContainsKey("PollSeconds")) {
+        $PollSeconds = 0.5
+    }
+    $KeepBrowserOpen = $true
+}
+
+if ($ApiOnly) {
+    Write-Host "Running QuikStrike API-only WebForms fetch:"
+    Write-Host "  Env file: $EnvFile"
+    Write-Host "  Start URL: $ApiStartUrl"
+    Push-Location $backendDir
+    try {
+        python scripts/quikstrike_webforms_normalize.py `
+            --env-file $EnvFile `
+            --start-url $ApiStartUrl
+        if ($LASTEXITCODE -ne 0) {
+            throw "QuikStrike API-only WebForms fetch failed."
+        }
+    }
+    finally {
+        Pop-Location
+    }
+    return
 }
 
 Assert-ProfilePathOutsideRepo -Path $ProfilePath -RepoRoot $repoRoot
@@ -258,8 +300,28 @@ if ($ProfileDirectory) {
     Write-Host "Using Edge profile directory:"
     Write-Host "  $ProfileDirectory"
 }
+if ($Fast) {
+    Write-Host "Fast mode enabled:"
+    Write-Host "  wait seconds: $WaitSeconds"
+    Write-Host "  poll seconds: $PollSeconds"
+    Write-Host "  browser will remain open for session reuse"
+}
+if ($NetworkDiagnostics -or $NetworkDiagnosticsPath) {
+    if (-not $NetworkDiagnosticsPath) {
+        $networkDiagTimestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+        $NetworkDiagnosticsPath = Join-Path `
+            (Join-Path $backendDir "data\reports\quikstrike_network_diag") `
+            "network_diag_$networkDiagTimestamp.json"
+    }
+    $NetworkDiagnosticsPath = Resolve-LocalPath -Path $NetworkDiagnosticsPath -BasePath $repoRoot
+    Write-Host "Sanitized browser network diagnostics enabled:"
+    Write-Host "  $NetworkDiagnosticsPath"
+    Write-Host "  Stores host/path/query-key/resource timing metadata only; no HAR, headers, cookies, bodies, full URLs, screenshots, or viewstate."
+}
 
-if (-not $SkipBrowserLaunch -and -not (Test-CdpPort -Port $CdpPort)) {
+$hadExistingCdp = Test-CdpPort -Port $CdpPort
+
+if (-not $SkipBrowserLaunch -and -not $hadExistingCdp) {
     if ($isSharedEdgeProfile -and @(Get-BrowserProfileProcesses -ProfilePath $ProfilePath).Count) {
         throw (
             "The normal Edge profile is already open without local CDP on port $CdpPort. " +
@@ -292,12 +354,25 @@ if (-not $SkipBrowserLaunch -and -not (Test-CdpPort -Port $CdpPort)) {
     Write-Host "Opened $Browser with local CDP on port $CdpPort and non-sync profile:"
     Write-Host "  $ProfilePath"
 }
-elseif (Test-CdpPort -Port $CdpPort) {
+elseif ($hadExistingCdp) {
     Write-Host "Reusing existing local CDP browser on port $CdpPort."
 }
 
 Push-Location $backendDir
 try {
+    if (-not $SkipAutoLogin) {
+        Write-Host "Running normal browser auto-login from local environment settings."
+        Write-Host "  Env file: $EnvFile"
+        python scripts/quikstrike_browser_login.py `
+            --cdp-url "http://127.0.0.1:$CdpPort" `
+            --start-url $StartUrl `
+            --env-file $EnvFile `
+            --wait-seconds $AutoLoginWaitSeconds
+        if ($LASTEXITCODE -ne 0) {
+            throw "QuikStrike browser auto-login did not reach an authenticated page."
+        }
+    }
+
     $pythonArgs = @(
         "scripts/xau_daily_quikstrike_snapshot.py",
         "--cdp-url", "http://127.0.0.1:$CdpPort",
@@ -325,6 +400,15 @@ try {
     if ($RealizedVolatility -gt 0) {
         $pythonArgs += @("--realized-volatility", "$RealizedVolatility")
     }
+    if ($NetworkDiagnostics -or $NetworkDiagnosticsPath) {
+        $pythonArgs += @("--network-diagnostics-path", $NetworkDiagnosticsPath)
+        if (-not $SkipNetworkDiagnosticsAnalysis) {
+            $pythonArgs += @("--network-diagnostics-analyze")
+        }
+    }
+    if ($SkipMatrixSupplementalViews) {
+        $pythonArgs += @("--skip-matrix-supplemental-views")
+    }
     python @pythonArgs
 }
 finally {
@@ -335,13 +419,16 @@ finally {
     elseif ($isSharedEdgeProfile -and -not $SkipBrowserLaunch) {
         Write-Host "Leaving normal Edge profile open to avoid closing your working browser."
     }
-    elseif (-not $SkipBrowserLaunch -and -not $KeepBrowserOpen) {
-        Stop-QuikStrikeBrowser -Port $CdpPort -ProfilePath $ProfilePath
+    elseif ($hadExistingCdp -and -not $CloseBrowser) {
+        Write-Host "Leaving browser open because an existing CDP session was reused."
     }
     elseif ($SkipBrowserLaunch) {
         Write-Host "Leaving browser open because -SkipBrowserLaunch was used."
     }
     elseif ($KeepBrowserOpen) {
         Write-Host "Leaving browser open because -KeepBrowserOpen was used."
+    }
+    elseif (-not $SkipBrowserLaunch) {
+        Write-Host "Leaving browser open for session reuse. Use -CloseBrowser to close it."
     }
 }

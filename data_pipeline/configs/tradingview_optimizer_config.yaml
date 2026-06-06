@@ -1,0 +1,130 @@
+data:
+  input_path: data/processed/xauusd_m15_2024_to_now.parquet
+  reports_dir: data/reports/tradingview_optimizer
+  symbol: XAUUSD
+  timeframe: 15m
+  inputs:
+    - timeframe: m15
+      input_path: data/processed/xauusd_m15_2024_to_now.parquet
+    - timeframe: m30
+      input_path: data/processed/xauusd_m30_2024_to_now.parquet
+    - timeframe: h1
+      input_path: data/processed/xauusd_h1_2024_to_now.parquet
+    - timeframe: h2
+      input_path: data/processed/xauusd_h2_2024_to_now.parquet
+
+execution:
+  initial_cash: 100000
+  fixed_qty: 1.0
+  size_mode: risk
+  risk_per_trade_pct: 0.35
+  max_notional_pct: 10.0
+  point_value: 1.0
+  min_risk_unit: 0.01
+  entry_timing: next_open
+  use_spread: true
+  stop_first_when_ambiguous: true
+
+fees:
+  exchange: bybit
+  order_fee_mode: maker_taker
+  bybit_maker_fee_pct: 0.020
+  bybit_taker_fee_pct: 0.055
+  mexc_maker_fee_pct: 0.000
+  mexc_taker_fee_pct: 0.040
+  custom_maker_fee_pct: 0.020
+  custom_taker_fee_pct: 0.055
+  slippage_pct_per_side: 0.010
+  expected_funding_pct: 0.000
+  impact_gamma_bps: 0.000
+  impact_notional_usd: 0.000
+  venue_adv_notional_usd: 1000000000
+  volatility_slippage_atr_mult: 0.000
+
+robustness:
+  enabled: true
+  require_validation_net_pnl_positive: true
+  require_validation_profit_factor: 1.0
+  require_test_net_pnl_positive: false
+  fee_scenarios:
+    - name: worst_case_taker
+      exchange: custom
+      order_fee_mode: taker_taker
+      custom_maker_fee_pct: 0.055
+      custom_taker_fee_pct: 0.075
+      slippage_pct_per_side: 0.030
+      expected_funding_pct: 0.010
+
+walk_forward:
+  train_start: "2024-01-01T00:00:00Z"
+  train_end: "2025-01-01T00:00:00Z"
+  validation_start: "2025-01-01T00:00:00Z"
+  validation_end: "2026-01-01T00:00:00Z"
+  test_start: "2026-01-01T00:00:00Z"
+
+search:
+  mode: random
+  iterations: 250
+  seed: 42
+  top_n: 20
+  # 0 means auto: use CPU count minus one. Override with --workers N.
+  max_workers: 0
+
+reject:
+  min_validation_net_pnl: 0
+  min_trades_per_year: 80
+  max_trades_per_year: 300
+  preferred_trades_per_year: 160
+  min_validation_profit_factor: 1.05
+  min_avg_win_loss: 1.30
+  max_commission_to_gross_profit: 0.40
+
+fixed: {}
+
+parameters:
+  entryStrictness: [balanced_quality, conservative]
+  tradeMode: [auto, don_only, sd_only]
+  allowLongs: [true]
+  allowShorts: [false]
+  entrySd: [0.90, 1.50]
+  stopSd: [2.40, 4.20]
+  noTradeSd: [0.35, 0.75]
+  useDynamicNoPlay: [true]
+  costNoPlayK: [0.15, 0.45]
+  volNoPlayK: [0.05, 0.25]
+  maxNoPlaySd: [0.75, 1.25]
+  mrMinScoreLong: [3.5, 5.0]
+  mrMinScoreShort: [4.5, 6.0]
+  breakoutMinScore: [4.0, 6.0]
+  cooldownBars: [4, 16]
+  donFastLen: [12, 28]
+  donSlowLen: [34, 80]
+  minFeeMultipleForTP: [4.0, 6.0]
+  minAtrRewardMult: [0.15, 0.60]
+  brkTp1R: [1.20, 1.75]
+  brkRunnerR: [3.0, 4.5]
+  mrMaxBars: [4, 16]
+  brkMaxBars: [24, 72]
+  gridSdLen: [20, 120]
+  exitAtrLen: [7, 35]
+  atrStopMult: [1.5, 4.0]
+  brkTp1Qty: [40.0, 60.0]
+  mrTp1Qty: [25.0, 100.0]
+  mrUseTp2: [true, false]
+  moveStopToBreakevenAfterTp1: [true, false]
+  softMajorityPct: [0.45, 0.60]
+  majorityPct: [0.50, 0.65]
+  regimeDiLen: [7, 28]
+  regimeAdxSmooth: [7, 28]
+  regimeAdxLevel: [10.0, 32.0]
+  regimeAtrLen: [7, 28]
+  atrBaseLen: [7, 35]
+  regimeAtrRatioLevel: [0.75, 1.35]
+  maxAdxForMeanReversion: [25.0, 55.0]
+  softMaxAdxForMR: [30.0, 60.0]
+  sweepLookback: [8, 50]
+  maLen: [20, 120]
+  rsiLen: [7, 28]
+  macdFastLen: [6, 18]
+  macdSlowLen: [18, 40]
+  macdSignalLen: [5, 18]

@@ -9,6 +9,7 @@ from typing import Any
 from pydantic import Field, field_validator, model_validator
 
 from src.models.backtest import StrictModel, _normalize_guardrail_key
+from src.models.xau import XauExpectedRangeSnapshot
 
 SAFE_XAU_FUSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 XAU_FUSION_RESEARCH_ONLY_WARNING = (
@@ -630,6 +631,7 @@ class XauQuikStrikeFusionReport(XauFusionBaseModel):
     coverage: XauFusionCoverageSummary | None = None
     context_summary: XauFusionContextSummary | None = None
     basis_state: XauFusionBasisState | None = None
+    expected_range_snapshot: XauExpectedRangeSnapshot | None = None
     fused_row_count: int = Field(ge=0)
     xau_vol_oi_input_row_count: int = Field(default=0, ge=0)
     fused_rows: list[XauFusionRow] = Field(default_factory=list)

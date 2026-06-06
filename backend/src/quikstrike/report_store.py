@@ -63,6 +63,7 @@ class QuikStrikeReportStore:
         normalized_rows: list[QuikStrikeNormalizedRow],
         conversion_result: QuikStrikeConversionResult | None = None,
         conversion_rows: list[QuikStrikeXauVolOiRow] | None = None,
+        range_bands_payload: dict[str, Any] | None = None,
         source_kind: str | None = None,
         overwrite_allowed: bool = False,
     ) -> QuikStrikeExtractionReport:
@@ -83,6 +84,7 @@ class QuikStrikeReportStore:
         metadata_path = report_dir / "metadata.json"
         normalized_rows_path = report_dir / "normalized_rows.json"
         conversion_rows_path = report_dir / "conversion_rows.json"
+        range_bands_path = report_dir / "range_bands.json"
         artifact_metadata_path = report_dir / "artifact_metadata.json"
         report_json_path = report_dir / "report.json"
         report_markdown_path = report_dir / "report.md"
@@ -124,6 +126,15 @@ class QuikStrikeReportStore:
                     rows=len(conversion_rows),
                 )
             )
+        if range_bands_payload is not None:
+            artifacts.append(
+                self.artifact(
+                    artifact_type=QuikStrikeArtifactType.RANGE_BANDS_JSON,
+                    path=range_bands_path,
+                    artifact_format=QuikStrikeArtifactFormat.JSON,
+                    rows=len(range_bands_payload.get("views", [])),
+                )
+            )
         report = QuikStrikeExtractionReport(
             extraction_id=extraction_result.extraction_id,
             source_kind=normalized_source_kind,
@@ -151,6 +162,8 @@ class QuikStrikeReportStore:
                 conversion_rows_path,
                 [row.model_dump(mode="json") for row in conversion_rows],
             )
+        if range_bands_payload is not None:
+            self._write_json(range_bands_path, range_bands_payload)
         self._write_json(
             artifact_metadata_path,
             [artifact.model_dump(mode="json") for artifact in report.artifacts],

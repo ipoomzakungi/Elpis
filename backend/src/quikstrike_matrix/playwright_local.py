@@ -45,6 +45,16 @@ MATRIX_VIEW_CLICK_LABELS = {
     QuikStrikeMatrixViewType.VOLUME_MATRIX: ("Volume Matrix", "Volume"),
 }
 
+SUPPLEMENTAL_VIEW_CLICK_LABELS = {
+    "settlements": ("Settlements",),
+    "futures_volume_oi": ("Volume & OI",),
+}
+
+SUPPLEMENTAL_VIEW_LINK_SELECTORS = {
+    "settlements": "#MainContent_ucViewControl_OpenInterestV2_lbSettles",
+    "futures_volume_oi": "#MainContent_ucViewControl_OpenInterestV2_lbFutureOI",
+}
+
 MATRIX_VIEW_LINK_SELECTORS = {
     QuikStrikeMatrixViewType.OPEN_INTEREST_MATRIX: (
         "#MainContent_ucViewControl_OpenInterestV2_lbOIMatrix"
@@ -134,6 +144,54 @@ class QuikStrikeMatrixCdpConnectionError(RuntimeError):
     """Raised when the user-controlled browser debugging endpoint is unavailable."""
 
 
+def collect_supplemental_views_from_cdp(
+    *,
+    cdp_url: str = DEFAULT_CDP_URL,
+    views: Sequence[str] | None = None,
+    wait_seconds: int = 600,
+    poll_seconds: float = 0.5,
+) -> dict[str, Mapping[str, Any]]:
+    """Collect sanitized non-heatmap Matrix side-nav views.
+
+    These payloads are persisted only as supplemental research artifacts. They
+    are not converted into XAU Vol-OI rows because their table layouts differ
+    from the strike/expiration heatmap parser.
+    """
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError as exc:  # pragma: no cover - exercised without optional dep
+        raise QuikStrikeMatrixPlaywrightUnavailableError(
+            "Install the optional browser dependency with: pip install -e .[browser]"
+        ) from exc
+
+    normalized_views = _normalize_supplemental_views(views)
+    payloads: dict[str, Mapping[str, Any]] = {}
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.connect_over_cdp(cdp_url)
+        except Exception as exc:
+            raise QuikStrikeMatrixCdpConnectionError(
+                "Could not connect to the local browser debugging endpoint for "
+                "Matrix supplemental views."
+            ) from exc
+        page = _wait_for_gold_matrix_page(
+            browser,
+            wait_seconds=wait_seconds,
+            poll_seconds=poll_seconds,
+            auto_prepare=False,
+        )
+        if page is None:
+            raise QuikStrikeMatrixBrowserPageNotReadyError(
+                "Timed out waiting for authenticated QuikStrike Gold Matrix page "
+                "before collecting supplemental views."
+            )
+        for view in normalized_views:
+            _click_supplemental_view(page, view)
+            payloads[view] = collect_sanitized_page_payload(page)
+    return payloads
+
+
 def extract_from_cdp(
     *,
     cdp_url: str = DEFAULT_CDP_URL,
@@ -143,7 +201,7 @@ def extract_from_cdp(
     auto_prepare: bool = False,
     view_prompt: Callable[[QuikStrikeMatrixViewType], None] | None = None,
     wait_seconds: int = 600,
-    poll_seconds: int = 5,
+    poll_seconds: float = 0.5,
     store: QuikStrikeMatrixReportStore | None = None,
 ) -> QuikStrikeMatrixBrowserExtraction:
     """Attach to a user-controlled browser and persist a sanitized Matrix report."""
@@ -231,7 +289,7 @@ def build_manual_request_from_page(
     views: Sequence[QuikStrikeMatrixViewType | str] | None = None,
     *,
     wait_seconds: int = 600,
-    poll_seconds: int = 5,
+    poll_seconds: float = 0.5,
 ) -> QuikStrikeMatrixExtractionRequest:
     """Wait for each Matrix view to be manually selected, then collect payloads."""
 
@@ -363,10 +421,10 @@ def _wait_for_manual_view(
     view: QuikStrikeMatrixViewType,
     *,
     wait_seconds: int,
-    poll_seconds: int,
+    poll_seconds: float,
 ) -> Mapping[str, Any]:
     deadline = time.monotonic() + max(wait_seconds, 1)
-    poll_ms = max(poll_seconds, 1) * 1000
+    poll_ms = int(max(poll_seconds, 0.1) * 1000)
     while time.monotonic() < deadline:
         if _page_payload_matches_view(page, view):
             return collect_sanitized_page_payload(page)
@@ -377,6 +435,8 @@ def _wait_for_manual_view(
 
 
 def _page_payload_matches_view(page: Any, view: QuikStrikeMatrixViewType) -> bool:
+    if not _active_matrix_view_matches(page, view):
+        return False
     try:
         payload = collect_sanitized_page_payload(page)
         select_matrix_table_payload(payload.get("tables"), view)
@@ -395,6 +455,26 @@ def _page_payload_matches_view(page: Any, view: QuikStrikeMatrixViewType) -> boo
     return any(token in page_text for token in MATRIX_VIEW_TOKENS[view])
 
 
+def _active_matrix_view_matches(page: Any, view: QuikStrikeMatrixViewType) -> bool:
+    try:
+        return bool(
+            page.evaluate(
+                """
+                (selector) => {
+                  const item = document.querySelector(selector);
+                  const parent = item && item.parentElement;
+                  return Boolean(
+                    parent && String(parent.className || "").includes("ui-state-active")
+                  );
+                }
+                """,
+                MATRIX_VIEW_LINK_SELECTORS[view],
+            )
+        )
+    except Exception:
+        return False
+
+
 def _find_gold_matrix_page(browser: Any) -> Any:
     for context in browser.contexts:
         for page in context.pages:
@@ -410,11 +490,11 @@ def _wait_for_gold_matrix_page(
     browser: Any,
     *,
     wait_seconds: int,
-    poll_seconds: int,
+    poll_seconds: float,
     auto_prepare: bool,
 ) -> Any | None:
     deadline = time.monotonic() + max(wait_seconds, 1)
-    poll_ms = max(poll_seconds, 1) * 1000
+    poll_ms = int(max(poll_seconds, 0.1) * 1000)
     last_page = None
     while time.monotonic() < deadline:
         for context in browser.contexts:
@@ -425,9 +505,12 @@ def _wait_for_gold_matrix_page(
         if auto_prepare:
             _prepare_gold_matrix_from_quikstrike_page(browser)
         if last_page is not None:
-            last_page.wait_for_timeout(poll_ms)
+            try:
+                last_page.wait_for_timeout(poll_ms)
+            except Exception:
+                time.sleep(max(poll_seconds, 0.1))
         else:
-            time.sleep(max(poll_seconds, 1))
+            time.sleep(max(poll_seconds, 0.1))
     return None
 
 
@@ -445,8 +528,9 @@ def _prepare_gold_matrix_from_quikstrike_page(browser: Any) -> None:
             if page_has_gold_matrix_table(page):
                 return
             if not _page_text_matches_any(page, ("Open Interest Chart", "Heatmap", "Matrix")):
-                _click_selector(page, OPEN_INTEREST_NAV_SELECTOR)
-                page.wait_for_timeout(2500)
+                if not _click_selector(page, OPEN_INTEREST_NAV_SELECTOR):
+                    _click_visible_text(page, "OPEN INTEREST")
+                page.wait_for_timeout(750)
             try:
                 _click_view(page, QuikStrikeMatrixViewType.OPEN_INTEREST_MATRIX)
             except QuikStrikeMatrixBrowserPageNotReadyError:
@@ -470,14 +554,71 @@ def _click_view(page: Any, view: QuikStrikeMatrixViewType) -> None:
     )
 
 
+def _click_supplemental_view(page: Any, view: str) -> None:
+    if _click_selector(page, SUPPLEMENTAL_VIEW_LINK_SELECTORS[view]):
+        page.wait_for_timeout(500)
+        return
+    labels = SUPPLEMENTAL_VIEW_CLICK_LABELS[view]
+    for label in labels:
+        if _click_visible_text(page, label):
+            page.wait_for_timeout(500)
+            return
+        try:
+            page.get_by_text(label, exact=True).click(timeout=1500)
+            page.wait_for_timeout(500)
+            return
+        except Exception:
+            continue
+    raise QuikStrikeMatrixBrowserPageNotReadyError(
+        f"Could not click Matrix supplemental view {view}."
+    )
+
+
+def _click_visible_text(page: Any, label: str) -> bool:
+    try:
+        return bool(
+            page.evaluate(
+                """
+                (label) => {
+                  const clean = (value) => String(value || "").replace(/\\s+/g, " ").trim();
+                  const visible = (node) => {
+                    const style = window.getComputedStyle(node);
+                    const rect = node.getBoundingClientRect();
+                    return style && style.visibility !== "hidden" && style.display !== "none"
+                      && rect.width > 0 && rect.height > 0;
+                  };
+                  const target = clean(label).toLowerCase();
+                  const nodes = Array.from(document.querySelectorAll("a,button,span,div,li"));
+                  const exact = nodes.find((node) => (
+                    clean(node.innerText || node.textContent).toLowerCase() === target
+                    && visible(node)
+                  ));
+                  if (exact) {
+                    exact.click();
+                    return true;
+                  }
+                  const partial = nodes.find((node) => {
+                    const text = clean(node.innerText || node.textContent);
+                    return text.length <= 80 && text.toLowerCase().includes(target)
+                      && visible(node);
+                  });
+                  if (!partial) return false;
+                  partial.click();
+                  return true;
+                }
+                """,
+                label,
+            )
+        )
+    except Exception:
+        return False
+
+
 def _click_selector(page: Any, selector: str) -> bool:
     try:
-        locator = page.locator(selector)
-        box = locator.bounding_box(timeout=3000)
-        if box:
-            page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
-            page.wait_for_timeout(1000)
-            return True
+        page.locator(selector).click(timeout=3000)
+        page.wait_for_timeout(250)
+        return True
     except Exception:
         pass
     try:
@@ -502,8 +643,8 @@ def _wait_for_view_match(
     page: Any,
     view: QuikStrikeMatrixViewType,
     *,
-    timeout_ms: int = 10000,
-    poll_ms: int = 500,
+    timeout_ms: int = 30000,
+    poll_ms: int = 75,
 ) -> bool:
     deadline = time.monotonic() + (timeout_ms / 1000)
     while time.monotonic() < deadline:
@@ -541,6 +682,18 @@ def _normalize_views(
             QuikStrikeMatrixViewType.VOLUME_MATRIX,
         ]
     return [QuikStrikeMatrixViewType(view) for view in views]
+
+
+def _normalize_supplemental_views(views: Sequence[str] | None) -> list[str]:
+    if not views:
+        return list(SUPPLEMENTAL_VIEW_CLICK_LABELS)
+    normalized = []
+    for view in views:
+        key = str(view).strip().lower().replace("-", "_")
+        if key not in SUPPLEMENTAL_VIEW_CLICK_LABELS:
+            raise ValueError(f"unsupported Matrix supplemental view: {view}")
+        normalized.append(key)
+    return list(dict.fromkeys(normalized))
 
 
 def _required_text(payload: Mapping[str, Any], key: str) -> str:

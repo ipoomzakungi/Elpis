@@ -1,0 +1,7 @@
+symbol,interval,trades_per_day,commission_per_trade,commission_total,gross_pnl_before_cost,net_pnl_after_cost,fee_drag_ratio,lowering_gridSdLen_increases_trades_and_fees,recommendation
+GC=F,15m,0.5581,4.5,108.0,23.62,-84.38,4.5724,True,DO_NOT_LOWER_GRID
+GC=F,30m,0.2857,4.5,27.0,-77.44,-104.44,0.3487,True,DO_NOT_LOWER_GRID
+GC=F,1h,0.4646,4.5,1800.0,1054.47,-745.53,1.707,True,DO_NOT_LOWER_GRID
+GC=F,4h,0.0441,4.5,171.0,1111.65,940.65,0.1538,True,TEST_GRID_WITH_FILTERS_ONLY
+GC=F,1d,0.0302,4.5,265.5,1213.2,947.7,0.2188,True,TEST_GRID_WITH_FILTERS_ONLY
+GLD,1d,0.0246,0.25,34.75,-346.91,-381.66,0.1002,True,TEST_GRID_WITH_FILTERS_ONLY

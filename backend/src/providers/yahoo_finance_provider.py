@@ -25,7 +25,7 @@ class YahooFinanceProvider:
     name = "yahoo_finance"
     display_name = "Yahoo Finance"
     default_symbol = "SPY"
-    supported_timeframes = ["1d", "1h"]
+    supported_timeframes = ["1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h", "1d"]
     unsupported_open_interest_reason = (
         "Yahoo Finance does not provide open interest for this research layer"
     )
@@ -91,6 +91,28 @@ class YahooFinanceProvider:
                 supports_open_interest=False,
                 supports_funding_rate=False,
                 notes=["Yahoo Finance futures proxy OHLCV only"],
+            ),
+            ProviderSymbol(
+                symbol="XAUUSD=X",
+                display_name="XAU/USD Yahoo Reference",
+                asset_class="spot_reference",
+                supports_ohlcv=True,
+                supports_open_interest=False,
+                supports_funding_rate=False,
+                notes=[
+                    "Yahoo OHLCV reference if available; validate coverage before use"
+                ],
+            ),
+            ProviderSymbol(
+                symbol="GLD",
+                display_name="SPDR Gold Shares ETF Proxy",
+                asset_class="etf_proxy",
+                supports_ohlcv=True,
+                supports_open_interest=False,
+                supports_funding_rate=False,
+                notes=[
+                    "PROXY_ONLY research symbol; not true XAU/USD spot or CME options OI"
+                ],
             ),
             ProviderSymbol(
                 symbol="BTC-USD",

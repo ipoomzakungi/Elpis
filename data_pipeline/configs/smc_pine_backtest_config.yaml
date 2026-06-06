@@ -1,0 +1,40 @@
+data:
+  reports_dir: data/reports/smc_pine_backtest
+  inputs:
+    - timeframe: m15
+      input_path: data/processed/xauusd_m15_2024_to_now.parquet
+    - timeframe: m30
+      input_path: data/processed/xauusd_m30_2024_to_now.parquet
+    - timeframe: h1
+      input_path: data/processed/xauusd_h1_2024_to_now.parquet
+    - timeframe: h2
+      input_path: data/processed/xauusd_h2_2024_to_now.parquet
+
+execution:
+  initial_cash: 10000
+  risk_per_trade_pct: 0.50
+  point_value: 1.0
+  point_size: 0.01
+  slippage_points: 5
+  use_spread: true
+  stop_first_when_ambiguous: true
+  allow_longs: true
+  allow_shorts: true
+
+walk_forward:
+  train_start: "2024-01-01T00:00:00Z"
+  train_end: "2025-01-01T00:00:00Z"
+  validation_start: "2025-01-01T00:00:00Z"
+  validation_end: "2026-01-01T00:00:00Z"
+  test_start: "2026-01-01T00:00:00Z"
+
+reject:
+  min_validation_net_pnl: 0
+  min_validation_profit_factor: 1.05
+  min_validation_trades: 20
+  require_train_net_pnl_positive: true
+  require_test_net_pnl_positive: false
+
+parameters:
+  pivot_len_swing: [3, 15]
+  rr_ratio: [1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0]

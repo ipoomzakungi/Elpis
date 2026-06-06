@@ -22,6 +22,10 @@ from src.quikstrike.conversion import convert_to_xau_vol_oi_rows
 from src.quikstrike.dom_metadata import parse_dom_metadata
 from src.quikstrike.extraction import build_extraction_from_request
 from src.quikstrike.highcharts_reader import parse_highcharts_chart
+from src.quikstrike.range_bands import (
+    build_range_bands_payload,
+    range_bands_payload_has_data,
+)
 from src.quikstrike.report_store import QuikStrikeReportStore
 
 DEFAULT_CDP_URL = "http://127.0.0.1:9222"
@@ -153,7 +157,7 @@ def extract_from_cdp(
     views: Sequence[QuikStrikeViewType | str] | None = None,
     drive_views: bool = False,
     wait_seconds: int = 600,
-    poll_seconds: int = 5,
+    poll_seconds: float = 0.5,
     auto_prepare: bool = False,
     target_url: str = DEFAULT_TARGET_URL,
     debug_page_state: bool = False,
@@ -206,11 +210,19 @@ def extract_from_cdp(
         extraction_result=extraction.result,
         rows=extraction.rows,
     )
+    range_bands_payload = build_range_bands_payload(
+        extraction_id=extraction.result.extraction_id,
+        request=request,
+        created_at=extraction.result.created_at,
+    )
     report = (store or QuikStrikeReportStore()).persist_report(
         extraction_result=extraction.result,
         normalized_rows=extraction.rows,
         conversion_result=conversion.result,
         conversion_rows=conversion.rows,
+        range_bands_payload=range_bands_payload
+        if range_bands_payload_has_data(range_bands_payload)
+        else None,
     )
     return QuikStrikeBrowserExtraction(report=report, request=request)
 
@@ -223,7 +235,7 @@ def extract_from_launched_browser(
     drive_views: bool = False,
     manual_views: bool = False,
     wait_seconds: int = 600,
-    poll_seconds: int = 5,
+    poll_seconds: float = 0.5,
     headless: bool = False,
     channel: str | None = "chrome",
     debug_page_state: bool = False,
@@ -296,11 +308,19 @@ def extract_from_launched_browser(
         extraction_result=extraction.result,
         rows=extraction.rows,
     )
+    range_bands_payload = build_range_bands_payload(
+        extraction_id=extraction.result.extraction_id,
+        request=request,
+        created_at=extraction.result.created_at,
+    )
     report = (store or QuikStrikeReportStore()).persist_report(
         extraction_result=extraction.result,
         normalized_rows=extraction.rows,
         conversion_result=conversion.result,
         conversion_rows=conversion.rows,
+        range_bands_payload=range_bands_payload
+        if range_bands_payload_has_data(range_bands_payload)
+        else None,
     )
     return QuikStrikeBrowserExtraction(report=report, request=request)
 
@@ -327,7 +347,7 @@ def build_manual_request_from_page(
     views: Sequence[QuikStrikeViewType | str] | None = None,
     *,
     wait_seconds: int = 600,
-    poll_seconds: int = 5,
+    poll_seconds: float = 0.5,
 ) -> QuikStrikeExtractionRequest:
     """Wait for each view to be manually selected, then collect sanitized payloads."""
 
@@ -381,10 +401,10 @@ def _wait_for_manual_view(
     view: QuikStrikeViewType,
     *,
     wait_seconds: int,
-    poll_seconds: int,
+    poll_seconds: float,
 ) -> Mapping[str, Any]:
     deadline = time.monotonic() + max(wait_seconds, 1)
-    poll_ms = max(poll_seconds, 1) * 1000
+    poll_ms = int(max(poll_seconds, 0.1) * 1000)
     while time.monotonic() < deadline:
         if _page_payload_matches_view(page, view):
             return collect_sanitized_page_payload(page)
@@ -460,13 +480,13 @@ def _wait_for_gold_vol2vol_page(
     browser: Any,
     *,
     wait_seconds: int,
-    poll_seconds: int,
+    poll_seconds: float,
     target_url: str,
     auto_prepare: bool,
     debug_page_state: bool,
 ) -> Any | None:
     deadline = time.monotonic() + max(wait_seconds, 1)
-    poll_ms = max(poll_seconds, 1) * 1000
+    poll_ms = int(max(poll_seconds, 0.1) * 1000)
     last_page = None
     while time.monotonic() < deadline:
         for context in browser.contexts:
@@ -491,9 +511,12 @@ def _wait_for_gold_vol2vol_page(
         elif debug_page_state and last_page is not None:
             _print_page_state(last_page, "waiting_manual")
         if last_page is not None:
-            last_page.wait_for_timeout(poll_ms)
+            try:
+                last_page.wait_for_timeout(poll_ms)
+            except Exception:
+                time.sleep(max(poll_seconds, 0.1))
         else:
-            time.sleep(max(poll_seconds, 1))
+            time.sleep(max(poll_seconds, 0.1))
     return None
 
 
@@ -598,7 +621,29 @@ def _visible_debug_labels(page: Any) -> list[str]:
 
 
 def _page_is_vol2vol_surface(page: Any) -> bool:
-    return _page_text_matches_any(page, ("QUIKOPTIONS VOL2VOL", "Vol2Vol", "VOL2VOL"))
+    try:
+        result = page.evaluate(
+            """
+            (viewSelectors) => {
+              if (viewSelectors.some((selector) => document.querySelector(selector))) {
+                return true;
+              }
+              return Array.from(document.querySelectorAll("[id*='QuikOptionsV2V']"))
+                .some((node) => {
+                  const style = window.getComputedStyle(node);
+                  const rect = node.getBoundingClientRect();
+                  return style.visibility !== "hidden"
+                    && style.display !== "none"
+                    && rect.width > 0
+                    && rect.height > 0;
+                });
+            }
+            """,
+            list(VIEW_LINK_SELECTORS.values()),
+        )
+    except Exception:
+        return False
+    return result is True
 
 
 def _click_quikoptions_vol2vol(page: Any) -> None:
@@ -772,6 +817,12 @@ def _click_product_selector_link(page: Any, selector: str) -> bool:
 
 def _click_exact_selector(page: Any, selector: str) -> bool:
     try:
+        page.locator(selector).click(timeout=3000)
+        page.wait_for_timeout(250)
+        return True
+    except Exception:
+        pass
+    try:
         return bool(
             page.evaluate(
                 """
@@ -852,7 +903,9 @@ def _continue_disclaimer_if_present(page: Any) -> bool:
                     'input[name="chkAccept"], input[type="checkbox"]'
                   );
                   if (checkbox && !checkbox.checked) {
-                    checkbox.checked = true;
+                    checkbox.click();
+                    if (!checkbox.checked) checkbox.checked = true;
+                    checkbox.dispatchEvent(new Event("input", { bubbles: true }));
                     checkbox.dispatchEvent(new Event("change", { bubbles: true }));
                   }
                   const submit = document.querySelector(
@@ -888,7 +941,7 @@ def _click_view(page: Any, view: QuikStrikeViewType) -> None:
             return
     parent_label, child_label = VIEW_MENU_PATHS[view]
     _click_visible_text(page, parent_label)
-    page.wait_for_timeout(500)
+    page.wait_for_timeout(250)
     clicked = _click_visible_text(page, child_label)
     if not clicked and child_label != VIEW_LINK_LABELS[view]:
         clicked = _click_visible_text(page, VIEW_LINK_LABELS[view])
@@ -961,7 +1014,7 @@ def _wait_for_view_match(
     view: QuikStrikeViewType,
     *,
     timeout_ms: int = 10000,
-    poll_ms: int = 500,
+    poll_ms: int = 75,
 ) -> bool:
     deadline = time.monotonic() + (timeout_ms / 1000)
     while time.monotonic() < deadline:

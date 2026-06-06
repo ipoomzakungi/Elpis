@@ -1,0 +1,929 @@
+//@version=6
+strategy("14-Indicator Status Dashboard Strategy", overlay = true, pyramiding = 3, initial_capital = 100000, default_qty_type = strategy.fixed, default_qty_value = 1, commission_type = strategy.commission.percent, commission_value = 0.05, slippage = 1, risk_free_rate = 2.0, margin_long = 100, margin_short = 100, process_orders_on_close = true, calc_on_order_fills = true, dynamic_requests = true)
+
+// Strategy declaration defaults above are realistic starting values.
+// TradingView requires commission, slippage, initial capital, pyramiding, and official risk_free_rate
+// to be set in strategy() or changed from Strategy Properties, not from runtime input values.
+
+// Status constants.
+STATUS_UP = "UP"
+STATUS_LOW = "LOW"
+STATUS_MID = "MID"
+STATUS_RANGE = "RANGE"
+STATUS_HIGH = "HIGH"
+SIGNAL_BUY = "BUY BIAS"
+SIGNAL_SELL = "SELL BIAS"
+
+SIZE_FIXED = "Fixed quantity"
+SIZE_PERCENT = "Percent of equity"
+EXIT_DON = "Donchian Bands"
+EXIT_ENV = "ENV Bands"
+EXIT_ATR = "ATR Multiple"
+GRID_SRC_DON = "Donchian Middle"
+GRID_SRC_SD = "SD Basis"
+GRID_SRC_EMA = "EMA"
+GRID_SRC_VWAP = "Session VWAP if available"
+CLOSE_CROSS = "Cross Middle"
+CLOSE_TOUCH = "Touch Middle"
+LADDER_LIMIT = "Limit Ladder"
+LADDER_REJECT = "Rejection Market"
+
+// Input groups.
+GROUP_VIS_LINES = "Visuals - Lines"
+GROUP_VIS_BANDS = "Visuals - Bands"
+GROUP_MA = "1) MA - EMA"
+GROUP_STO = "2) STO - Stochastic"
+GROUP_SAR = "3) SAR"
+GROUP_SD = "4) SD Bands"
+GROUP_ENV = "5) ENV Bands"
+GROUP_MACD = "6) MACD"
+GROUP_RSI = "7) RSI"
+GROUP_CCI = "8) CCI"
+GROUP_DON = "9) DON"
+GROUP_REGIME = "10) REGIME"
+GROUP_VPI = "11) VPI"
+GROUP_MTF = "12) MTF"
+GROUP_SWEEP = "13) SWEEP"
+GROUP_ADAPT = "14) ADAPT"
+GROUP_SIGNAL = "Summary And Signals"
+GROUP_STRATEGY = "Strategy Orders"
+GROUP_GRID = "Dynamic Grid Range Engine"
+GROUP_LADDER = "3-Level SD Ladder Grid"
+GROUP_CME = "Manual CME Walls"
+GROUP_PERF = "Performance Panel"
+
+// Default visuals match request: MA OFF, SAR OFF, SD OFF, ENV OFF, DON ON.
+showMA = input.bool(false, "MA line", group = GROUP_VIS_LINES)
+showSAR = input.bool(false, "SAR dots", group = GROUP_VIS_LINES)
+showSD = input.bool(false, "SD bands", group = GROUP_VIS_BANDS)
+showENV = input.bool(false, "ENV bands", group = GROUP_VIS_BANDS)
+showDON = input.bool(true, "DON bands", group = GROUP_VIS_BANDS)
+
+// Indicator inputs.
+maLen = input.int(50, "EMA length", minval = 1, group = GROUP_MA)
+
+stoLen = input.int(14, "Length", minval = 1, group = GROUP_STO)
+stoSmoothK = input.int(3, "K smoothing", minval = 1, group = GROUP_STO)
+stoSmoothD = input.int(3, "D smoothing", minval = 1, group = GROUP_STO)
+
+sarStart = input.float(0.02, "Start", minval = 0.001, step = 0.001, group = GROUP_SAR)
+sarInc = input.float(0.02, "Increment", minval = 0.001, step = 0.001, group = GROUP_SAR)
+sarMax = input.float(0.20, "Maximum", minval = 0.001, step = 0.01, group = GROUP_SAR)
+
+sdLen = input.int(20, "SMA length", minval = 1, group = GROUP_SD)
+sdMult = input.float(2.0, "Standard deviation multiplier", minval = 0.1, step = 0.1, group = GROUP_SD)
+sdZThreshold = input.float(0.5, "Status z threshold", minval = 0.0, step = 0.1, group = GROUP_SD)
+
+envLen = input.int(20, "SMA length", minval = 1, group = GROUP_ENV)
+envPct = input.float(1.0, "Envelope percent", minval = 0.01, step = 0.01, group = GROUP_ENV)
+
+macdFastLen = input.int(12, "Fast length", minval = 1, group = GROUP_MACD)
+macdSlowLen = input.int(26, "Slow length", minval = 1, group = GROUP_MACD)
+macdSignalLen = input.int(9, "Signal length", minval = 1, group = GROUP_MACD)
+
+rsiLen = input.int(14, "Length", minval = 1, group = GROUP_RSI)
+rsiUp = input.float(55.0, "UP threshold", step = 0.1, group = GROUP_RSI)
+rsiLow = input.float(45.0, "LOW threshold", step = 0.1, group = GROUP_RSI)
+
+cciLen = input.int(20, "Length", minval = 1, group = GROUP_CCI)
+cciUp = input.float(100.0, "UP threshold", step = 1.0, group = GROUP_CCI)
+cciLow = input.float(-100.0, "LOW threshold", step = 1.0, group = GROUP_CCI)
+
+donLen = input.int(20, "Length", minval = 1, group = GROUP_DON)
+
+regimeDiLen = input.int(14, "DI length", minval = 1, group = GROUP_REGIME)
+regimeAdxSmooth = input.int(14, "ADX smoothing", minval = 1, group = GROUP_REGIME)
+regimeAdxLevel = input.float(20.0, "ADX level", minval = 0.0, step = 0.5, group = GROUP_REGIME)
+regimeAtrLen = input.int(14, "ATR length", minval = 1, group = GROUP_REGIME)
+atrBaseLen = input.int(14, "ATR ratio baseline length", minval = 1, group = GROUP_REGIME)
+regimeAtrRatioLevel = input.float(1.0, "ATR ratio threshold", minval = 0.0, step = 0.05, group = GROUP_REGIME)
+
+vpiLen = input.int(20, "Length", minval = 1, group = GROUP_VPI)
+vpiSmooth = input.int(5, "Smoothing", minval = 1, group = GROUP_VPI)
+vpiUpper = input.float(0.10, "Upper threshold", step = 0.01, group = GROUP_VPI)
+vpiLower = input.float(-0.10, "Lower threshold", step = 0.01, group = GROUP_VPI)
+
+mtfTf = input.timeframe("1D", "Higher timeframe", group = GROUP_MTF)
+mtfStrongVotes = input.int(4, "Strong vote threshold", minval = 1, maxval = 4, group = GROUP_MTF)
+
+sweepLookback = input.int(20, "Lookback", minval = 2, group = GROUP_SWEEP)
+
+adaptSqueezeLen = input.int(50, "Squeeze length", minval = 2, group = GROUP_ADAPT)
+adaptBbMult = input.float(2.0, "Bollinger multiplier", minval = 0.1, step = 0.1, group = GROUP_ADAPT)
+adaptRatioLevel = input.float(0.8, "Width ratio threshold", minval = 0.01, step = 0.01, group = GROUP_ADAPT)
+adaptDonLen = input.int(50, "Donchian midpoint length", minval = 2, group = GROUP_ADAPT)
+
+summaryUpLevel = input.float(0.35, "Summary UP threshold", step = 0.01, group = GROUP_SIGNAL)
+summaryLowLevel = input.float(-0.35, "Summary LOW threshold", step = 0.01, group = GROUP_SIGNAL)
+summaryRangeLevel = input.float(0.10, "Summary RANGE absolute threshold", minval = 0.0, step = 0.01, group = GROUP_SIGNAL)
+signalBiasLevel = input.float(0.15, "Final bias threshold", minval = 0.0, step = 0.01, group = GROUP_SIGNAL)
+confirmedOnly = input.bool(true, "Confirm signals on bar close", group = GROUP_SIGNAL)
+
+cmeMode = input.string("Visual only", "CME mode", options = ["Off", "Visual only", "Strict filter"], group = GROUP_CME)
+cmeBasisAdjust = input.float(0.0, "Spot/futures level adjustment", step = 0.1, tooltip = "Add this to CME strike levels if your chart symbol trades above/below the CME futures reference.", group = GROUP_CME)
+cmeUpperWall1 = input.float(0.0, "Peak above 1", step = 0.1, group = GROUP_CME)
+cmeUpperWall2 = input.float(0.0, "Peak above 2", step = 0.1, group = GROUP_CME)
+cmeUpperWall3 = input.float(0.0, "Peak above 3", step = 0.1, group = GROUP_CME)
+cmeLowerWall1 = input.float(0.0, "Peak below 1", step = 0.1, group = GROUP_CME)
+cmeLowerWall2 = input.float(0.0, "Peak below 2", step = 0.1, group = GROUP_CME)
+cmeLowerWall3 = input.float(0.0, "Peak below 3", step = 0.1, group = GROUP_CME)
+cmeAcceptanceBars = input.int(2, "Acceptance bars", minval = 1, maxval = 10, group = GROUP_CME)
+cmeMaxDistance = input.float(0.0, "Max entry distance from filter wall (0 = off)", minval = 0.0, step = 0.1, group = GROUP_CME)
+
+executeOrders = input.bool(true, "Enable strategy orders", group = GROUP_STRATEGY)
+sizeMode = input.string(SIZE_PERCENT, "Position size mode", options = [SIZE_PERCENT, SIZE_FIXED], group = GROUP_STRATEGY)
+fixedQty = input.float(1.0, "Fixed quantity", minval = 0.0, step = 1.0, group = GROUP_STRATEGY)
+equityPct = input.float(10.0, "Percent of equity", minval = 0.1, maxval = 100.0, step = 0.1, group = GROUP_STRATEGY)
+requireBiasFilter = input.bool(false, "Require final bias for tactical entries", group = GROUP_STRATEGY)
+exitMode = input.string(EXIT_ATR, "Stop/target source", options = [EXIT_ATR, EXIT_DON, EXIT_ENV], group = GROUP_STRATEGY)
+exitAtrLen = input.int(14, "ATR exit length", minval = 1, group = GROUP_STRATEGY)
+atrStopMult = input.float(2.0, "ATR stop multiple", minval = 0.1, step = 0.1, group = GROUP_STRATEGY)
+atrTargetMult = input.float(3.0, "ATR target multiple", minval = 0.1, step = 0.1, group = GROUP_STRATEGY)
+
+enableGridEngine = input.bool(true, "Enable grid engine", group = GROUP_GRID)
+gridSource = input.string(GRID_SRC_DON, "Grid middle source", options = [GRID_SRC_DON, GRID_SRC_SD, GRID_SRC_EMA, GRID_SRC_VWAP], group = GROUP_GRID)
+gridSdLen = input.int(50, "Grid SD length", minval = 5, group = GROUP_GRID)
+entrySd = input.float(1.25, "Entry SD", step = 0.05, group = GROUP_GRID)
+stopSd = input.float(2.25, "Stop SD", step = 0.05, group = GROUP_GRID)
+noTradeSd = input.float(0.50, "No-trade SD", step = 0.05, group = GROUP_GRID)
+useTrendFilter = input.bool(true, "Use trend filter", group = GROUP_GRID)
+maxAdxForMeanReversion = input.float(25.0, "Max ADX for mean reversion", step = 0.5, group = GROUP_GRID)
+useSweepConfirmation = input.bool(true, "Use sweep confirmation", group = GROUP_GRID)
+closeAtMiddleMode = input.string(CLOSE_CROSS, "Close at middle mode", options = [CLOSE_CROSS, CLOSE_TOUCH], group = GROUP_GRID)
+useOneTradeOnly = input.bool(true, "One trade only", group = GROUP_GRID)
+allowFlipOnZoneBreak = input.bool(false, "Allow flip on zone break", group = GROUP_GRID)
+fixedGoldStopCapPoints = input.float(0.0, "Fixed gold stop cap points", minval = 0.0, step = 0.1, tooltip = "0 disables fixed cap; otherwise cap stop distance in XAUUSD points", group = GROUP_GRID)
+minBarsBetweenTrades = input.int(5, "Min bars between trades", minval = 0, group = GROUP_GRID)
+showGridLines = input.bool(true, "Show grid lines", group = GROUP_GRID)
+
+enableLadderGrid = input.bool(true, "Enable ladder grid", group = GROUP_LADDER)
+ladderMode = input.string(LADDER_LIMIT, "Ladder mode", options = [LADDER_LIMIT, LADDER_REJECT], group = GROUP_LADDER)
+ladderLevel1Sd = input.float(2.0, "Level 1 SD", step = 0.05, group = GROUP_LADDER)
+ladderLevel2Sd = input.float(2.5, "Level 2 SD", step = 0.05, group = GROUP_LADDER)
+ladderLevel3Sd = input.float(3.0, "Level 3 SD", step = 0.05, group = GROUP_LADDER)
+ladderWeight1 = input.float(25.0, "Level 1 weight", step = 1.0, group = GROUP_LADDER)
+ladderWeight2 = input.float(35.0, "Level 2 weight", step = 1.0, group = GROUP_LADDER)
+ladderWeight3 = input.float(40.0, "Level 3 weight", step = 1.0, group = GROUP_LADDER)
+ladderSoftStopSd = input.float(3.5, "Soft stop SD", step = 0.05, group = GROUP_LADDER)
+ladderEmergencyStopSd = input.float(3.9, "Emergency stop SD", step = 0.05, group = GROUP_LADDER)
+ladderCloseAtMiddle = input.bool(true, "Close at middle", group = GROUP_LADDER)
+ladderUseCloseConfirmedStop = input.bool(true, "Use close-confirmed soft stop", group = GROUP_LADDER)
+ladderStopConfirmBars = input.int(1, "Stop confirm bars", minval = 1, group = GROUP_LADDER)
+ladderAllowLongs = input.bool(true, "Allow longs", group = GROUP_LADDER)
+ladderAllowShorts = input.bool(true, "Allow shorts", group = GROUP_LADDER)
+ladderUseTrendFilter = input.bool(false, "Use trend filter", group = GROUP_LADDER)
+ladderMaxAdx = input.float(35.0, "Max ADX", step = 0.5, group = GROUP_LADDER)
+ladderUseSweepConfirmation = input.bool(false, "Use sweep confirmation", group = GROUP_LADDER)
+ladderCancelOppositeOrders = input.bool(true, "Cancel opposite orders", group = GROUP_LADDER)
+ladderUseBasketRiskSizing = input.bool(true, "Use basket risk sizing", group = GROUP_LADDER)
+ladderBasketRiskPct = input.float(0.50, "Basket risk %", step = 0.05, group = GROUP_LADDER)
+ladderMaxNotionalPct = input.float(10.0, "Max notional %", step = 0.5, group = GROUP_LADDER)
+
+riskFreeRateInput = input.float(2.0, "risk_free_rate for custom Sharpe (%)", step = 0.1, group = GROUP_PERF)
+customSharpeLen = input.int(100, "Custom Sharpe return length", minval = 2, group = GROUP_PERF)
+
+// Helpers.
+f_safeDiv(float _num, float _den, float _fallback) =>
+    not na(_num) and not na(_den) and _den != 0.0 ? _num / _den : _fallback
+
+f_minNotNa(float _a, float _b) =>
+    na(_a) ? _b : na(_b) ? _a : math.min(_a, _b)
+
+f_maxNotNa(float _a, float _b) =>
+    na(_a) ? _b : na(_b) ? _a : math.max(_a, _b)
+
+f_score(_status) =>
+    _status == STATUS_UP or _status == STATUS_HIGH ? 1 : _status == STATUS_LOW ? -1 : 0
+
+f_upCount(_status) =>
+    _status == STATUS_UP or _status == STATUS_HIGH ? 1 : 0
+
+f_lowCount(_status) =>
+    _status == STATUS_LOW ? 1 : 0
+
+f_statusText(_status) =>
+    _status == STATUS_UP ? STATUS_UP : _status == STATUS_LOW ? STATUS_LOW : _status == STATUS_HIGH ? STATUS_HIGH : _status == STATUS_RANGE ? STATUS_RANGE : _status == SIGNAL_BUY ? SIGNAL_BUY : _status == SIGNAL_SELL ? SIGNAL_SELL : STATUS_MID
+
+f_statusColor(_status) =>
+    _status == STATUS_UP or _status == STATUS_HIGH or _status == SIGNAL_BUY ? color.new(color.lime, 15) : _status == STATUS_LOW or _status == SIGNAL_SELL ? color.new(color.red, 15) : _status == STATUS_RANGE ? color.new(color.orange, 15) : color.new(color.gray, 20)
+
+f_price(float _value) =>
+    na(_value) ? "n/a" : str.tostring(_value, format.mintick)
+
+f_num(float _value) =>
+    na(_value) ? "n/a" : str.tostring(_value, "#.##")
+
+f_pct(float _value) =>
+    na(_value) ? "n/a" : str.tostring(_value, "#.##") + "%"
+
+f_macdHist(_src, _fast, _slow, _signal) =>
+    [_macd, _sig, _hist] = ta.macd(_src, _fast, _slow, _signal)
+    _hist
+
+f_orderQty(_mode, _fixedQty, _equityPct) =>
+    _contractValue = close * syminfo.pointvalue
+    _mode == SIZE_FIXED ? _fixedQty : _contractValue > 0.0 and strategy.equity > 0.0 ? (strategy.equity * _equityPct * 0.01) / _contractValue : 0.0
+
+f_hasOpenEntry(string entryId) =>
+    bool found = false
+    if strategy.opentrades > 0
+        for i = 0 to strategy.opentrades - 1
+            if strategy.opentrades.entry_id(i) == entryId
+                found := true
+    found
+
+f_updateLevelLine(line _line, bool _show, float _level, color _color, int _width) =>
+    line _result = _line
+    if _show and not na(_level)
+        _x1 = bar_index > 0 ? bar_index - 1 : bar_index
+        if na(_result)
+            _result := line.new(_x1, _level, bar_index, _level, xloc = xloc.bar_index, extend = extend.both, color = _color, width = _width)
+        else
+            line.set_xy1(_result, _x1, _level)
+            line.set_xy2(_result, bar_index, _level)
+            line.set_extend(_result, extend.both)
+            line.set_color(_result, _color)
+            line.set_width(_result, _width)
+    else
+        if not na(_result)
+            line.delete(_result)
+            _result := na
+    _result
+
+f_renderRow(_table, _row, _name, _status, _detail) =>
+    _bg = f_statusColor(_status)
+    table.cell(_table, 0, _row, _name, text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = size.small)
+    table.cell(_table, 1, _row, f_statusText(_status), text_color = color.white, bgcolor = _bg, text_halign = text.align_center, text_size = size.small)
+    table.cell(_table, 2, _row, _detail, text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = size.small)
+
+f_renderInfoRow(_table, _row, _name, _detail) =>
+    table.cell(_table, 0, _row, _name, text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = size.small)
+    table.cell(_table, 1, _row, "", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_center, text_size = size.small)
+    table.cell(_table, 2, _row, _detail, text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = size.small)
+
+// HTF guard.
+chartSeconds = timeframe.in_seconds()
+mtfSeconds = timeframe.in_seconds(mtfTf)
+if not na(chartSeconds) and not na(mtfSeconds) and mtfSeconds < chartSeconds
+    runtime.error("Selected MTF timeframe must be equal to or higher than the chart timeframe.")
+
+// 1) MA.
+ema50 = ta.ema(close, maLen)
+maStatus = not na(ema50) ? (close > ema50 ? STATUS_UP : close < ema50 ? STATUS_LOW : STATUS_MID) : STATUS_MID
+
+// 2) STO.
+stoRawK = ta.stoch(close, high, low, stoLen)
+stoK = ta.sma(stoRawK, stoSmoothK)
+stoD = ta.sma(stoK, stoSmoothD)
+stoReady = not na(stoK) and not na(stoD)
+stoStatus = stoReady ? (stoK > stoD and stoK >= 50.0 ? STATUS_UP : stoK < stoD and stoK <= 50.0 ? STATUS_LOW : STATUS_MID) : STATUS_MID
+
+// 3) SAR.
+sarValue = ta.sar(sarStart, sarInc, sarMax)
+sarStatus = not na(sarValue) ? (close > sarValue ? STATUS_UP : close < sarValue ? STATUS_LOW : STATUS_MID) : STATUS_MID
+
+// 4) SD.
+sdBasis = ta.sma(close, sdLen)
+sdDev = ta.stdev(close, sdLen)
+sdUpper = sdBasis + sdDev * sdMult
+sdLower = sdBasis - sdDev * sdMult
+sdReady = not na(sdBasis) and not na(sdDev) and sdDev != 0.0
+sdZ = f_safeDiv(close - sdBasis, sdDev, 0.0)
+sdStatus = sdReady ? (sdZ >= sdZThreshold ? STATUS_HIGH : sdZ <= -sdZThreshold ? STATUS_LOW : STATUS_MID) : STATUS_MID
+
+// 5) ENV.
+envBasis = ta.sma(close, envLen)
+envUpper = envBasis * (1.0 + envPct * 0.01)
+envLower = envBasis * (1.0 - envPct * 0.01)
+envStatus = not na(envBasis) ? (close > envBasis ? STATUS_UP : close < envBasis ? STATUS_LOW : STATUS_MID) : STATUS_MID
+
+// 6) MACD.
+[macdLine, macdSignal, macdHist] = ta.macd(close, macdFastLen, macdSlowLen, macdSignalLen)
+macdReady = not na(macdLine) and not na(macdSignal) and not na(macdHist)
+macdStatus = macdReady ? (macdLine > macdSignal and macdHist >= 0.0 ? STATUS_UP : macdLine < macdSignal and macdHist <= 0.0 ? STATUS_LOW : STATUS_MID) : STATUS_MID
+
+// 7) RSI.
+rsiValue = ta.rsi(close, rsiLen)
+rsiStatus = not na(rsiValue) ? (rsiValue > rsiUp ? STATUS_UP : rsiValue < rsiLow ? STATUS_LOW : STATUS_MID) : STATUS_MID
+
+// 8) CCI.
+cciValue = ta.cci(hlc3, cciLen)
+cciStatus = not na(cciValue) ? (cciValue > cciUp ? STATUS_UP : cciValue < cciLow ? STATUS_LOW : STATUS_MID) : STATUS_MID
+
+// 9) DON.
+donUpper = ta.highest(high, donLen)
+donLower = ta.lowest(low, donLen)
+donMid = (donUpper + donLower) * 0.5
+donStatus = not na(donMid) ? (close > donMid ? STATUS_UP : close < donMid ? STATUS_LOW : STATUS_MID) : STATUS_MID
+
+// 10) REGIME. ATR baseline length is an assumed implementation detail.
+[plusDI, minusDI, adxValue] = ta.dmi(regimeDiLen, regimeAdxSmooth)
+regimeAtr = ta.atr(regimeAtrLen)
+regimeAtrBase = ta.sma(regimeAtr, atrBaseLen)
+atrRatio = f_safeDiv(regimeAtr, regimeAtrBase, 0.0)
+regimeReady = not na(adxValue) and not na(plusDI) and not na(minusDI) and not na(atrRatio)
+regimeStatus = regimeReady ? (adxValue < regimeAdxLevel and atrRatio < regimeAtrRatioLevel ? STATUS_RANGE : adxValue >= regimeAdxLevel and plusDI > minusDI and atrRatio >= regimeAtrRatioLevel ? STATUS_UP : adxValue >= regimeAdxLevel and minusDI > plusDI and atrRatio >= regimeAtrRatioLevel ? STATUS_LOW : STATUS_MID) : STATUS_MID
+
+// 11) VPI assumed implementation: normalized signed-volume pressure oscillator.
+vol = nz(volume, 0.0)
+signedVol = close > open ? vol : close < open ? -vol : 0.0
+avgVolume = ta.sma(vol, vpiLen)
+hasVolume = not na(avgVolume) and avgVolume > 0.0
+vpiRaw = f_safeDiv(ta.sma(signedVol, vpiLen), avgVolume, 0.0)
+vpi = ta.ema(vpiRaw, vpiSmooth)
+vpiStatus = hasVolume ? (vpi > vpiUpper ? STATUS_UP : vpi < vpiLower ? STATUS_LOW : STATUS_MID) : STATUS_MID
+
+// 12) MTF assumed implementation: four confirmed HTF binary votes.
+dClose = request.security(syminfo.tickerid, mtfTf, close[1], lookahead = barmerge.lookahead_on)
+dEma50 = request.security(syminfo.tickerid, mtfTf, ta.ema(close, maLen)[1], lookahead = barmerge.lookahead_on)
+dSar = request.security(syminfo.tickerid, mtfTf, ta.sar(sarStart, sarInc, sarMax)[1], lookahead = barmerge.lookahead_on)
+dMacdHist = request.security(syminfo.tickerid, mtfTf, f_macdHist(close, macdFastLen, macdSlowLen, macdSignalLen)[1], lookahead = barmerge.lookahead_on)
+dRsi = request.security(syminfo.tickerid, mtfTf, ta.rsi(close, rsiLen)[1], lookahead = barmerge.lookahead_on)
+
+mtfUpVotes = (not na(dClose) and not na(dEma50) and dClose > dEma50 ? 1 : 0) + (not na(dClose) and not na(dSar) and dClose > dSar ? 1 : 0) + (not na(dMacdHist) and dMacdHist > 0.0 ? 1 : 0) + (not na(dRsi) and dRsi > 50.0 ? 1 : 0)
+mtfLowVotes = (not na(dClose) and not na(dEma50) and dClose < dEma50 ? 1 : 0) + (not na(dClose) and not na(dSar) and dClose < dSar ? 1 : 0) + (not na(dMacdHist) and dMacdHist < 0.0 ? 1 : 0) + (not na(dRsi) and dRsi < 50.0 ? 1 : 0)
+mtfStatus = mtfUpVotes >= mtfStrongVotes ? STATUS_UP : mtfLowVotes >= mtfStrongVotes ? STATUS_LOW : STATUS_MID
+
+// 13) SWEEP.
+priorHigh = ta.highest(high[1], sweepLookback - 1)
+priorLow = ta.lowest(low[1], sweepLookback - 1)
+highTrap = not na(priorHigh) and high > priorHigh and close < priorHigh
+lowTrap = not na(priorLow) and low < priorLow and close > priorLow
+sweepConflict = highTrap and lowTrap
+sweepStatus = sweepConflict ? STATUS_MID : highTrap ? STATUS_LOW : lowTrap ? STATUS_UP : STATUS_MID
+sweepText = sweepConflict ? "CONFLICT" : highTrap ? "HIGH TRAP" : lowTrap ? "LOW TRAP" : "NO SWEEP"
+
+// 14) ADAPT assumed implementation: Bollinger width compression against its own average.
+adaptBasisBB = ta.sma(close, adaptSqueezeLen)
+adaptDevBB = ta.stdev(close, adaptSqueezeLen) * adaptBbMult
+adaptUpperBB = adaptBasisBB + adaptDevBB
+adaptLowerBB = adaptBasisBB - adaptDevBB
+adaptBbWidth = not na(adaptBasisBB) and adaptBasisBB != 0.0 ? (adaptUpperBB - adaptLowerBB) / math.abs(adaptBasisBB) : na
+adaptWidthBase = ta.sma(adaptBbWidth, adaptSqueezeLen)
+adaptWidthRatio = f_safeDiv(adaptBbWidth, adaptWidthBase, na)
+adaptDonUpper = ta.highest(high, adaptDonLen)
+adaptDonLower = ta.lowest(low, adaptDonLen)
+adaptDonMid = (adaptDonUpper + adaptDonLower) * 0.5
+squeezeOn = not na(adaptWidthRatio) and adaptWidthRatio < adaptRatioLevel
+adaptStatus = squeezeOn ? (close < adaptDonMid ? STATUS_LOW : close > adaptDonMid ? STATUS_UP : STATUS_MID) : STATUS_MID
+adaptText = squeezeOn ? (close < adaptDonMid ? "PULLBACK LOW" : close > adaptDonMid ? "PULLBACK UP" : "PULLBACK MID") : "NO SQUEEZE"
+
+// Summary and final signal.
+maPoint = f_score(maStatus)
+stoPoint = f_score(stoStatus)
+sarPoint = f_score(sarStatus)
+sdPoint = f_score(sdStatus)
+envPoint = f_score(envStatus)
+macdPoint = f_score(macdStatus)
+rsiPoint = f_score(rsiStatus)
+cciPoint = f_score(cciStatus)
+donPoint = f_score(donStatus)
+regimePoint = f_score(regimeStatus)
+vpiPoint = f_score(vpiStatus)
+mtfPoint = f_score(mtfStatus)
+sweepPoint = f_score(sweepStatus)
+adaptPoint = f_score(adaptStatus)
+
+usedCount = 14
+totalScore = maPoint + stoPoint + sarPoint + sdPoint + envPoint + macdPoint + rsiPoint + cciPoint + donPoint + regimePoint + vpiPoint + mtfPoint + sweepPoint + adaptPoint
+scoreNorm = totalScore / usedCount
+
+upCount = f_upCount(maStatus) + f_upCount(stoStatus) + f_upCount(sarStatus) + f_upCount(sdStatus) + f_upCount(envStatus) + f_upCount(macdStatus) + f_upCount(rsiStatus) + f_upCount(cciStatus) + f_upCount(donStatus) + f_upCount(regimeStatus) + f_upCount(vpiStatus) + f_upCount(mtfStatus) + f_upCount(sweepStatus) + f_upCount(adaptStatus)
+lowCount = f_lowCount(maStatus) + f_lowCount(stoStatus) + f_lowCount(sarStatus) + f_lowCount(sdStatus) + f_lowCount(envStatus) + f_lowCount(macdStatus) + f_lowCount(rsiStatus) + f_lowCount(cciStatus) + f_lowCount(donStatus) + f_lowCount(regimeStatus) + f_lowCount(vpiStatus) + f_lowCount(mtfStatus) + f_lowCount(sweepStatus) + f_lowCount(adaptStatus)
+
+summaryStatus = scoreNorm >= summaryUpLevel ? STATUS_UP : scoreNorm <= summaryLowLevel ? STATUS_LOW : math.abs(scoreNorm) <= summaryRangeLevel and regimeStatus == STATUS_RANGE ? STATUS_RANGE : STATUS_MID
+tieBuy = not na(ema50) and not na(donMid) ? close >= ema50 and close >= donMid : not na(ema50) ? close >= ema50 : not na(donMid) ? close >= donMid : close >= nz(close[1], close)
+finalSignal = scoreNorm >= signalBiasLevel ? SIGNAL_BUY : scoreNorm <= -signalBiasLevel ? SIGNAL_SELL : summaryStatus == STATUS_UP ? SIGNAL_BUY : summaryStatus == STATUS_LOW ? SIGNAL_SELL : tieBuy ? SIGNAL_BUY : SIGNAL_SELL
+finalBuyBias = finalSignal == SIGNAL_BUY
+finalSellBias = finalSignal == SIGNAL_SELL
+
+// Tactical support/resistance touch assumption: use enabled lower/upper visual bands.
+sdLowerActive = showSD ? sdLower : na
+envLowerActive = showENV ? envLower : na
+donLowerActive = showDON ? donLower : na
+sdUpperActive = showSD ? sdUpper : na
+envUpperActive = showENV ? envUpper : na
+donUpperActive = showDON ? donUpper : na
+
+activeLower = f_minNotNa(f_minNotNa(sdLowerActive, envLowerActive), donLowerActive)
+activeUpper = f_maxNotNa(f_maxNotNa(sdUpperActive, envUpperActive), donUpperActive)
+
+hitLower = not na(activeLower) and low <= activeLower
+hitUpper = not na(activeUpper) and high >= activeUpper
+bullConfirm = not na(activeLower) and close > open and close > activeLower
+bearConfirm = not na(activeUpper) and close < open and close < activeUpper
+rawTacticalLong = hitLower and bullConfirm
+rawTacticalShort = hitUpper and bearConfirm
+tacticalConflict = rawTacticalLong and rawTacticalShort
+tacticalLong = rawTacticalLong and not tacticalConflict
+tacticalShort = rawTacticalShort and not tacticalConflict
+
+// Dynamic Grid Range Engine: mean-reversion SD zones around a selectable middle line.
+sessionVwap = ta.vwap(hlc3)
+gridMid = gridSource == GRID_SRC_DON ? donMid : gridSource == GRID_SRC_SD ? sdBasis : gridSource == GRID_SRC_EMA ? ema50 : not na(sessionVwap) ? sessionVwap : donMid
+gridDev = ta.stdev(close, gridSdLen)
+gridReady = not na(gridMid) and not na(gridDev) and gridDev > 0.0
+upperNoTrade = gridReady ? gridMid + gridDev * noTradeSd : na
+lowerNoTrade = gridReady ? gridMid - gridDev * noTradeSd : na
+upperEntry = gridReady ? gridMid + gridDev * entrySd : na
+lowerEntry = gridReady ? gridMid - gridDev * entrySd : na
+upperStop = gridReady ? gridMid + gridDev * stopSd : na
+lowerStop = gridReady ? gridMid - gridDev * stopSd : na
+sigmaPos = gridReady ? (close - gridMid) / gridDev : 0.0
+
+gridInNoTrade = gridReady and close >= lowerNoTrade and close <= upperNoTrade
+gridLowerBreak = gridReady and close < lowerStop
+gridUpperBreak = gridReady and close > upperStop
+gridLowerBreakEvent = gridLowerBreak and not gridLowerBreak[1]
+gridUpperBreakEvent = gridUpperBreak and not gridUpperBreak[1]
+gridLowerReached = gridReady and (low <= lowerEntry or close <= lowerEntry)
+gridUpperReached = gridReady and (high >= upperEntry or close >= upperEntry)
+gridLongReject = gridReady and ((low <= lowerEntry and close > lowerEntry) or (useSweepConfirmation and lowTrap))
+gridShortReject = gridReady and ((high >= upperEntry and close < upperEntry) or (useSweepConfirmation and highTrap))
+gridTrendOk = not useTrendFilter or na(adxValue) or adxValue <= maxAdxForMeanReversion
+gridRegime = not gridReady ? "n/a" : gridLowerBreak ? "LOWER BREAK" : gridUpperBreak ? "UPPER BREAK" : close <= lowerEntry ? "LOWER ENTRY" : close >= upperEntry ? "UPPER ENTRY" : "MIDDLE"
+
+// 3-Level SD Ladder Grid: scale-in levels from 2SD to 3SD with basket exits.
+ladderOrderMode = enableGridEngine and enableLadderGrid
+ladderUpper1 = gridReady ? gridMid + gridDev * ladderLevel1Sd : na
+ladderUpper2 = gridReady ? gridMid + gridDev * ladderLevel2Sd : na
+ladderUpper3 = gridReady ? gridMid + gridDev * ladderLevel3Sd : na
+ladderLower1 = gridReady ? gridMid - gridDev * ladderLevel1Sd : na
+ladderLower2 = gridReady ? gridMid - gridDev * ladderLevel2Sd : na
+ladderLower3 = gridReady ? gridMid - gridDev * ladderLevel3Sd : na
+ladderUpperSoftStop = gridReady ? gridMid + gridDev * ladderSoftStopSd : na
+ladderLowerSoftStop = gridReady ? gridMid - gridDev * ladderSoftStopSd : na
+ladderUpperEmergencyStop = gridReady ? gridMid + gridDev * ladderEmergencyStopSd : na
+ladderLowerEmergencyStop = gridReady ? gridMid - gridDev * ladderEmergencyStopSd : na
+
+ladderTotalWeight = math.max(ladderWeight1 + ladderWeight2 + ladderWeight3, 0.0)
+ladderW1 = ladderTotalWeight > 0.0 ? ladderWeight1 / ladderTotalWeight : 1.0 / 3.0
+ladderW2 = ladderTotalWeight > 0.0 ? ladderWeight2 / ladderTotalWeight : 1.0 / 3.0
+ladderW3 = ladderTotalWeight > 0.0 ? ladderWeight3 / ladderTotalWeight : 1.0 / 3.0
+ladderTrendOk = not ladderUseTrendFilter or na(adxValue) or adxValue <= ladderMaxAdx
+ladderLongConfirmOk = not ladderUseSweepConfirmation or lowTrap
+ladderShortConfirmOk = not ladderUseSweepConfirmation or highTrap
+
+minBarsA = math.max(maLen, stoLen + stoSmoothK + stoSmoothD)
+minBarsB = math.max(sdLen, math.max(envLen, donLen))
+minBarsC = math.max(macdSlowLen + macdSignalLen, math.max(rsiLen, cciLen))
+minBarsD = math.max(math.max(regimeDiLen + regimeAdxSmooth, regimeAtrLen + atrBaseLen), vpiLen + vpiSmooth)
+minBarsE = math.max(sweepLookback, math.max(adaptSqueezeLen * 2, math.max(adaptDonLen, gridSdLen)))
+minBarsNeeded = math.max(math.max(minBarsA, minBarsB), math.max(math.max(minBarsC, minBarsD), minBarsE)) + 2
+enoughBars = bar_index >= minBarsNeeded
+
+signalReady = enoughBars and (not confirmedOnly or barstate.isconfirmed)
+tacticalLongSignal = signalReady and tacticalLong
+tacticalShortSignal = signalReady and tacticalShort
+cmeShow = cmeMode != "Off"
+cmeStrict = cmeMode == "Strict filter"
+cmeUpper1 = cmeUpperWall1 > 0.0 ? cmeUpperWall1 + cmeBasisAdjust : na
+cmeUpper2 = cmeUpperWall2 > 0.0 ? cmeUpperWall2 + cmeBasisAdjust : na
+cmeUpper3 = cmeUpperWall3 > 0.0 ? cmeUpperWall3 + cmeBasisAdjust : na
+cmeLower1 = cmeLowerWall1 > 0.0 ? cmeLowerWall1 + cmeBasisAdjust : na
+cmeLower2 = cmeLowerWall2 > 0.0 ? cmeLowerWall2 + cmeBasisAdjust : na
+cmeLower3 = cmeLowerWall3 > 0.0 ? cmeLowerWall3 + cmeBasisAdjust : na
+cmeAcceptedAbove = not na(cmeUpper1) and ta.lowest(close, cmeAcceptanceBars) > cmeUpper1
+cmeAcceptedBelow = not na(cmeLower1) and ta.highest(close, cmeAcceptanceBars) < cmeLower1
+cmeNearUpper = na(cmeUpper1) or cmeMaxDistance == 0.0 or math.abs(close - cmeUpper1) <= cmeMaxDistance
+cmeNearLower = na(cmeLower1) or cmeMaxDistance == 0.0 or math.abs(close - cmeLower1) <= cmeMaxDistance
+cmeLongOk = not cmeStrict or na(cmeUpper1) or (cmeAcceptedAbove and cmeNearUpper)
+cmeShortOk = not cmeStrict or na(cmeLower1) or (cmeAcceptedBelow and cmeNearLower)
+
+longEntry = not enableGridEngine and tacticalLongSignal and (not requireBiasFilter or finalBuyBias) and cmeLongOk
+shortEntry = not enableGridEngine and tacticalShortSignal and (not requireBiasFilter or finalSellBias) and cmeShortOk
+
+var int lastTradeBar = na
+closedTradeNow = strategy.closedtrades > nz(strategy.closedtrades[1])
+if closedTradeNow
+    lastTradeBar := bar_index
+cooldownOk = na(lastTradeBar) or bar_index - lastTradeBar >= minBarsBetweenTrades
+
+ladderLL1Open = f_hasOpenEntry("Ladder Long 2SD")
+ladderLL2Open = f_hasOpenEntry("Ladder Long 2.5SD")
+ladderLL3Open = f_hasOpenEntry("Ladder Long 3SD")
+ladderSS1Open = f_hasOpenEntry("Ladder Short 2SD")
+ladderSS2Open = f_hasOpenEntry("Ladder Short 2.5SD")
+ladderSS3Open = f_hasOpenEntry("Ladder Short 3SD")
+ladderLongOpen = ladderLL1Open or ladderLL2Open or ladderLL3Open
+ladderShortOpen = ladderSS1Open or ladderSS2Open or ladderSS3Open
+ladderAnyOpen = ladderLongOpen or ladderShortOpen
+ladderLongFilledCount = (ladderLL1Open ? 1 : 0) + (ladderLL2Open ? 1 : 0) + (ladderLL3Open ? 1 : 0)
+ladderShortFilledCount = (ladderSS1Open ? 1 : 0) + (ladderSS2Open ? 1 : 0) + (ladderSS3Open ? 1 : 0)
+ladderActiveSide = ladderLongOpen and ladderShortOpen ? "MIXED" : ladderLongOpen ? "LONG" : ladderShortOpen ? "SHORT" : "FLAT"
+
+var bool ladderWasOpen = false
+var int ladderLastBasketClosedBar = na
+ladderBasketClosedNow = ladderWasOpen and not ladderAnyOpen
+if ladderBasketClosedNow
+    ladderLastBasketClosedBar := bar_index
+ladderCooldownOk = na(ladderLastBasketClosedBar) or bar_index - ladderLastBasketClosedBar >= minBarsBetweenTrades
+ladderCanStartOrAdd = ladderAnyOpen or ladderCooldownOk
+
+gridSignalReady = enableGridEngine and not enableLadderGrid and signalReady and gridReady
+gridLongRaw = gridSignalReady and not gridInNoTrade and gridLowerReached and gridLongReject and gridTrendOk and not gridLowerBreak
+gridShortRaw = gridSignalReady and not gridInNoTrade and gridUpperReached and gridShortReject and gridTrendOk and not gridUpperBreak
+gridSignalConflict = gridLongRaw and gridShortRaw
+gridLongSignal = gridLongRaw and not gridSignalConflict and cmeLongOk
+gridShortSignal = gridShortRaw and not gridSignalConflict and cmeShortOk
+
+gridLongMiddleExit = enableGridEngine and not enableLadderGrid and signalReady and strategy.position_size > 0 and gridReady and (closeAtMiddleMode == CLOSE_CROSS ? close >= gridMid : high >= gridMid)
+gridShortMiddleExit = enableGridEngine and not enableLadderGrid and signalReady and strategy.position_size < 0 and gridReady and (closeAtMiddleMode == CLOSE_CROSS ? close <= gridMid : low <= gridMid)
+gridMiddleExitSignal = gridLongMiddleExit or gridShortMiddleExit
+
+// Orders.
+orderQty = f_orderQty(sizeMode, fixedQty, equityPct)
+validQty = not na(orderQty) and orderQty > 0.0
+gridFlatOk = not useOneTradeOnly or strategy.position_size == 0
+gridCanOpen = executeOrders and enableGridEngine and not enableLadderGrid and validQty and cooldownOk and not gridMiddleExitSignal and gridFlatOk
+
+gridLongHardStop = strategy.position_size > 0 and gridReady ? (fixedGoldStopCapPoints > 0.0 ? math.max(lowerStop, strategy.position_avg_price - fixedGoldStopCapPoints) : lowerStop) : na
+gridShortHardStop = strategy.position_size < 0 and gridReady ? (fixedGoldStopCapPoints > 0.0 ? math.min(upperStop, strategy.position_avg_price + fixedGoldStopCapPoints) : upperStop) : na
+gridNominalStopDistance = gridReady ? gridDev * math.max(stopSd - entrySd, 0.0) : na
+gridStopDistancePoints = strategy.position_size > 0 and not na(gridLongHardStop) ? math.abs(strategy.position_avg_price - gridLongHardStop) : strategy.position_size < 0 and not na(gridShortHardStop) ? math.abs(gridShortHardStop - strategy.position_avg_price) : gridNominalStopDistance
+
+ladderLongWeightedEntry = gridReady ? ladderLower1 * ladderW1 + ladderLower2 * ladderW2 + ladderLower3 * ladderW3 : na
+ladderShortWeightedEntry = gridReady ? ladderUpper1 * ladderW1 + ladderUpper2 * ladderW2 + ladderUpper3 * ladderW3 : na
+ladderRiskCapital = strategy.equity * ladderBasketRiskPct * 0.01
+ladderLongRiskPerUnit = gridReady ? math.max((ladderLongWeightedEntry - ladderLowerEmergencyStop) * syminfo.pointvalue, 0.0) : na
+ladderShortRiskPerUnit = gridReady ? math.max((ladderUpperEmergencyStop - ladderShortWeightedEntry) * syminfo.pointvalue, 0.0) : na
+ladderMaxNotionalQty = close * syminfo.pointvalue > 0.0 and strategy.equity > 0.0 ? strategy.equity * ladderMaxNotionalPct * 0.01 / (close * syminfo.pointvalue) : 0.0
+ladderLongRiskQty = not na(ladderLongRiskPerUnit) and ladderLongRiskPerUnit > 0.0 ? ladderRiskCapital / ladderLongRiskPerUnit : 0.0
+ladderShortRiskQty = not na(ladderShortRiskPerUnit) and ladderShortRiskPerUnit > 0.0 ? ladderRiskCapital / ladderShortRiskPerUnit : 0.0
+ladderLongBasketQty = ladderUseBasketRiskSizing ? math.min(ladderLongRiskQty, ladderMaxNotionalQty) : orderQty
+ladderShortBasketQty = ladderUseBasketRiskSizing ? math.min(ladderShortRiskQty, ladderMaxNotionalQty) : orderQty
+ladderLongQty1 = ladderLongBasketQty * ladderW1
+ladderLongQty2 = ladderLongBasketQty * ladderW2
+ladderLongQty3 = ladderLongBasketQty * ladderW3
+ladderShortQty1 = ladderShortBasketQty * ladderW1
+ladderShortQty2 = ladderShortBasketQty * ladderW2
+ladderShortQty3 = ladderShortBasketQty * ladderW3
+ladderValidLongQty = ladderLongQty1 > 0.0 and ladderLongQty2 > 0.0 and ladderLongQty3 > 0.0
+ladderValidShortQty = ladderShortQty1 > 0.0 and ladderShortQty2 > 0.0 and ladderShortQty3 > 0.0
+
+ladderLongSideSelected = ladderLongOpen or strategy.position_size > 0 or (not ladderAnyOpen and strategy.position_size == 0 and close < gridMid)
+ladderShortSideSelected = ladderShortOpen or strategy.position_size < 0 or (not ladderAnyOpen and strategy.position_size == 0 and close > gridMid)
+ladderLongSideOk = ladderOrderMode and ladderAllowLongs and gridReady and ladderTrendOk and ladderLongConfirmOk and ladderLongSideSelected and not ladderShortOpen and strategy.position_size >= 0 and cmeLongOk
+ladderShortSideOk = ladderOrderMode and ladderAllowShorts and gridReady and ladderTrendOk and ladderShortConfirmOk and ladderShortSideSelected and not ladderLongOpen and strategy.position_size <= 0 and cmeShortOk
+ladderCanPlaceLong = validQty and ladderValidLongQty and ladderCanStartOrAdd and ladderLongSideOk
+ladderCanPlaceShort = validQty and ladderValidShortQty and ladderCanStartOrAdd and ladderShortSideOk
+ladderLongL1Reject = ladderCanPlaceLong and ladderMode == LADDER_REJECT and not ladderLL1Open and low <= ladderLower1 and close > ladderLower1
+ladderLongL2Reject = ladderCanPlaceLong and ladderMode == LADDER_REJECT and not ladderLL2Open and low <= ladderLower2 and close > ladderLower2
+ladderLongL3Reject = ladderCanPlaceLong and ladderMode == LADDER_REJECT and not ladderLL3Open and low <= ladderLower3 and close > ladderLower3
+ladderShortS1Reject = ladderCanPlaceShort and ladderMode == LADDER_REJECT and not ladderSS1Open and high >= ladderUpper1 and close < ladderUpper1
+ladderShortS2Reject = ladderCanPlaceShort and ladderMode == LADDER_REJECT and not ladderSS2Open and high >= ladderUpper2 and close < ladderUpper2
+ladderShortS3Reject = ladderCanPlaceShort and ladderMode == LADDER_REJECT and not ladderSS3Open and high >= ladderUpper3 and close < ladderUpper3
+ladderLongRejectAny = ladderLongL1Reject or ladderLongL2Reject or ladderLongL3Reject
+ladderShortRejectAny = ladderShortS1Reject or ladderShortS2Reject or ladderShortS3Reject
+ladderRejectConflict = ladderLongRejectAny and ladderShortRejectAny
+ladderLongMidExit = ladderOrderMode and signalReady and ladderCloseAtMiddle and ladderLongOpen and close >= gridMid
+ladderShortMidExit = ladderOrderMode and signalReady and ladderCloseAtMiddle and ladderShortOpen and close <= gridMid
+
+var int ladderLongSoftStopCount = 0
+var int ladderShortSoftStopCount = 0
+ladderLongSoftStopCount := ladderOrderMode and ladderLongOpen and gridReady and close < ladderLowerSoftStop ? ladderLongSoftStopCount + 1 : 0
+ladderShortSoftStopCount := ladderOrderMode and ladderShortOpen and gridReady and close > ladderUpperSoftStop ? ladderShortSoftStopCount + 1 : 0
+ladderLongSoftStopSignal = ladderOrderMode and signalReady and ladderUseCloseConfirmedStop and ladderLongOpen and ladderLongSoftStopCount >= ladderStopConfirmBars
+ladderShortSoftStopSignal = ladderOrderMode and signalReady and ladderUseCloseConfirmedStop and ladderShortOpen and ladderShortSoftStopCount >= ladderStopConfirmBars
+ladderStopSignal = ladderLongSoftStopSignal or ladderShortSoftStopSignal
+
+bool didTradeAction = false
+bool didGridFlip = false
+bool didLadderBasketClose = false
+
+if executeOrders and ladderOrderMode
+    if ladderCancelOppositeOrders
+        if ladderLongOpen
+            strategy.cancel("Ladder Short 2SD")
+            strategy.cancel("Ladder Short 2.5SD")
+            strategy.cancel("Ladder Short 3SD")
+        if ladderShortOpen
+            strategy.cancel("Ladder Long 2SD")
+            strategy.cancel("Ladder Long 2.5SD")
+            strategy.cancel("Ladder Long 3SD")
+        if not ladderAnyOpen and strategy.position_size == 0
+            if close < gridMid
+                strategy.cancel("Ladder Short 2SD")
+                strategy.cancel("Ladder Short 2.5SD")
+                strategy.cancel("Ladder Short 3SD")
+            if close > gridMid
+                strategy.cancel("Ladder Long 2SD")
+                strategy.cancel("Ladder Long 2.5SD")
+                strategy.cancel("Ladder Long 3SD")
+
+    if ladderLongMidExit
+        strategy.close("Ladder Long 2SD", comment = "LADDER MID EXIT")
+        strategy.close("Ladder Long 2.5SD", comment = "LADDER MID EXIT")
+        strategy.close("Ladder Long 3SD", comment = "LADDER MID EXIT")
+        strategy.cancel("Ladder Long 2SD")
+        strategy.cancel("Ladder Long 2.5SD")
+        strategy.cancel("Ladder Long 3SD")
+        didLadderBasketClose := true
+
+    if ladderLongSoftStopSignal
+        strategy.close("Ladder Long 2SD", comment = "LADDER STOP")
+        strategy.close("Ladder Long 2.5SD", comment = "LADDER STOP")
+        strategy.close("Ladder Long 3SD", comment = "LADDER STOP")
+        strategy.cancel("Ladder Long 2SD")
+        strategy.cancel("Ladder Long 2.5SD")
+        strategy.cancel("Ladder Long 3SD")
+        didLadderBasketClose := true
+
+    if ladderShortMidExit
+        strategy.close("Ladder Short 2SD", comment = "LADDER MID EXIT")
+        strategy.close("Ladder Short 2.5SD", comment = "LADDER MID EXIT")
+        strategy.close("Ladder Short 3SD", comment = "LADDER MID EXIT")
+        strategy.cancel("Ladder Short 2SD")
+        strategy.cancel("Ladder Short 2.5SD")
+        strategy.cancel("Ladder Short 3SD")
+        didLadderBasketClose := true
+
+    if ladderShortSoftStopSignal
+        strategy.close("Ladder Short 2SD", comment = "LADDER STOP")
+        strategy.close("Ladder Short 2.5SD", comment = "LADDER STOP")
+        strategy.close("Ladder Short 3SD", comment = "LADDER STOP")
+        strategy.cancel("Ladder Short 2SD")
+        strategy.cancel("Ladder Short 2.5SD")
+        strategy.cancel("Ladder Short 3SD")
+        didLadderBasketClose := true
+
+    if ladderMode == LADDER_LIMIT and not ladderLongMidExit and not ladderShortMidExit and not ladderStopSignal
+        if ladderCanPlaceLong
+            if not ladderLL1Open
+                strategy.entry("Ladder Long 2SD", strategy.long, qty = ladderLongQty1, limit = ladderLower1, comment = "L1 2SD")
+            if not ladderLL2Open
+                strategy.entry("Ladder Long 2.5SD", strategy.long, qty = ladderLongQty2, limit = ladderLower2, comment = "L2 2.5SD")
+            if not ladderLL3Open
+                strategy.entry("Ladder Long 3SD", strategy.long, qty = ladderLongQty3, limit = ladderLower3, comment = "L3 3SD")
+        if ladderCanPlaceShort
+            if not ladderSS1Open
+                strategy.entry("Ladder Short 2SD", strategy.short, qty = ladderShortQty1, limit = ladderUpper1, comment = "S1 2SD")
+            if not ladderSS2Open
+                strategy.entry("Ladder Short 2.5SD", strategy.short, qty = ladderShortQty2, limit = ladderUpper2, comment = "S2 2.5SD")
+            if not ladderSS3Open
+                strategy.entry("Ladder Short 3SD", strategy.short, qty = ladderShortQty3, limit = ladderUpper3, comment = "S3 3SD")
+
+    if ladderMode == LADDER_REJECT and not ladderRejectConflict and not ladderLongMidExit and not ladderShortMidExit and not ladderStopSignal
+        if ladderLongL1Reject
+            strategy.entry("Ladder Long 2SD", strategy.long, qty = ladderLongQty1, comment = "L1 2SD")
+        if ladderLongL2Reject
+            strategy.entry("Ladder Long 2.5SD", strategy.long, qty = ladderLongQty2, comment = "L2 2.5SD")
+        if ladderLongL3Reject
+            strategy.entry("Ladder Long 3SD", strategy.long, qty = ladderLongQty3, comment = "L3 3SD")
+        if ladderShortS1Reject
+            strategy.entry("Ladder Short 2SD", strategy.short, qty = ladderShortQty1, comment = "S1 2SD")
+        if ladderShortS2Reject
+            strategy.entry("Ladder Short 2.5SD", strategy.short, qty = ladderShortQty2, comment = "S2 2.5SD")
+        if ladderShortS3Reject
+            strategy.entry("Ladder Short 3SD", strategy.short, qty = ladderShortQty3, comment = "S3 3SD")
+
+    ladderLongStopPrice = ladderUseCloseConfirmedStop ? ladderLowerEmergencyStop : ladderLowerSoftStop
+    ladderShortStopPrice = ladderUseCloseConfirmedStop ? ladderUpperEmergencyStop : ladderUpperSoftStop
+    if gridReady and not na(ladderLongStopPrice)
+        strategy.exit("Ladder L1 Stop", "Ladder Long 2SD", stop = ladderLongStopPrice)
+        strategy.exit("Ladder L2 Stop", "Ladder Long 2.5SD", stop = ladderLongStopPrice)
+        strategy.exit("Ladder L3 Stop", "Ladder Long 3SD", stop = ladderLongStopPrice)
+    if gridReady and not na(ladderShortStopPrice)
+        strategy.exit("Ladder S1 Stop", "Ladder Short 2SD", stop = ladderShortStopPrice)
+        strategy.exit("Ladder S2 Stop", "Ladder Short 2.5SD", stop = ladderShortStopPrice)
+        strategy.exit("Ladder S3 Stop", "Ladder Short 3SD", stop = ladderShortStopPrice)
+
+if didLadderBasketClose
+    ladderLastBasketClosedBar := bar_index
+
+if executeOrders and enableGridEngine and not enableLadderGrid
+    if gridLongMiddleExit
+        strategy.close("Grid Long", comment = "MID EXIT")
+        didTradeAction := true
+    if gridShortMiddleExit
+        strategy.close("Grid Short", comment = "MID EXIT")
+        didTradeAction := true
+
+    if allowFlipOnZoneBreak and validQty and signalReady
+        if strategy.position_size < 0 and gridUpperBreak
+            strategy.close("Grid Short", comment = "ZONE BREAK")
+            didTradeAction := true
+            didGridFlip := true
+            if cooldownOk and cmeLongOk and (not useOneTradeOnly or strategy.position_size == 0)
+                strategy.entry("Grid Long", strategy.long, qty = orderQty, comment = "Grid Flip Long")
+                didTradeAction := true
+        else if strategy.position_size > 0 and gridLowerBreak
+            strategy.close("Grid Long", comment = "ZONE BREAK")
+            didTradeAction := true
+            didGridFlip := true
+            if cooldownOk and cmeShortOk and (not useOneTradeOnly or strategy.position_size == 0)
+                strategy.entry("Grid Short", strategy.short, qty = orderQty, comment = "Grid Flip Short")
+                didTradeAction := true
+
+    if gridCanOpen and not didGridFlip
+        if gridLongSignal and not gridShortSignal
+            strategy.entry("Grid Long", strategy.long, qty = orderQty, comment = "Grid Long")
+            didTradeAction := true
+        else if gridShortSignal and not gridLongSignal
+            strategy.entry("Grid Short", strategy.short, qty = orderQty, comment = "Grid Short")
+            didTradeAction := true
+
+if executeOrders and enableGridEngine and not enableLadderGrid and strategy.position_size > 0 and not na(gridLongHardStop)
+    strategy.exit("Grid Long Stop", "Grid Long", stop = gridLongHardStop)
+
+if executeOrders and enableGridEngine and not enableLadderGrid and strategy.position_size < 0 and not na(gridShortHardStop)
+    strategy.exit("Grid Short Stop", "Grid Short", stop = gridShortHardStop)
+
+if executeOrders and not enableGridEngine and validQty
+    if longEntry and not shortEntry
+        strategy.entry("Long", strategy.long, qty = orderQty, comment = "Tactical Long")
+        didTradeAction := true
+    else if shortEntry and not longEntry
+        strategy.entry("Short", strategy.short, qty = orderQty, comment = "Tactical Short")
+        didTradeAction := true
+
+exitAtr = ta.atr(exitAtrLen)
+
+longStopRaw = exitMode == EXIT_DON ? donLower : exitMode == EXIT_ENV ? envLower : strategy.position_avg_price - exitAtr * atrStopMult
+longLimitRaw = exitMode == EXIT_DON ? donUpper : exitMode == EXIT_ENV ? envUpper : strategy.position_avg_price + exitAtr * atrTargetMult
+shortStopRaw = exitMode == EXIT_DON ? donUpper : exitMode == EXIT_ENV ? envUpper : strategy.position_avg_price + exitAtr * atrStopMult
+shortLimitRaw = exitMode == EXIT_DON ? donLower : exitMode == EXIT_ENV ? envLower : strategy.position_avg_price - exitAtr * atrTargetMult
+
+longStop = strategy.position_size > 0 and not na(longStopRaw) and longStopRaw < strategy.position_avg_price ? longStopRaw : na
+longLimit = strategy.position_size > 0 and not na(longLimitRaw) and longLimitRaw > strategy.position_avg_price ? longLimitRaw : na
+shortStop = strategy.position_size < 0 and not na(shortStopRaw) and shortStopRaw > strategy.position_avg_price ? shortStopRaw : na
+shortLimit = strategy.position_size < 0 and not na(shortLimitRaw) and shortLimitRaw < strategy.position_avg_price ? shortLimitRaw : na
+
+if executeOrders and not enableGridEngine and strategy.position_size > 0 and (not na(longStop) or not na(longLimit))
+    strategy.exit("Long Exit", "Long", stop = longStop, limit = longLimit)
+
+if executeOrders and not enableGridEngine and strategy.position_size < 0 and (not na(shortStop) or not na(shortLimit))
+    strategy.exit("Short Exit", "Short", stop = shortStop, limit = shortLimit)
+
+if didTradeAction
+    lastTradeBar := bar_index
+ladderWasOpen := didLadderBasketClose ? false : ladderAnyOpen
+
+// Chart visuals.
+plot(showMA ? ema50 : na, "EMA 50", color = color.new(color.yellow, 0), linewidth = 2)
+plot(showSAR ? sarValue : na, "SAR", color = color.new(color.aqua, 0), style = plot.style_circles, linewidth = 2)
+
+sdUpperPlot = plot(showSD ? sdUpper : na, "SD Upper", color = color.new(color.blue, 0))
+sdBasisPlot = plot(showSD ? sdBasis : na, "SD Basis", color = color.new(color.blue, 55))
+sdLowerPlot = plot(showSD ? sdLower : na, "SD Lower", color = color.new(color.blue, 0))
+fill(sdUpperPlot, sdLowerPlot, color = showSD ? color.new(color.blue, 90) : color.new(color.blue, 100))
+
+envUpperPlot = plot(showENV ? envUpper : na, "ENV Upper", color = color.new(color.purple, 0))
+envBasisPlot = plot(showENV ? envBasis : na, "ENV Basis", color = color.new(color.purple, 55))
+envLowerPlot = plot(showENV ? envLower : na, "ENV Lower", color = color.new(color.purple, 0))
+fill(envUpperPlot, envLowerPlot, color = showENV ? color.new(color.purple, 92) : color.new(color.purple, 100))
+
+donUpperPlot = plot(showDON ? donUpper : na, "DON Upper", color = color.new(color.orange, 0))
+donMidPlot = plot(showDON ? donMid : na, "DON Middle", color = color.new(color.orange, 35))
+donLowerPlot = plot(showDON ? donLower : na, "DON Lower", color = color.new(color.orange, 0))
+fill(donUpperPlot, donLowerPlot, color = showDON ? color.new(color.orange, 90) : color.new(color.orange, 100))
+
+gridMidPlot = plot(showGridLines ? gridMid : na, "Grid Mid", color = color.new(color.white, 0), linewidth = 2)
+gridUpperEntryPlot = plot(showGridLines ? upperEntry : na, "Grid Upper Entry", color = color.new(color.red, 25), linewidth = 1)
+gridLowerEntryPlot = plot(showGridLines ? lowerEntry : na, "Grid Lower Entry", color = color.new(color.lime, 25), linewidth = 1)
+gridUpperStopPlot = plot(showGridLines ? upperStop : na, "Grid Upper Stop", color = color.new(color.red, 0), linewidth = 1)
+gridLowerStopPlot = plot(showGridLines ? lowerStop : na, "Grid Lower Stop", color = color.new(color.lime, 0), linewidth = 1)
+
+ladderShow = showGridLines and ladderOrderMode
+ladderUpper1Plot = plot(ladderShow ? ladderUpper1 : na, "Ladder Upper 2SD", color = color.new(color.red, 75), linewidth = 1)
+ladderLower1Plot = plot(ladderShow ? ladderLower1 : na, "Ladder Lower 2SD", color = color.new(color.lime, 75), linewidth = 1)
+ladderUpper2Plot = plot(ladderShow ? ladderUpper2 : na, "Ladder Upper 2.5SD", color = color.new(color.red, 45), linewidth = 1)
+ladderLower2Plot = plot(ladderShow ? ladderLower2 : na, "Ladder Lower 2.5SD", color = color.new(color.lime, 45), linewidth = 1)
+ladderUpper3Plot = plot(ladderShow ? ladderUpper3 : na, "Ladder Upper 3SD", color = color.new(color.red, 10), linewidth = 2)
+ladderLower3Plot = plot(ladderShow ? ladderLower3 : na, "Ladder Lower 3SD", color = color.new(color.lime, 10), linewidth = 2)
+ladderUpperSoftStopPlot = plot(ladderShow ? ladderUpperSoftStop : na, "Ladder Upper Soft Stop", color = color.new(color.red, 0), linewidth = 2)
+ladderLowerSoftStopPlot = plot(ladderShow ? ladderLowerSoftStop : na, "Ladder Lower Soft Stop", color = color.new(color.lime, 0), linewidth = 2)
+ladderUpperEmergencyStopPlot = plot(ladderShow ? ladderUpperEmergencyStop : na, "Ladder Upper Emergency Stop", color = color.new(color.red, 0), style = plot.style_circles, linewidth = 2)
+ladderLowerEmergencyStopPlot = plot(ladderShow ? ladderLowerEmergencyStop : na, "Ladder Lower Emergency Stop", color = color.new(color.lime, 0), style = plot.style_circles, linewidth = 2)
+
+var line cmeUpperLine1 = na
+var line cmeUpperLine2 = na
+var line cmeUpperLine3 = na
+var line cmeLowerLine1 = na
+var line cmeLowerLine2 = na
+var line cmeLowerLine3 = na
+if barstate.islast
+    cmeUpperLine1 := f_updateLevelLine(cmeUpperLine1, cmeShow, cmeUpper1, color.new(color.red, 0), 2)
+    cmeUpperLine2 := f_updateLevelLine(cmeUpperLine2, cmeShow, cmeUpper2, color.new(color.red, 35), 1)
+    cmeUpperLine3 := f_updateLevelLine(cmeUpperLine3, cmeShow, cmeUpper3, color.new(color.red, 60), 1)
+    cmeLowerLine1 := f_updateLevelLine(cmeLowerLine1, cmeShow, cmeLower1, color.new(color.lime, 0), 2)
+    cmeLowerLine2 := f_updateLevelLine(cmeLowerLine2, cmeShow, cmeLower2, color.new(color.lime, 35), 1)
+    cmeLowerLine3 := f_updateLevelLine(cmeLowerLine3, cmeShow, cmeLower3, color.new(color.lime, 60), 1)
+
+gridVisualCanOpen = enableGridEngine and cooldownOk and not gridMiddleExitSignal and gridFlatOk
+gridLongMarker = gridLongSignal and gridVisualCanOpen
+gridShortMarker = gridShortSignal and gridVisualCanOpen
+gridLowerBreakMarker = enableGridEngine and signalReady and gridLowerBreakEvent
+gridUpperBreakMarker = enableGridEngine and signalReady and gridUpperBreakEvent
+ladderLongL1Marker = ladderOrderMode and (ladderLongL1Reject or (ladderLL1Open and not ladderLL1Open[1]))
+ladderLongL2Marker = ladderOrderMode and (ladderLongL2Reject or (ladderLL2Open and not ladderLL2Open[1]))
+ladderLongL3Marker = ladderOrderMode and (ladderLongL3Reject or (ladderLL3Open and not ladderLL3Open[1]))
+ladderShortS1Marker = ladderOrderMode and (ladderShortS1Reject or (ladderSS1Open and not ladderSS1Open[1]))
+ladderShortS2Marker = ladderOrderMode and (ladderShortS2Reject or (ladderSS2Open and not ladderSS2Open[1]))
+ladderShortS3Marker = ladderOrderMode and (ladderShortS3Reject or (ladderSS3Open and not ladderSS3Open[1]))
+ladderMidExitMarker = ladderLongMidExit or ladderShortMidExit
+ladderLongStopMarker = ladderLongSoftStopSignal or (ladderOrderMode and signalReady and ladderLongOpen and low <= ladderLowerEmergencyStop)
+ladderShortStopMarker = ladderShortSoftStopSignal or (ladderOrderMode and signalReady and ladderShortOpen and high >= ladderUpperEmergencyStop)
+
+plotshape(tacticalLongSignal, "Tactical Long", style = shape.triangleup, location = location.belowbar, color = color.new(color.lime, 0), text = "LONG", textcolor = color.white, size = size.tiny)
+plotshape(tacticalShortSignal, "Tactical Short", style = shape.triangledown, location = location.abovebar, color = color.new(color.red, 0), text = "SHORT", textcolor = color.white, size = size.tiny)
+plotshape(gridLongMarker, "Grid Long", style = shape.labelup, location = location.belowbar, color = color.new(color.teal, 0), text = "GRID LONG", textcolor = color.white, size = size.tiny)
+plotshape(gridShortMarker, "Grid Short", style = shape.labeldown, location = location.abovebar, color = color.new(color.maroon, 0), text = "GRID SHORT", textcolor = color.white, size = size.tiny)
+plotshape(gridMiddleExitSignal ? gridMid : na, "Grid Mid Exit", style = shape.circle, location = location.absolute, color = color.new(color.white, 0), text = "MID EXIT", textcolor = color.black, size = size.tiny)
+plotshape(gridLowerBreakMarker, "Grid Lower Zone Break", style = shape.xcross, location = location.belowbar, color = color.new(color.red, 0), text = "ZONE BREAK", textcolor = color.white, size = size.tiny)
+plotshape(gridUpperBreakMarker, "Grid Upper Zone Break", style = shape.xcross, location = location.abovebar, color = color.new(color.red, 0), text = "ZONE BREAK", textcolor = color.white, size = size.tiny)
+plotshape(ladderLongL1Marker, "Ladder Long L1", style = shape.labelup, location = location.belowbar, color = color.new(color.lime, 65), text = "L1 2SD", textcolor = color.white, size = size.tiny)
+plotshape(ladderLongL2Marker, "Ladder Long L2", style = shape.labelup, location = location.belowbar, color = color.new(color.lime, 35), text = "L2 2.5SD", textcolor = color.white, size = size.tiny)
+plotshape(ladderLongL3Marker, "Ladder Long L3", style = shape.labelup, location = location.belowbar, color = color.new(color.lime, 0), text = "L3 3SD", textcolor = color.white, size = size.tiny)
+plotshape(ladderShortS1Marker, "Ladder Short S1", style = shape.labeldown, location = location.abovebar, color = color.new(color.red, 65), text = "L1 2SD", textcolor = color.white, size = size.tiny)
+plotshape(ladderShortS2Marker, "Ladder Short S2", style = shape.labeldown, location = location.abovebar, color = color.new(color.red, 35), text = "L2 2.5SD", textcolor = color.white, size = size.tiny)
+plotshape(ladderShortS3Marker, "Ladder Short S3", style = shape.labeldown, location = location.abovebar, color = color.new(color.red, 0), text = "L3 3SD", textcolor = color.white, size = size.tiny)
+plotshape(ladderMidExitMarker ? gridMid : na, "Ladder Mid Exit", style = shape.circle, location = location.absolute, color = color.new(color.yellow, 0), text = "LADDER MID EXIT", textcolor = color.black, size = size.tiny)
+plotshape(ladderLongStopMarker, "Ladder Long Stop", style = shape.xcross, location = location.belowbar, color = color.new(color.red, 0), text = "LADDER STOP", textcolor = color.white, size = size.tiny)
+plotshape(ladderShortStopMarker, "Ladder Short Stop", style = shape.xcross, location = location.abovebar, color = color.new(color.red, 0), text = "LADDER STOP", textcolor = color.white, size = size.tiny)
+
+// Alerts.
+alertcondition(signalReady and finalBuyBias, "BUY BIAS", "BUY BIAS")
+alertcondition(signalReady and finalSellBias, "SELL BIAS", "SELL BIAS")
+alertcondition(tacticalLongSignal, "Tactical Long", "Tactical long: lower support hit with bullish confirmation.")
+alertcondition(tacticalShortSignal, "Tactical Short", "Tactical short: upper resistance hit with bearish confirmation.")
+alertcondition(gridLongMarker, "GRID LONG", "GRID LONG: lower dynamic SD zone rejection.")
+alertcondition(gridShortMarker, "GRID SHORT", "GRID SHORT: upper dynamic SD zone rejection.")
+alertcondition(gridMiddleExitSignal, "GRID MID EXIT", "GRID MID EXIT: price returned to the grid middle.")
+alertcondition(gridLowerBreakMarker or gridUpperBreakMarker, "GRID ZONE BREAK", "GRID ZONE BREAK: price closed beyond the dynamic stop zone.")
+alertcondition(ladderLongL1Marker or ladderLongL2Marker or ladderLongL3Marker, "LADDER LONG", "LADDER LONG: 3-level SD ladder long entry.")
+alertcondition(ladderShortS1Marker or ladderShortS2Marker or ladderShortS3Marker, "LADDER SHORT", "LADDER SHORT: 3-level SD ladder short entry.")
+alertcondition(ladderMidExitMarker, "LADDER MID EXIT", "LADDER MID EXIT: basket returned to grid middle.")
+alertcondition(ladderLongStopMarker or ladderShortStopMarker, "LADDER STOP", "LADDER STOP: ladder soft or emergency stop condition.")
+
+// Internal performance panel.
+var float peakEquity = na
+peakEquity := na(peakEquity) ? strategy.equity : math.max(peakEquity, strategy.equity)
+drawdownPctNow = peakEquity != 0.0 ? (strategy.equity - peakEquity) / peakEquity * 100.0 : 0.0
+
+var float maxDrawdownPct = 0.0
+maxDrawdownPct := math.min(maxDrawdownPct, drawdownPctNow)
+
+netProfitPct = f_safeDiv(strategy.netprofit, 100000.0, 0.0) * 100.0
+winRatePct = strategy.closedtrades > 0 ? strategy.wintrades * 100.0 / strategy.closedtrades : na
+
+barsPerYearRaw = not na(chartSeconds) and chartSeconds > 0 ? 31557600.0 / chartSeconds : 252.0
+barsPerYear = math.max(barsPerYearRaw, 1.0)
+equityReturn = strategy.equity[1] > 0.0 ? strategy.equity / strategy.equity[1] - 1.0 : 0.0
+riskFreePerBar = riskFreeRateInput * 0.01 / barsPerYear
+excessReturn = equityReturn - riskFreePerBar
+meanExcessReturn = ta.sma(excessReturn, customSharpeLen)
+stdevExcessReturn = ta.stdev(excessReturn, customSharpeLen)
+customSharpe = not na(stdevExcessReturn) and stdevExcessReturn != 0.0 ? meanExcessReturn / stdevExcessReturn * math.sqrt(barsPerYear) : na
+
+// Dashboard table. Table updates only on the last bar.
+var table dash = table.new(position.top_right, 3, 36, border_width = 1, border_color = color.new(color.gray, 55), frame_width = 1, frame_color = color.new(color.gray, 55))
+
+if barstate.islast
+    table.cell(dash, 0, 0, "IND", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = size.small)
+    table.cell(dash, 1, 0, "STATUS", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_center, text_size = size.small)
+    table.cell(dash, 2, 0, "VALUE", text_color = color.white, bgcolor = color.new(color.black, 0), text_halign = text.align_left, text_size = size.small)
+
+    f_renderRow(dash, 1, "MA", maStatus, "EMA" + str.tostring(maLen) + " " + f_price(ema50))
+    f_renderRow(dash, 2, "STO", stoStatus, "K " + f_num(stoK) + " / D " + f_num(stoD))
+    f_renderRow(dash, 3, "SAR", sarStatus, "SAR " + f_price(sarValue))
+    f_renderRow(dash, 4, "SD", sdStatus, "z " + f_num(sdZ) + " / SMA " + f_price(sdBasis))
+    f_renderRow(dash, 5, "ENV", envStatus, "Basis " + f_price(envBasis))
+    f_renderRow(dash, 6, "MACD", macdStatus, "Hist " + f_num(macdHist))
+    f_renderRow(dash, 7, "RSI", rsiStatus, "RSI " + f_num(rsiValue))
+    f_renderRow(dash, 8, "CCI", cciStatus, "CCI " + f_num(cciValue))
+    f_renderRow(dash, 9, "DON", donStatus, "Mid " + f_price(donMid))
+    f_renderRow(dash, 10, "REGIME", regimeStatus, "ADX " + f_num(adxValue) + " / ATRr " + f_num(atrRatio))
+    f_renderRow(dash, 11, "VPI", vpiStatus, hasVolume ? "VPI " + f_num(vpi) : "NO VOLUME")
+    f_renderRow(dash, 12, "MTF", mtfStatus, mtfTf + " Strong" + str.tostring(mtfStrongVotes) + " UP " + str.tostring(mtfUpVotes) + " / LOW " + str.tostring(mtfLowVotes))
+    f_renderRow(dash, 13, "SWEEP", sweepStatus, sweepText)
+    f_renderRow(dash, 14, "ADAPT", adaptStatus, adaptText + " / R " + f_num(adaptWidthRatio))
+    f_renderRow(dash, 15, "SUMMARY", summaryStatus, "UP " + str.tostring(upCount) + " / LOW " + str.tostring(lowCount) + " / USE " + str.tostring(usedCount))
+    f_renderRow(dash, 16, "SIGNAL", finalSignal, "Score " + f_num(scoreNorm) + " (" + str.tostring(totalScore) + "/" + str.tostring(usedCount) + ")")
+
+    f_renderInfoRow(dash, 17, "GRID MODE", enableGridEngine ? "ON / " + gridSource : "OFF / Tactical")
+    f_renderInfoRow(dash, 18, "GRID SIGMA", f_num(sigmaPos))
+    f_renderInfoRow(dash, 19, "GRID REGIME", gridRegime)
+    f_renderInfoRow(dash, 20, "GRID 1SD", f_price(gridDev))
+    f_renderInfoRow(dash, 21, "GRID STOP", f_price(gridStopDistancePoints))
+
+    ladderFilledText = ladderLongFilledCount > 0 ? "L " + str.tostring(ladderLongFilledCount) + "/3" : ladderShortFilledCount > 0 ? "S " + str.tostring(ladderShortFilledCount) + "/3" : "0/3"
+    float ladderAvgEntry = ladderAnyOpen ? strategy.position_avg_price : na
+    ladderSoftStopText = ladderLongOpen ? f_price(ladderLowerSoftStop) : ladderShortOpen ? f_price(ladderUpperSoftStop) : "L " + f_price(ladderLowerSoftStop) + " / S " + f_price(ladderUpperSoftStop)
+    ladderEmergencyStopText = ladderLongOpen ? f_price(ladderLowerEmergencyStop) : ladderShortOpen ? f_price(ladderUpperEmergencyStop) : "L " + f_price(ladderLowerEmergencyStop) + " / S " + f_price(ladderUpperEmergencyStop)
+
+    f_renderInfoRow(dash, 22, "LADDER MODE", ladderOrderMode ? ladderMode : "OFF")
+    f_renderInfoRow(dash, 23, "LADDER LEVELS", f_num(ladderLevel1Sd) + " / " + f_num(ladderLevel2Sd) + " / " + f_num(ladderLevel3Sd) + " SD")
+    f_renderInfoRow(dash, 24, "LADDER RISK", f_num(ladderBasketRiskPct) + "% / Max " + f_num(ladderMaxNotionalPct) + "%")
+    f_renderInfoRow(dash, 25, "LADDER SIDE", ladderActiveSide)
+    f_renderInfoRow(dash, 26, "LADDER FILLED", ladderFilledText)
+    f_renderInfoRow(dash, 27, "LADDER AVG", f_price(ladderAvgEntry))
+    f_renderInfoRow(dash, 28, "LADDER SOFT", ladderSoftStopText)
+    f_renderInfoRow(dash, 29, "LADDER EMERG", ladderEmergencyStopText)
+
+    f_renderInfoRow(dash, 30, "NET PROFIT", f_pct(netProfitPct))
+    f_renderInfoRow(dash, 31, "MAX DD", f_pct(math.abs(maxDrawdownPct)))
+    f_renderInfoRow(dash, 32, "CLOSED", str.tostring(strategy.closedtrades))
+    f_renderInfoRow(dash, 33, "WIN RATE", f_pct(winRatePct))
+    f_renderInfoRow(dash, 34, "SHARPE", "Sharpe: read from Strategy Tester (official)")
+    f_renderInfoRow(dash, 35, "CUSTOM SHARPE", f_num(customSharpe))

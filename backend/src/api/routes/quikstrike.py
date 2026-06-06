@@ -10,6 +10,7 @@ from src.models.quikstrike import (
 )
 from src.quikstrike.conversion import convert_to_xau_vol_oi_rows
 from src.quikstrike.extraction import build_extraction_from_request
+from src.quikstrike.range_bands import build_range_bands_payload, range_bands_payload_has_data
 from src.quikstrike.report_store import QuikStrikeReportStore
 
 router = APIRouter()
@@ -36,11 +37,19 @@ async def create_quikstrike_extraction_from_fixture(
             extraction_result=extraction.result,
             rows=extraction.rows,
         )
+        range_bands_payload = build_range_bands_payload(
+            extraction_id=extraction.result.extraction_id,
+            request=request,
+            created_at=extraction.result.created_at,
+        )
         return store.persist_report(
             extraction_result=extraction.result,
             normalized_rows=extraction.rows,
             conversion_result=conversion.result,
             conversion_rows=conversion.rows,
+            range_bands_payload=range_bands_payload
+            if range_bands_payload_has_data(range_bands_payload)
+            else None,
         )
     except ValueError as exc:
         _validation_error(str(exc))
