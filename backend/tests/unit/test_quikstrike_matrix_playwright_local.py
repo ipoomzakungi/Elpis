@@ -5,7 +5,11 @@ from src.quikstrike_matrix.extraction import build_extraction_from_request
 from src.quikstrike_matrix.playwright_local import (
     MATRIX_VIEW_LINK_SELECTORS,
     OPEN_INTEREST_NAV_SELECTOR,
+    SUPPLEMENTAL_VIEW_CLICK_LABELS,
+    SUPPLEMENTAL_VIEW_LINK_SELECTORS,
+    _click_supplemental_view,
     _click_view,
+    _normalize_supplemental_views,
     _prepare_gold_matrix_from_quikstrike_page,
     build_prompted_request_from_page,
     build_request_from_browser_payloads,
@@ -108,6 +112,24 @@ def test_prepare_gold_matrix_clicks_open_interest_nav_and_oi_matrix():
     assert page.active_view == QuikStrikeMatrixViewType.OPEN_INTEREST_MATRIX
 
 
+def test_supplemental_view_normalization_defaults_to_extra_side_nav_views():
+    assert _normalize_supplemental_views(None) == [
+        "settlements",
+        "futures_volume_oi",
+    ]
+    assert SUPPLEMENTAL_VIEW_CLICK_LABELS["settlements"] == ("Settlements",)
+
+
+def test_click_supplemental_view_uses_stable_side_nav_selector():
+    page = _AutoMatrixFakePage()
+
+    _click_supplemental_view(page, "futures_volume_oi")
+
+    assert page.clicked_selectors == [SUPPLEMENTAL_VIEW_LINK_SELECTORS["futures_volume_oi"]]
+    assert page.clicked_labels == []
+    assert page.active_supplemental_view == "Volume & OI"
+
+
 def _payload(label: str, first_value: str) -> dict:
     return {
         "visible_text": f"Gold (OG|GC) OPEN INTEREST Matrix {label}",
@@ -166,6 +188,8 @@ class _AutoMatrixFakePage:
         self.active_view = QuikStrikeMatrixViewType.OPEN_INTEREST_MATRIX
         self.body_text = body_text
         self.clicked_selectors: list[str] = []
+        self.clicked_labels: list[str] = []
+        self.active_supplemental_view: str | None = None
         self.matrix_ready = False
         self.mouse = _FakeMouse(self)
 
@@ -184,8 +208,19 @@ class _AutoMatrixFakePage:
     def evaluate(self, _script: str, arg: object | None = None) -> object:
         if isinstance(arg, list):
             return any(str(item).lower() in self.body_text.lower() for item in arg)
+        if isinstance(arg, str) and "parentElement" in _script:
+            return any(
+                arg == selector and self.active_view == view
+                for view, selector in MATRIX_VIEW_LINK_SELECTORS.items()
+            )
         if isinstance(arg, str) and arg.startswith("#"):
             self.clicked_selectors.append(arg)
+            if arg == SUPPLEMENTAL_VIEW_LINK_SELECTORS["settlements"]:
+                self.active_supplemental_view = "Settlements"
+                return True
+            if arg == SUPPLEMENTAL_VIEW_LINK_SELECTORS["futures_volume_oi"]:
+                self.active_supplemental_view = "Volume & OI"
+                return True
             if arg == OPEN_INTEREST_NAV_SELECTOR:
                 self.body_text = "Gold (OG|GC) Open Interest Chart Matrix"
                 self.matrix_ready = False
@@ -196,6 +231,10 @@ class _AutoMatrixFakePage:
                     self.matrix_ready = True
                     return True
             return False
+        if isinstance(arg, str) and arg in {"Settlements", "Volume & OI"}:
+            self.clicked_labels.append(arg)
+            self.active_supplemental_view = arg
+            return True
         if not self.matrix_ready:
             return {"visible_text": self.body_text, "tables": []}
         return _payload(MATRIX_VIEW_LABEL_FOR_TEST[self.active_view], "120")

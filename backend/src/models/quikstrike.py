@@ -124,6 +124,7 @@ class QuikStrikeArtifactType(StrEnum):
     RAW_NORMALIZED_ROWS_JSON = "raw_normalized_rows_json"
     RAW_NORMALIZED_ROWS_PARQUET = "raw_normalized_rows_parquet"
     RAW_METADATA = "raw_metadata"
+    RANGE_BANDS_JSON = "range_bands_json"
     PROCESSED_XAU_VOL_OI_CSV = "processed_xau_vol_oi_csv"
     PROCESSED_XAU_VOL_OI_PARQUET = "processed_xau_vol_oi_parquet"
     CONVERSION_METADATA = "conversion_metadata"

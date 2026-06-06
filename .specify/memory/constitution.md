@@ -1,8 +1,10 @@
 <!--
   Sync Impact Report
   ==================
-  Version change: N/A → 1.0.0 (initial ratification)
-  Modified principles: N/A (new constitution)
+  Version change: 1.0.0 → 1.1.0
+  Modified principles:
+    - IX. Data-Source Principle (adds approved local read-only credential exception)
+    - Governance (requires documented exception handling for local research secrets)
   Added sections:
     - Core Principles (12 principles)
     - Technology Stack Details
@@ -115,6 +117,28 @@ for serious multi-year research.
 
 **Rationale**: Official APIs provide reliable, sanctioned data. Vendor
 data enables broader historical coverage.
+
+#### Approved Local Research Credential Exception
+
+The project owner MAY approve read-only local credentials for research data
+ingestion providers, including CME/QuikStrike-style sources, while the project
+remains in v0. This exception is limited to market-data collection for research.
+
+Approved local research credentials:
+
+- MUST NOT be committed to git or stored in tracked files.
+- SHOULD use the OS credential store. Ignored local-only secret files MAY be used
+  only when explicitly approved.
+- MUST NOT be printed, logged, persisted in reports, captured in diagnostics, or
+  saved in network artifacts.
+- MUST NOT grant or be used for broker/exchange account access, order placement,
+  wallet/private-key access, position management, live trading, paper trading, or
+  execution workflows.
+- MUST include documented setup, removal, rotation, and missing-credential
+  behavior before implementation is considered complete.
+
+Reversible encoding is secret material, not protection. Encoded passwords MUST
+be treated as credentials and kept outside tracked files.
 
 ### X. TradingView Principle
 
@@ -259,6 +283,9 @@ project. Any deviation from these principles MUST be documented with:
 3. Mitigation plan
 4. Approval from project owner
 
+Approved local research credential exceptions MUST also document the exact
+storage boundary and redaction guarantees.
+
 Amendments to this constitution MUST:
 
 1. Be documented in this file
@@ -272,4 +299,4 @@ Compliance reviews MUST occur:
 - When introducing new technologies
 - When modifying core architecture decisions
 
-**Version**: 1.0.0 | **Ratified**: 2026-04-26 | **Last Amended**: 2026-04-26
+**Version**: 1.1.0 | **Ratified**: 2026-04-26 | **Last Amended**: 2026-06-06

@@ -1,0 +1,1176 @@
+________________________________________
+Distilled Source Pack v2
+OI, IV, SD, Gamma, Flow, and Automation Logic for Trading Signal Design
+0. Executive Verdict
+The core truth from the sources is:
+Do not use OI alone as a trading signal.
+OI is the map of committed positions.
+IV/SD is the map of expected movement.
+Gamma tells how hedging pressure can change.
+Intraday volume/flow tells what is happening now.
+Price confirms whether the map is being activated.
+The Mtraders philosophy is not prediction. It is measurement. Part 1 says the trading process should shift from guessing direction to measuring volatility mispricing, normalizing data, and identifying structural outliers such as IV vs RV, skew, and cross-sectional abnormalities.
+The visual source Options Data for Futures Edge summarizes the whole system well: price shows what is happening; volatility and OI show why it is happening.
+So the final automated trading model should not be:
+High Call OI = sell
+High Put OI = buy
+It should be:
+OI concentration + IV/SD boundary + Gamma regime + intraday flow + price confirmation + risk control = signal
+________________________________________
+1. Source Coverage: What v1 Missed
+Report v1 was about 65–70% coverage conceptually, but only 40–50% coverage for automation.
+It covered:
+Area	v1 coverage
+OI basic meaning	Good
+IV/SD expected move	Good
+Positive/negative gamma	Good
+Basic trading rules	Good
+Automation direction	Basic
+It missed or under-covered:
+Missing layer	Why it matters
+OI timing	OI is usually yesterday’s settled position; intraday volume is today’s action.
+Open/close mechanics	OI does not show whether positions are new, closed, long, or short unless you have open/close data.
+Delta Ranges	25Δ, 15Δ, 5Δ zones are used as market-priced distance/tail zones.
+CME settlement lock	SD map should use fixed settlement constants, not constantly moving real-time anchors.
+Vol Chg / Future Chg	Needed to distinguish IV expansion from price movement.
+GEX formulas	Automation needs OI × Gamma × multiplier × price², not raw OI.
+Flow/GEX ratios	Flow must be scaled against local gamma base.
+Liquidity features	Spread, depth, relative spread must be part of the signal.
+Vanna / Charm	Secondary Greeks can drive late-day flow.
+Fat-tail / gap risk	SD bands are not hard walls.
+0DTE research conflict	Some papers find dampening; others find volatility increase. The signal must classify regimes.
+Jump/event risk	0DTE is extremely sensitive to FOMC/CPI/news jumps.
+Backtest design	Without no-lookahead OI handling, the model will be fake.
+Data schema	Needed before automation.
+________________________________________
+2. Core Philosophy: Measurement, Not Prediction
+The source framework is built on the idea that traders should stop guessing price direction and instead measure where the market has priced risk incorrectly. Part 1 says the institutional/quant approach is not “where will price go?” but “is volatility mispriced?” It uses normalization and cross-sectional comparison to identify outliers.
+This matters because a trading signal should not begin with a directional opinion. It should begin with a market state:
+Is IV expensive or cheap?
+Is price inside or outside expected move?
+Where is OI concentrated?
+Where is Gamma concentrated?
+Is current flow activating those levels?
+Is the market in mean-reversion or momentum regime?
+This is why the Mtraders visual material repeatedly frames the method as looking through the Volatility Lens: instead of seeing only price candles, you measure volatility, commitment, and hidden structure under price.
+________________________________________
+3. OI: What It Is
+Open Interest, or OI, is the number of contracts that remain open after clearing/settlement. It is not the same as volume.
+The tool explanation says Put OI and Call OI are the total open interest of all put and call contracts in the selected series, calculated by summing OI across every strike. It is useful for seeing which side has more outstanding position weight, and it can be used to calculate Put/Call Ratio. But the same source warns that intraday volume often reflects the real action during the day better than OI, because OI is accumulated/settled position data.
+The IV lesson also makes the timing difference clear: OI is the settled outstanding contract quantity, often cleared from the previous day, while intraday data is today’s live trading activity.
+So:
+OI = committed position map
+Volume = current activity
+OI Change = change in committed position
+Intraday Volume/OI = whether today’s activity is large relative to existing commitment
+3.1 How OI Changes
+OI increases when:
+New buyer opens + new seller opens
+OI decreases when:
+Existing long closes + existing short closes
+OI stays the same when:
+One trader opens while another trader closes
+Therefore, raw OI cannot tell you:
+Who is long?
+Who is short?
+Was the trade opening?
+Was the trade closing?
+Was the market maker forced to hedge?
+That is why OI must be combined with:
+Volume
+OI change
+Bid/ask trade direction
+Open/close data
+Delta
+Gamma
+IV change
+Price reaction
+________________________________________
+4. The Most Important OI Rule
+The most important rule is:
+OI is real, but OI is delayed and sign-ambiguous.
+The source says “OI is real,” but it also distinguishes OI from intraday activity. OI is settled outstanding position; intraday volume is the live “changing of hands.” The IV lesson’s source guide says intraday volume is treated as the “hero” indicator for daily movement because it reflects real-time institutional action, while OI reflects settled positions from the prior clearing cycle.
+For automation:
+Use OI to build the battlefield.
+Use intraday volume to see where the battle is active.
+Use price to confirm who is winning.
+Do not automate like this:
+IF Put OI high THEN buy
+IF Call OI high THEN sell
+Use this instead:
+IF price approaches high-OI strike
+AND the strike is also high gamma
+AND IV is compressing
+AND intraday flow does not break the level
+THEN mean-reversion signal is allowed
+
+IF price breaks high-OI strike
+AND volume/OI surges
+AND IV expands
+AND gamma regime is negative or flow implies short-gamma hedging
+THEN momentum/squeeze signal is allowed
+________________________________________
+5. OI vs Intraday Volume
+This is a major missing part from v1.
+OI
+Time nature: stock variable
+Meaning: positions still open
+Update: usually after clearing/settlement
+Use: map of commitment
+Weakness: delayed, does not identify buyer/seller side
+Intraday Volume
+Time nature: flow variable
+Meaning: contracts traded today
+Update: real time or intraday
+Use: current activity / activation
+Weakness: can be noisy and may include closing trades
+The IV lesson source guide says the intraday tool focuses on live option activity and filters for expiration-day CME behavior, aiming to follow larger institutional activity. It also describes a research-backed “80% rule” where price tends to gravitate toward the longest intraday volume spikes, often moving at least one block or price level toward those concentrated zones.
+For signal design, this becomes:
+OI Wall = old battlefield
+Intraday Volume Spike = current battlefield
+Price Movement Toward Spike = activation
+Practical model:
+Volume_OI_Ratio = Intraday_Volume / max(OI, 1)
+
+If Volume_OI_Ratio > 1:
+    today's activity is larger than existing position at that strike
+
+If Volume_OI_Ratio > 2 or 3:
+    fresh activity may dominate old OI map
+
+If high OI but low volume:
+    level may matter as magnet/support/resistance, but is not active yet
+________________________________________
+6. Data Dictionary From the Tools
+The Vol2Vol tool source defines several fields that should become part of your automated system.
+Field	Meaning	Signal use
+Put OI	Sum of all put open interest in the series	Downside commitment / PCR
+Call OI	Sum of all call open interest in the series	Upside commitment / PCR
+Vol	Overall volatility of the option series, often ATM IV or volatility settlement	Expected move / premium pricing
+Vol Chg	Current Vol minus prior Vol settlement	IV expansion/compression
+Future Chg	Current futures price minus prior futures settlement	Underlying direction context
+Delta Ranges	Distance from ATM to 25Δ, 15Δ, 5Δ strikes	Market-priced distance/tail map
+SD Ranges	Expected-move bands	Risk boundary
+The Vol2Vol file says CME volatility is reverse-engineered from option premium using a pricing model such as Bjerksund-Stensland 1993 American Approximation, and Vol Chg is current Vol minus prior Vol settlement.
+The same file explains that Delta Ranges show the distance from ATM/50Δ to important delta levels such as 25Δ, 15Δ, and 5Δ on both put and call sides. These are used to measure the swing range priced by market makers and to frame Delta-Gamma exposure and tail risk without guessing direction.
+________________________________________
+7. Delta Ranges and SD Ranges
+This was under-covered in v1.
+Delta Ranges are not just decorative chart bands. They are market-implied distance zones.
+From the Vol2Vol source:
+25Δ zone = closer OTM / first meaningful wing
+15Δ zone = further OTM / larger expected move
+5Δ zone = deep OTM / tail risk zone
+The tool shows examples where:
+25Δ distance ≈ 54.5 points
+15Δ distance ≈ 108–109.9 points
+5Δ distance ≈ 160.9–166 points
+These are used as quant measurements for Delta-Gamma exposure and tail-risk distance.
+For automation, use both:
+Distance in price points
+Distance in SD
+Distance in delta bucket
+Example classification:
+ATM / 50Δ = center
+25Δ = first pressure zone
+15Δ = high-stress zone
+5Δ = tail zone
+A price move from ATM toward 25Δ is normal. A move toward 15Δ is more serious. A move toward 5Δ means the market is entering tail-risk territory, especially if IV expands and volume follows.
+________________________________________
+8. IV and Expected Move
+IV is the market’s price of future movement. It is not a directional forecast.
+The SD source says Daily Expected Move compresses annualized IV into a one-day estimate, while exact time to expiration should be used for contracts with less than one day remaining, such as 0DTE. It also states that 1 SD covers approximately 68.2% probability.
+8.1 Expected Move Formula
+Use annualized IV as decimal:
+Expected_Move = Underlying_Price × IV × sqrt(Time_To_Expiration_In_Years)
+For a one-day approximation:
+Daily_1SD_% ≈ Annualized_IV / 16
+Daily_1SD_Points = Price × Daily_1SD_%
+For 0DTE exact timing:
+T = Minutes_To_Expiration / Minutes_Per_Trading_Year
+Expected_Move_Remaining = Current_Price × Current_IV × sqrt(T)
+8.2 SD Bands
+Upper_1SD = Anchor_Price + 1 × Expected_Move
+Lower_1SD = Anchor_Price - 1 × Expected_Move
+
+Upper_2SD = Anchor_Price + 2 × Expected_Move
+Lower_2SD = Anchor_Price - 2 × Expected_Move
+
+Upper_3SD = Anchor_Price + 3 × Expected_Move
+Lower_3SD = Anchor_Price - 3 × Expected_Move
+Approximate normal distribution interpretation:
+±1 SD ≈ 68.2%
+±2 SD ≈ 95%
+±3 SD ≈ 99.7%
+But this is not a guarantee. Part 4 warns that real markets have fat tails, gap risk, jumps, weekend gaps, geopolitical events, and Black Swan behavior. The model is a map, not the territory.
+________________________________________
+9. CME Settlement Lock: Critical for Automation
+The SD formula source says the map should be built around a locked time. It states that around 00:30, or 01:30 during DST, CME performs mark-to-market accounting. At that point, the system pulls fixed constants and draws ±1SD, ±2SD, and ±3SD bands on the chart. These lines should remain fixed and not move with real-time price. The constants include prior settlement price and Vol Settle/ATM IV.
+This is very important.
+Your automation should separate:
+Static Daily Map:
+    prior settlement
+    vol settlement
+    fixed SD bands
+    prior OI
+
+Dynamic Intraday Map:
+    current price
+    current IV
+    intraday volume
+    live Greeks
+    live flow
+Do not keep moving the original daily SD map every tick. That destroys the meaning of the risk boundary.
+________________________________________
+10. Why 1SD, 2SD, and 3SD Matter for Trade Location
+The IV instructional source explains the practical risk logic: as price moves farther toward the IV boundary, the remaining distance to the boundary shrinks, so the capital required to survive adverse movement becomes smaller. The source frames this as a risk-management advantage for mean reversion, not a guarantee that price cannot continue.
+The distilled rule:
+Inside ±1SD:
+    normal zone
+    less edge for mean reversion
+    need flow confirmation
+
+Near ±2SD:
+    pressure zone
+    mean reversion becomes interesting if positive gamma / IV compression / failed breakout
+
+Near ±3SD:
+    tail zone
+    avoid blind fade
+    trade only with strong reversal confirmation or strong squeeze confirmation
+Important:
+1SD is not automatically a trade.
+2SD is not automatically a reversal.
+3SD is not automatically impossible.
+SD gives risk boundary. It does not replace flow confirmation.
+________________________________________
+11. Delta: The Correct Interpretation
+Part 2 explains that Delta should be understood as hedge ratio / equivalent exposure, not merely probability of finishing ITM. A 0.50 Delta option behaves like exposure to 50 shares per 100-share stock option contract.
+For futures options, translate this into futures-equivalent exposure.
+Futures_Equivalent_Delta = Contracts × Delta
+For gold futures options:
+Dollar_Delta ≈ Contracts × Delta × Contract_Multiplier × Futures_Price
+Delta tells you:
+How directional the option position is now.
+How much futures/underlying may be needed to hedge.
+Delta does not tell you how fast exposure changes. That is Gamma.
+________________________________________
+12. Gamma: The Engine of Forced Hedging
+Gamma is the change in Delta when price moves.
+Part 2 says Gamma is what makes Delta non-constant. It creates convexity. Long Gamma can create “buy low, sell high” rebalancing behavior when the trader delta-hedges.
+For 0DTE, Gamma becomes especially important. The gamma hedging source says that as time to expiration shortens to one day or less, Theta rises sharply, and for ATM or near-the-money strikes Gamma increases because small underlying moves can create large Delta changes. OTM Gamma falls as the probability of moving ITM decreases.
+So:
+ATM + short DTE = maximum Gamma danger/opportunity
+Far OTM + low probability = less Gamma until price approaches
+For automation:
+High OI is not enough.
+High OI × high Gamma is important.
+High OI × high Gamma × active flow is very important.
+________________________________________
+13. Convert OI Into Exposure
+Raw OI must be transformed.
+13.1 OI Notional
+For equity index options:
+OI_Notional = OI × Contract_Multiplier × Underlying_Price
+For standard equity-style index options, multiplier is often 100.
+For CME Gold options, the Mtraders gold analysis states that COMEX Gold Options use underlying Gold Futures, contract size is 100 troy ounces, and 1 point = $100 USD.
+So for Gold:
+Gold_OI_Notional = OI × 100 × GC_Futures_Price
+13.2 OI Delta Exposure
+OI_Delta_Exposure = OI × Delta × Contract_Multiplier × Price
+For futures-equivalent contracts:
+Futures_Equivalent = OI × Delta
+13.3 OI Gamma Exposure
+General:
+OI_Gamma_Exposure = OI × Gamma × Contract_Multiplier × Price²
+For strategy-level or leg-level features, the 0DTE Trading Rules paper defines flow and GEX-style features using volume, OI, Greeks, and spot. For example, flow gamma uses volume × gamma × 100 × spot², and OI gamma exposure uses OI × gamma × 100 × spot². It also separates liquidity, flow, and GEX features because they capture different economic channels: execution friction, current trading pressure, and concentration of convexity.
+For Gold, replace 100 with the Gold contract multiplier:
+Gold_OI_Gamma_Exposure = OI × Gamma × 100 × GC_Price²
+The 100 here means 100 troy ounces, not 100 shares.
+________________________________________
+14. Signed vs Absolute Gamma
+You need two versions.
+Absolute Gamma
+Abs_GEX = OI × abs(Gamma) × Multiplier × Price²
+Use this to find:
+Where convexity is concentrated
+Where price may pin
+Where hedging sensitivity is high
+Where a break may matter
+Signed Gamma
+Signed_GEX = Position_Sign × OI × Gamma × Multiplier × Price²
+The problem:
+You usually do not know Position_Sign from raw OI.
+So with only public OI, you can estimate:
+Gamma concentration
+Potential hedge sensitivity
+Put wall / Call wall
+Possible squeeze levels
+But you cannot honestly claim:
+Dealer is definitely long gamma
+Dealer is definitely short gamma
+unless you have open/close data, trade direction, or dealer inventory data.
+The 0DTE Trading Rules paper explicitly notes that its flow-style and exposure-style proxies based on traded volume, OI, and Greeks are not a dealer-inventory reconstruction.
+This is a crucial automation rule:
+If dealer inventory data is unavailable:
+    label the feature as GEX Proxy, not true dealer GEX.
+________________________________________
+15. Normalized GEX and Flow Ratios
+The 0DTE Trading Rules paper gives useful normalized features:
+BΓ = gOI,n / (abs(gOI,a) + 1)
+RΓ = fΓ / (abs(gOI,a) + 1)
+T  = h / (d + 1)
+Meaning:
+BΓ = normalized GEX balance
+RΓ = gamma flow pressure scaled by local GEX base
+T  = liquidity tightness / trading friction
+This is important because raw flow and raw GEX are scale-dependent across strategies, strikes, premium sizes, and widths.
+For your futures signal, translate this into:
+GEX_Balance = Net_GEX_Proxy / (Abs_GEX + 1)
+
+Flow_Pressure = Intraday_Gamma_Flow / (Abs_GEX + 1)
+
+Liquidity_Tightness = Half_Spread / (Displayed_Depth + 1)
+Signal meaning:
+High Abs_GEX + low Flow_Pressure:
+    level may pin / resist
+
+High Abs_GEX + high Flow_Pressure:
+    level is being attacked
+
+High Flow_Pressure against wall + IV expansion:
+    possible squeeze / breakout
+
+High Liquidity_Tightness:
+    reduce size or skip trade
+________________________________________
+16. Positive Gamma vs Negative Gamma Regime
+This is the heart of the trading signal.
+Positive Dealer Gamma
+When dealers/market makers are long gamma, hedging tends to lean against price movement.
+Price rises -> dealer sells underlying/futures
+Price falls -> dealer buys underlying/futures
+Effect:
+Mean reversion
+Volatility dampening
+Pinning
+Failed breakouts
+Range behavior
+The liquidity-provider paper says that if market makers’ net gamma and net delta are positive, they should buy after index declines and sell after index increases, which dampens volatility. It finds that market makers’ 0DTE net gamma predicts lower volatility over the next 10 minutes and up to about one hour.
+Negative Dealer Gamma
+When dealers/market makers are short gamma, hedging tends to follow price movement.
+Price rises -> dealer buys more
+Price falls -> dealer sells more
+Effect:
+Momentum
+Acceleration
+Gamma squeeze
+Volatility expansion
+Trend persistence
+The gamma hedging source explains that hedging short gamma requires trading in the direction of price movement, creating intraday momentum. It also says that balanced buy/sell flow can leave market makers with near-zero net gamma despite large notional volume.
+Automation Translation
+Positive Gamma Regime = fade extremes / expect pin / reduce breakout confidence
+
+Negative Gamma Regime = follow breakouts / avoid blind fade / expect acceleration
+
+Unknown Gamma Regime = reduce size / require stronger confirmation
+________________________________________
+17. Why Volume Alone Is Not Risk
+A major academic point: huge 0DTE volume does not automatically mean huge hedging impact.
+The gamma hedging source gives a clear example: if 100,000 contracts trade at a strike but 50,000 are customer buys and 50,000 are customer sells, market makers can be left with net zero gamma risk even though notional volume is huge.
+So the model must distinguish:
+Gross Volume
+Net Flow
+Order Imbalance
+Dealer Inventory
+Gamma Exposure
+Bad signal:
+Volume high -> market must move
+Better signal:
+Volume high
+AND flow imbalance is directional
+AND IV is expanding
+AND price is breaking a gamma/OI level
+AND dealer gamma regime supports momentum
+________________________________________
+18. What the Academic 0DTE Sources Really Say
+The 0DTE literature is not one-sided. This matters because you should not hard-code one belief.
+18.1 View A: 0DTE / Market-Maker Gamma Often Dampens Volatility
+The Dim-Eraker-Vilkov paper finds that market makers’ 0DTE net gamma is on average positive and negatively related to future intraday volatility. It also finds that positive gamma strengthens intraday reversal, while negative gamma strengthens momentum.
+The same paper reports that a one-standard-deviation increase in market makers’ 0DTE net gamma is associated with a decline in underlying log variance equal to 7.3% of its standard deviation, and that market makers are predominantly long gamma for most of the sample.
+The Adams-Fontaine-Ornthanalai liquidity-provider paper finds that index volatility is lower by about 60–90 annualized basis points on days with 0DTE trading, and argues that market-maker hedging of expiring positions dampens volatility.
+18.2 View B: 0DTE Trading Can Still Increase Volatility
+Brogaard-Han-Won find that a one-standard-deviation increase in 0DTE options trading leads to a 9.10% increase relative to mean volatility. They argue that the volatility effect remains positive even after accounting for gamma hedging and is primarily driven by speculative retail investors.
+Their internet appendix result says that 0DTE volume and order imbalance continue to exert positive pressure on volatility, while market-maker long gamma only partially offsets directional imbalance.
+18.3 View C: Average Effect Can Be Dampening, But Negative Gamma Can Still Be Dangerous
+The Amaya-Garcia-Ares-Pearson-Vasquez paper finds that OMM gamma is typically positive and often reduces volatility, but gamma can be negative. It estimates that the largest impact of OMM gamma was to increase annualized daily volatility by 3.3 percentage points and 30-minute annualized volatility by 6.4 percentage points.
+It also notes that OMM gamma was negative at some point on at least 25% of days in its sample, and after Tuesday/Thursday expirations were introduced, daily minima were negative on at least half of trading days.
+18.4 Final Research Conclusion
+The correct automated model is not:
+0DTE always dampens volatility
+or:
+0DTE always increases volatility
+The correct model is:
+Separate the channels:
+    1. Dealer gamma inventory
+    2. Directional order imbalance
+    3. Retail/speculative flow
+    4. IV expansion/compression
+    5. Price location versus SD/OI walls
+    6. Event/jump risk
+________________________________________
+19. Retail 0DTE Flow: Why It Matters
+The retail 0DTE paper finds a strong retail preference for 0DTE options. It says that for most of 2022 and all of 2023, 0DTE options represented more than 75% of retail S&P 500 options volume, and the paper finds substantial retail losses despite price improvement mechanisms.
+Another snippet from that paper says market-maker order imbalance in 0DTE options was consistently negative, meaning end consumers had net-long demand for 0DTE options and market makers absorbed that demand.
+Signal meaning:
+Retail / speculative flow can create noise volatility.
+Dealer hedging can dampen or amplify.
+The model must not assume all option flow is informed.
+For automation, include:
+small-lot volume share if available
+single-leg vs multi-leg if available
+same-day expiry share
+volume/OI surge
+put/call volume imbalance
+________________________________________
+20. Jump Risk and Event Risk
+0DTE options are extremely sensitive to intraday jumps.
+The Intraday Jumps paper says 0DTE options display extreme sensitivity to abrupt underlying price movements. It finds intraday jumps are frequent and impactful, with intensity clustering around the market open and close. It also finds that the implied premium for jump risk is nearly twice as large as the combined premia for diffusion and volatility risks.
+The same paper gives an FOMC example where an out-of-the-money 0DTE SPX put rose dramatically after Powell’s comments; the option gained around 640% from the open and around 2400% from its intraday low.
+Automation implication:
+On FOMC / CPI / NFP / major news:
+    SD mean-reversion rules become weaker
+    jump filter must override normal signal
+    size must be reduced or strategy must switch to event mode
+Event mode logic:
+Before event:
+    avoid short naked gamma
+    prefer defined-risk structures
+    watch IV expansion
+
+After event:
+    if IV crush + price inside SD -> mean reversion allowed
+    if IV expansion + price breaks OI wall -> momentum allowed
+________________________________________
+21. Model Risk: The Map Is Not the Territory
+Part 4 warns against blindly trusting Black-Scholes or any Greek model. Markets have fat tails, gaps, jumps, weekends, geopolitical events, and discontinuous movement. A short-gamma trader who expects to rebalance continuously may be unable to rebalance through a gap.
+This must be coded into risk rules.
+Automation cannot say:
+Price cannot exceed 3SD
+It must say:
+Price is statistically stretched, but tail events can break the map.
+Risk controls:
+No naked short gamma
+No unlimited loss structures
+No mean-reversion trade during high-impact event without confirmation
+Hard stop
+Daily loss limit
+Data outage kill switch
+Spread/liquidity filter
+________________________________________
+22. Gold-Specific Knowledge
+The gold case study is important because your target appears to be Gold / CME.
+The Gold analysis states:
+Market: CME Group / COMEX
+Instrument: Gold Options (OG)
+Underlying: Gold Futures (GC)
+Contract Size: 100 Troy Ounces
+1 Point = $100 USD
+So every point of GC movement matters a lot.
+1 GC point = $100 per contract
+10 points = $1,000
+50 points = $5,000
+100 points = $10,000
+This means position sizing must be built from stop distance:
+Dollar_Risk_Per_Contract = Stop_Distance_Points × $100
+Contracts = Allowed_Dollar_Risk / Dollar_Risk_Per_Contract
+The gold case also distinguishes ATM long puts from far OTM long puts. ATM long puts behave like higher-delta directional exposure, while far OTM puts behave like low-delta/high-gamma tail-risk exposure. The seller side carries large risk, especially when selling OTM puts that appear safe but become dangerous as price approaches the strike.
+Automation implication:
+Never copy SPX thresholds blindly to Gold.
+Gold has different liquidity, session behavior, macro sensitivity, and contract sizing.
+________________________________________
+23. Secondary Greeks: Vanna and Charm
+Part 3 adds an important layer beyond Gamma.
+It explains discrete hedging and notes that real hedging cannot be continuous because transaction costs exist. It gives three hedging styles:
+Time-based hedging
+Move-based / band hedging
+Delta-based hedging
+It also introduces Vanna and Charm as second-order Greeks watched by quant traders because they can drive market-maker flow. Vanna is the change in Delta when IV changes.
+For automation:
+Gamma = Delta changes when price moves
+Vanna = Delta changes when IV moves
+Charm = Delta changes as time passes
+Practical meaning:
+After event IV crush:
+    Vanna flow can change dealer hedging needs quickly
+
+Near end of day:
+    Charm can force Delta changes even if price is quiet
+
+Near expiration:
+    Gamma + Charm can create fast hedging flow
+You do not need perfect Vanna/Charm in v1 automation, but you should design the system so they can be added later.
+________________________________________
+24. Volatility Mispricing: IV vs RV
+Part 5 says the practical workflow is:
+1. Scan for mispricing
+2. Choose structure that matches the volatility surface
+3. Manage risk and sizing
+It says the heart of the Mtraders style is IV compared with RV. In normal markets, IV is often above RV, creating volatility risk premium. But gold can misprice fear around Fed news or war risk.
+Signal interpretation:
+IV > RV:
+    market is pricing more movement than is being realized
+    possible short-vol / mean-reversion environment
+    only with defined risk and no major event tail
+
+IV < RV:
+    market is underpricing movement
+    possible long-gamma / breakout environment
+    good for event or momentum setup
+Automation features:
+ATM_IV
+Realized_Vol_5m
+Realized_Vol_30m
+Realized_Vol_1d
+IV_RV_Spread
+IV_Rank
+IV_Percentile
+Vol_Chg
+Skew
+Term_Structure
+________________________________________
+25. Strategy Evidence From 0DTE Trading Rules
+The 0DTE Trading Rules paper is useful because it warns against broad unconditional rules.
+It finds that a positive 0DTE variance risk premium exists, but same-day magnitude is small and difficult to monetize after realistic frictions. Strategy PNL is wide, state-dependent, and dominated by tail risk rather than stable carry. It also finds that conditional 10:00 ET rules can work better for selected strategies.
+Its later results show that put ratio spreads, iron butterfly/condor structures, and diversified baskets can produce positive out-of-sample performance under selected conditional rules, while not all strategies work uniformly.
+Automation conclusion:
+Do not build an unconditional rule like:
+    "Sell 0DTE every day"
+    "Fade 2SD every time"
+    "Buy every call-wall break"
+
+Build conditional rules:
+    only trade when regime + location + flow + liquidity agree
+________________________________________
+26. Strike Map: How to Read OI by Strike
+For each strike, compute:
+Call_OI
+Put_OI
+Total_OI
+Call_Volume
+Put_Volume
+Volume/OI
+OI_Change
+Call_IV
+Put_IV
+Call_Delta
+Put_Delta
+Call_Gamma
+Put_Gamma
+Abs_GEX
+Net_GEX_Proxy
+Distance_From_Spot
+Distance_In_SD
+Delta_Bucket
+26.1 Put Wall
+Usually a lower strike with large put OI or put gamma concentration.
+Possible meanings:
+Support if dealers are long gamma / puts sold by end users
+Acceleration zone if price breaks below and dealers are short gamma
+Do not assume automatically.
+26.2 Call Wall
+Usually an upper strike with large call OI or call gamma concentration.
+Possible meanings:
+Resistance if dealers are long gamma / calls sold by end users
+Squeeze trigger if price breaks above and dealers are short gamma
+26.3 Gamma Magnet / Pin
+A strike near current price with high absolute gamma.
+If price is near high Abs_GEX
+AND IV is flat/falling
+AND gamma regime is positive
+THEN price may pin or mean revert around the strike
+26.4 Squeeze Level
+A high-OI/high-gamma strike where price breaks through with active flow.
+If price breaks the wall
+AND volume/OI surges
+AND IV expands
+AND price holds beyond level
+THEN wall becomes squeeze trigger
+________________________________________
+27. Signal Architecture
+The automation should be built in layers.
+Layer 1: Static Daily Map
+    Prior settlement
+    Vol settlement / ATM IV
+    ±1SD / ±2SD / ±3SD
+    Prior OI by strike
+    Prior GEX by strike
+
+Layer 2: Dynamic Intraday Map
+    Current price
+    Current IV
+    Vol Chg
+    Future Chg
+    Intraday volume by strike
+    Volume/OI
+    Live Greeks
+    Live spreads/depth
+
+Layer 3: Regime Classifier
+    Positive gamma / negative gamma / unknown
+    IV expansion / IV compression
+    Trend / mean reversion
+    Event / non-event
+    Liquid / illiquid
+
+Layer 4: Signal Engine
+    Mean reversion
+    Momentum
+    Pinning
+    No-trade
+
+Layer 5: Risk Engine
+    Position size
+    Stop
+    Daily loss limit
+    Event filter
+    Data kill switch
+
+Layer 6: Execution Engine
+    Entry order
+    Slippage control
+    Spread filter
+    Exit logic
+________________________________________
+28. Required Raw Data for Automation
+A text report cannot replace raw market data. To automate, you need these feeds.
+28.1 Underlying Futures Data
+For Gold:
+GC front/active contract
+1-minute OHLCV
+tick data if possible
+VWAP
+session open/high/low
+prior settlement
+current price
+futures volume
+contract rollover calendar
+tick size
+point value
+margin requirements
+28.2 Options Chain Data
+For each expiration, strike, call/put:
+Bid
+Ask
+Mid
+Last
+Volume
+Open Interest
+OI Change
+IV
+Delta
+Gamma
+Vega
+Theta
+Time to expiration
+Strike
+Expiration
+Option type
+Underlying future
+28.3 Trade/Flow Data
+Minimum:
+Intraday volume by strike
+Volume/OI ratio
+Put/Call volume ratio
+Better:
+Bid-hit / ask-lift
+Open/close classification
+Customer vs market maker
+Large trade flag
+Multi-leg detection
+The Dim-Eraker-Vilkov paper uses intraday open interest by trader type, start-of-day OI, trading volume, and converts them into notional, delta, and gamma terms.
+28.4 Volatility Data
+ATM IV
+Vol settlement
+Vol Chg
+IV Rank
+IV Percentile
+IV term structure
+Skew
+Realized volatility
+IV - RV spread
+Expected move
+28.5 Event Data
+FOMC
+CPI
+NFP
+Fed speakers
+Treasury auctions
+war/geopolitical events
+CME holiday schedule
+settlement / expiration schedule
+________________________________________
+29. Feature Engineering Checklist
+29.1 Price Location Features
+Price_Z = (Current_Price - Anchor_Price) / One_SD
+
+Distance_To_Upper_1SD
+Distance_To_Upper_2SD
+Distance_To_Upper_3SD
+
+Distance_To_Lower_1SD
+Distance_To_Lower_2SD
+Distance_To_Lower_3SD
+
+Distance_To_Nearest_OI_Wall
+Distance_To_Nearest_Gamma_Wall
+Distance_To_VWAP
+Distance_To_Session_High_Low
+29.2 OI Features
+Call_OI_Total
+Put_OI_Total
+Put_Call_OI_Ratio
+OI_By_Strike_ZScore
+Call_Wall_Strike
+Put_Wall_Strike
+Max_Total_OI_Strike
+OI_Concentration_Index
+OI_Change_By_Strike
+29.3 Gamma Features
+Call_GEX_By_Strike
+Put_GEX_By_Strike
+Abs_GEX_By_Strike
+Net_GEX_Proxy_By_Strike
+Total_Abs_GEX
+Total_Net_GEX_Proxy
+Gamma_Wall_Upper
+Gamma_Wall_Lower
+Gamma_Flip_Proxy
+GEX_Balance
+29.4 Intraday Flow Features
+Call_Volume_By_Strike
+Put_Volume_By_Strike
+Volume_OI_Ratio
+Call_Put_Volume_Ratio
+Delta_Flow
+Gamma_Flow
+Vega_Flow
+Flow_Pressure = Gamma_Flow / (Abs_GEX + 1)
+29.5 Volatility Features
+ATM_IV
+Vol_Chg
+IV_Rank
+IV_Percentile
+Realized_Vol_5m
+Realized_Vol_30m
+Realized_Vol_1d
+IV_RV_Spread
+Skew
+Term_Structure
+29.6 Liquidity Features
+Bid_Ask_Spread
+Relative_Spread
+Displayed_Depth
+Half_Spread
+Liquidity_Tightness
+The 0DTE Trading Rules paper separates liquidity features, flow features, and GEX-style features because they represent different economic channels.
+________________________________________
+30. Regime Classifier
+The model should classify the market before generating a trade.
+30.1 Gamma Regime
+IF Dealer_GEX_Estimate > Positive_Threshold:
+    Gamma_Regime = Positive_Gamma
+
+ELIF Dealer_GEX_Estimate < Negative_Threshold:
+    Gamma_Regime = Negative_Gamma
+
+ELSE:
+    Gamma_Regime = Neutral_Unknown
+If dealer inventory is unavailable:
+Use:
+    Abs_GEX concentration
+    OI walls
+    flow pressure
+    IV change
+    price behavior
+
+But label it:
+    Gamma_Proxy_Regime
+30.2 Volatility Regime
+IF IV_RV_Spread high AND IV falling:
+    Vol_Regime = Compression / Short-vol friendly
+
+IF IV_RV_Spread low OR IV rising fast:
+    Vol_Regime = Expansion / Long-gamma friendly
+30.3 Price Location Regime
+Inside ±1SD:
+    Normal
+
+Between ±1SD and ±2SD:
+    Pressure
+
+Between ±2SD and ±3SD:
+    Extreme
+
+Beyond ±3SD:
+    Tail / Event / Squeeze
+30.4 Event Regime
+No event:
+    normal signal allowed
+
+Pre-event:
+    reduce or skip mean reversion
+
+During event:
+    no normal signal
+
+Post-event:
+    trade only after IV/price confirmation
+________________________________________
+31. Trading Signal Logic
+31.1 Mean Reversion Short
+Use when price is stretched upward but not breaking into squeeze.
+IF Price_Z >= +2.0
+AND Price is near upper Call Wall or upper high Abs_GEX zone
+AND Gamma_Regime is Positive or Gamma_Proxy supports pinning
+AND IV is flat or falling
+AND upside volume/OI is not surging
+AND price fails to hold above wall
+AND no major event window
+THEN Short Futures
+Exit:
+Target 1 = +1SD
+Target 2 = VWAP / ATM / settlement anchor
+Stop = above +3SD or next call/gamma wall
+31.2 Mean Reversion Long
+IF Price_Z <= -2.0
+AND Price is near lower Put Wall or lower high Abs_GEX zone
+AND Gamma_Regime is Positive or Gamma_Proxy supports pinning
+AND IV is flat or falling
+AND downside volume/OI is not surging
+AND price fails to hold below wall
+AND no major event window
+THEN Long Futures
+Exit:
+Target 1 = -1SD
+Target 2 = VWAP / ATM / settlement anchor
+Stop = below -3SD or next put/gamma wall
+31.3 Momentum Long / Call-Side Gamma Squeeze
+IF Price breaks above Call Wall
+AND Price holds above broken strike
+AND Call volume/OI surges
+AND IV expands
+AND Flow_Pressure is high
+AND Gamma_Regime is Negative or unknown-but-flow strongly confirms
+THEN Long Futures
+Exit:
+Target = next Call Wall / next Gamma Wall / upper SD band
+Stop = back below broken Call Wall
+31.4 Momentum Short / Put-Side Gamma Squeeze
+IF Price breaks below Put Wall
+AND Price holds below broken strike
+AND Put volume/OI surges
+AND IV expands
+AND Flow_Pressure is high
+AND Gamma_Regime is Negative or unknown-but-flow strongly confirms
+THEN Short Futures
+Exit:
+Target = next Put Wall / lower SD band
+Stop = back above broken Put Wall
+31.5 Pinning / Gamma Magnet
+IF Price is near high Abs_GEX strike
+AND Gamma_Regime is Positive
+AND IV is falling
+AND price repeatedly rejects both sides
+THEN expect chop/pin
+Futures action:
+Either no trade
+or small mean-reversion scalps around the magnet
+Options action:
+Defined-risk short premium only
+Never naked short gamma
+31.6 No-Trade Conditions
+No trade if:
+    Price inside ±1SD and no strong flow
+    IV flat and OI walls far away
+    Spread too wide
+    Liquidity too thin
+    Data missing
+    Major news within blackout window
+    Signal conflict: positive gamma but IV exploding
+    Signal conflict: negative gamma but breakout fails
+________________________________________
+32. Signal Scoring Model
+Instead of binary rules only, use scores.
+32.1 Mean Reversion Score
+MR_Score =
+    + Price beyond 2SD
+    + Near high Abs_GEX wall
+    + Positive gamma regime
+    + IV falling
+    + Volume fading
+    + Failed breakout
+    + Distance to IV boundary small
+    - Negative gamma regime
+    - IV expanding
+    - Volume/OI surge in breakout direction
+    - Event window
+32.2 Momentum Score
+MOM_Score =
+    + Break of OI/Gamma wall
+    + Hold above/below broken wall
+    + Volume/OI surge
+    + IV expansion
+    + Negative gamma regime
+    + Flow_Pressure high
+    + Price outside 1SD/2SD with continuation
+    - Positive gamma regime
+    - Failed breakout
+    - Liquidity poor
+Decision:
+IF MR_Score >= threshold AND MOM_Score low:
+    mean reversion trade
+
+IF MOM_Score >= threshold AND MR_Score low:
+    momentum trade
+
+IF both high:
+    reduce size or wait
+
+IF both low:
+    no trade
+________________________________________
+33. Database Schema for Automation
+33.1 underlying_bars
+timestamp
+symbol
+contract
+open
+high
+low
+close
+volume
+vwap
+session
+prior_settlement
+future_chg
+33.2 option_chain
+timestamp
+underlying_symbol
+option_symbol
+expiration
+dte
+strike
+type
+bid
+ask
+mid
+last
+volume
+open_interest
+iv
+delta
+gamma
+vega
+theta
+rho
+underlying_price
+33.3 oi_snapshot
+date
+expiration
+strike
+type
+open_interest
+oi_change
+prior_oi
+call_oi_total
+put_oi_total
+put_call_oi_ratio
+33.4 derived_features
+timestamp
+anchor_price
+atm_iv
+vol_chg
+one_sd
+two_sd
+three_sd
+price_z
+nearest_call_wall
+nearest_put_wall
+nearest_gamma_wall
+abs_gex_total
+net_gex_proxy
+flow_pressure
+volume_oi_ratio
+iv_rv_spread
+gamma_regime
+vol_regime
+event_regime
+33.5 signals
+timestamp
+symbol
+signal_type
+direction
+entry_price
+stop_price
+target_1
+target_2
+mr_score
+mom_score
+confidence
+reason_codes
+position_size
+risk_usd
+status
+33.6 execution_log
+timestamp
+signal_id
+order_id
+side
+quantity
+order_type
+limit_price
+fill_price
+slippage
+commission
+spread_at_entry
+exit_reason
+pnl
+________________________________________
+34. Backtest Rules
+Backtesting must avoid fake results.
+34.1 No Lookahead
+Use only OI that was available at that timestamp.
+Do not use end-of-day OI during the same day unless the feed truly provides it live.
+Use prior settlement and vol settlement as fixed daily constants.
+Use only intraday volume up to current timestamp.
+34.2 Include Costs
+Spread
+Slippage
+Commission
+Exchange fees
+Data delay
+Partial fills
+Market impact
+34.3 Separate Regimes
+Backtest separately:
+Positive gamma days
+Negative gamma days
+Unknown gamma days
+Event days
+Non-event days
+High IV days
+Low IV days
+Trend days
+Range days
+Expiration days
+Non-expiration days
+34.4 Walk-Forward
+The 0DTE Trading Rules paper uses strict out-of-sample conditional rules and rolling/expanding windows, with 252 trading days as a common burn-in/window length.
+Use:
+Training window = 252 trading days
+Validation = walk-forward
+Test = out-of-sample
+No parameter tuning on test
+________________________________________
+35. Risk Engine
+For Gold:
+Dollar_Risk_Per_Contract = Stop_Distance_Points × $100
+Contracts = Account_Risk_Per_Trade / Dollar_Risk_Per_Contract
+Hard rules:
+Max risk per trade: 0.25%–1.00%
+Max daily loss: 1%–3%
+Max open trades: 1 until validated
+No trade after daily loss hit
+No trade during data outage
+No trade when spread too wide
+No trade when event filter blocks
+No naked short gamma
+Defined-risk only for option selling
+Emergency kill switch:
+IF live price feed missing
+OR options feed stale
+OR IV missing
+OR Greeks missing
+OR spread > max threshold
+OR slippage > max threshold
+OR loss > daily max
+THEN flatten / stop trading
+________________________________________
+36. Main Mistakes to Avoid
+Mistake 1: Treating OI as Direction
+Wrong:
+High Put OI = bullish
+High Call OI = bearish
+Correct:
+High OI = important level
+Direction depends on dealer/customer side, gamma, IV, flow, and price confirmation
+Mistake 2: Ignoring OI Timing
+OI is often yesterday’s settled data. Intraday volume is today’s live activity.
+Mistake 3: Treating SD as a Hard Wall
+Part 4 warns about fat tails and gap risk.
+Mistake 4: Selling Naked Options
+Gold and 0DTE both punish short-gamma mistakes. The gold case study shows how short puts can rapidly create losses much larger than received premium.
+Mistake 5: Ignoring Event Risk
+0DTE jump risk is large, clustered around open/close, and strongly affected by macro events.
+Mistake 6: Copying SPX Research Directly to Gold
+Use SPX studies for mechanism, not exact thresholds.
+Mistake 7: Ignoring Liquidity
+The Trading Rules paper explicitly includes spread, depth, relative spread, and liquidity tightness because implementation frictions matter.
+________________________________________
+37. Final Portable Summary for Another Session
+Copy this block into another session as the minimum instruction:
+We are building an automated trading signal for futures, especially Gold/GC, using options data.
+
+The system must follow the Mtraders philosophy: measurement, not prediction. Price shows what is happening; IV and OI show why it may be happening. OI is real but delayed and sign-ambiguous. OI is the map of committed positions, while intraday volume is the live activity. Do not use high Call OI or high Put OI alone as a buy/sell signal.
+
+Core data:
+- GC futures 1m OHLCV, VWAP, settlement, session high/low
+- CME Gold options chain: strike, expiry, call/put, bid, ask, mid, volume, OI, IV, Delta, Gamma, Vega, Theta
+- Prior settlement and Vol Settle / ATM IV
+- Intraday volume by strike
+- Event calendar
+- Liquidity: spreads, depth, relative spread
+
+Build static daily map:
+- Anchor = prior settlement or CME settlement reference
+- Vol Settle / ATM IV
+- 1SD, 2SD, 3SD expected move bands
+- Prior OI by strike
+- OI-based gamma exposure by strike
+
+Build dynamic intraday map:
+- Current price
+- Current IV / Vol Chg
+- Intraday volume
+- Volume/OI ratio
+- Flow pressure
+- Price location versus SD and OI/GEX walls
+
+Formulas:
+- Expected Move = Price × IV × sqrt(T)
+- OI Notional = OI × Multiplier × Price
+- OI Delta Exposure = OI × Delta × Multiplier × Price
+- OI Gamma Exposure = OI × Gamma × Multiplier × Price²
+- For Gold, multiplier = 100 troy ounces; 1 GC point = $100.
+
+Classify regimes:
+- Positive gamma: market makers hedge against price movement; mean reversion/pinning more likely.
+- Negative gamma: market makers hedge with price movement; momentum/squeeze more likely.
+- Unknown gamma: reduce size and require stronger confirmation.
+
+Use rules:
+- Mean reversion only when price is stretched near ±2SD or beyond, near OI/GEX wall, IV flat/falling, positive gamma or pinning behavior, and breakout fails.
+- Momentum only when price breaks OI/GEX wall, volume/OI surges, IV expands, price holds the break, and gamma/flow regime supports continuation.
+- No trade inside ±1SD unless strong flow confirms.
+- No normal trade during major event windows.
+- Never treat SD as hard wall.
+- Never sell naked gamma.
+
+Backtest:
+- No lookahead on OI.
+- Include spread, slippage, fees.
+- Separate event and non-event days.
+- Use walk-forward / out-of-sample testing.
+- Use risk engine before entry engine.
+________________________________________
