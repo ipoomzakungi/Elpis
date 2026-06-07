@@ -11,7 +11,8 @@ orders, position sizing, or PnL logic.
 
 ## Current Result
 
-Feature 022 is implemented as a backend local XAU daily research workbench.
+Feature 023 is implemented as a backend local XAU candidate forward-outcomes
+layer on top of the Feature 021/022 candidate workflow.
 
 Feature 021 remains the research-only 2SD-3SD XAU SD/OI mean-reversion
 candidate classifier. It supports:
@@ -40,11 +41,29 @@ signal_allowed = false
 research_only = true
 ```
 
+Feature 023 attaches local price-bar forward outcome labels to saved Feature
+021/022 candidate sets. It supports:
+
+- 30m, 1h, 4h, session-close, and next-day outcome windows
+- local CSV, JSON, and Parquet price bars
+- short/long MFE and MAE
+- target 1/2/3 hits
+- stop-reference hits
+- returned-to-1SD flags
+- 2SD, 3SD, 3.5SD, next-wall, and breakout-continuation flags
+- missing and partial price-bar coverage states
+- persisted local outcome artifacts
+- local API and CLI access
+
+Feature 023 still does not implement PnL, entries, alerts, broker execution,
+position sizing, paper trading, live trading, or strategy profitability claims.
+
 Default no-signal behavior remains explicit:
 
 ```text
 Feature 021 is research-only; signal generation is disabled.
 Feature 022 is a research-only daily workbench; signal generation is disabled.
+Feature 023 is research-only; candidate outcome labels are not trading signals.
 ```
 
 ## Latest XAU Smoke Validation
@@ -150,6 +169,8 @@ Operational fix from this smoke:
   creating signals.
 - Feature 022 orchestrates local XAU workbench runs and persists map, candidate,
   and workbench artifacts for API review.
+- Feature 023 consumes saved candidate sets plus local OHLCV bars and persists
+  candidate outcome evidence for forward windows without PnL or execution.
 
 ## What Feature 021 Means
 
@@ -181,6 +202,10 @@ artifacts to candidate sidecars. The caller still must supply or already have
 source-backed traded price, GC reference, session open, and source bundle/map
 context. Confirmation, IV state, and flow state are still `unavailable` in this
 slice and need a later context-state engine.
+
+Feature 023 automates the local backend handoff from saved candidate sidecars to
+forward outcome artifacts. The caller still must supply local price bars, and
+missing or partial bars remain explicit coverage limitations.
 
 ## Feature 022 Workbench API
 
@@ -222,6 +247,41 @@ backend API implemented
 frontend workbench page not implemented in this slice
 ```
 
+## Feature 023 Candidate Outcome API
+
+Implemented local endpoints:
+
+```text
+POST /api/v1/research/xau/candidate-outcomes/run
+GET  /api/v1/research/xau/candidate-outcomes/latest
+GET  /api/v1/research/xau/candidate-outcomes/{outcome_run_id}
+```
+
+Local script:
+
+```text
+backend/scripts/run_xau_candidate_forward_outcomes.py
+```
+
+Persisted outcome artifacts:
+
+```text
+data/reports/xau_candidate_outcomes/{outcome_run_id}/outcome_metadata.json
+data/reports/xau_candidate_outcomes/{outcome_run_id}/outcomes.json
+data/reports/xau_candidate_outcomes/{outcome_run_id}/outcomes.md
+```
+
+The outcome labels are evidence annotations only:
+
+```text
+target_hit
+stop_hit
+mean_reverted
+breakout_continued
+unresolved
+unavailable
+```
+
 ## Missing Before Systematic Trading
 
 - Frontend workbench page for the new Feature 022 API.
@@ -237,8 +297,7 @@ frontend workbench page not implemented in this slice
 - Automatic flow-through-wall detection from volume, OI change, and price
   behavior near walls.
 - Gamma/GEX regime estimation only if source-backed Greeks are available.
-- Forward outcome labels for 30m, 1h, 4h, session close, and next day.
-- Research backtest statistics by regime, IV state, flow state, OI freshness,
+- Aggregated outcome statistics by regime, IV state, flow state, OI freshness,
   wall proximity, and session context.
 - Shadow/paper research journal after historical and forward evidence exists.
 - Live execution gate, risk sizing, broker integration, and order handling.
@@ -257,7 +316,7 @@ frontend workbench page not implemented in this slice
 | M7 Daily workbench API | Backend done | Feature 022, local bundle/latest-existing sources, candidate sidecars. |
 | M7B Local workbench dashboard | Not done | Needs frontend page wired to Feature 022 API. |
 | M8 Candle / IV / flow state engine | Not done | Turns raw data into candidate context states. |
-| M9 Forward outcome labels | Not done | Required before evaluating the hypothesis. |
+| M9 Forward outcome labels | Done | Feature 023 attaches local OHLCV outcome evidence to candidates. |
 | M10 Research backtest | Not done | Required before any strategy claim. |
 | M11 Dashboard / decision console | Partly planned | Should show data freshness, map, candidates, and no-trade reasons. |
 | M12 Paper/shadow mode | Not done | Not allowed until research gates are satisfied. |
@@ -265,34 +324,33 @@ frontend workbench page not implemented in this slice
 
 ## Next Recommended Feature
 
-Create Feature 023:
+Create Feature 024:
 
 ```text
-023-xau-workbench-dashboard-page
+024-xau-reaction-state-engine
 ```
 
 Purpose:
 
 ```text
-Render the Feature 022 API in the local dashboard:
-freshness/status -> map summary -> candidate state -> missing inputs -> artifact links
+Automatically compute confirmation_state, iv_state, and flow_state from
+source-backed price bars, IV context, volume, OI change, and wall interaction.
 ```
 
-Alternative next research slice:
+Alternative useful slice:
 
 ```text
-023-xau-candle-iv-flow-state-engine
+024B-xau-workbench-dashboard-page
 ```
 
-That slice would convert source-backed price/IV/flow observations into the
-Feature 021 confirmation, IV, and flow states. It must still remain
-research-only and must not implement signals, alerts, PnL, broker orders,
-paper trading, live trading, or position sizing.
+That slice would render Feature 022 and Feature 023 API outputs in the local
+dashboard. It must still remain research-only and must not implement signals,
+alerts, PnL, broker orders, paper trading, live trading, or position sizing.
 
 ## Current System Stage
 
 ```text
-research candidate generation
+research candidate generation plus forward outcome evidence
 ```
 
 Not:

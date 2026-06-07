@@ -32,6 +32,9 @@ This index locks the local course-source files that should guide future XAU/CME 
 - Feature 022 connects the local XAU/CME components into a research-only daily
   workbench with provider statuses, basis snapshots, candidate sidecars, CLI,
   and API inspection while keeping `signal_allowed=false`.
+- Feature 023 attaches local price-bar forward outcome labels to saved
+  candidates for 30m, 1h, 4h, session-close, and next-day windows while keeping
+  `signal_allowed=false`, `research_only=true`, and no PnL/execution behavior.
 
 ## Forbidden For Current Phase
 
@@ -39,10 +42,18 @@ This index locks the local course-source files that should guide future XAU/CME 
 - `range_label` converted into fake numeric SD.
 - CME strikes placed on XAU/GO charts without basis mapping.
 - Live trading, broker execution, alerts, PnL, or strategy automation.
-- 2SD/3.5SD entry-stop logic before real maps and forward outcomes exist.
+- 2SD/3.5SD entry-stop automation, PnL, alerts, execution, or strategy claims
+  before outcome evidence is aggregated and validated.
 
 ## Current Next Milestone
 
-Feature 023 should attach source-backed forward outcomes or build the local
-workbench dashboard. Either path must remain research-only and must not add live
-signals, orders, alerts, PnL, paper trading, or execution behavior.
+Feature 024 should compute reaction states automatically:
+
+```text
+confirmation_state
+iv_state
+flow_state
+```
+
+It must remain research-only and must not add live signals, orders, alerts, PnL,
+paper trading, or execution behavior.

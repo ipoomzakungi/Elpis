@@ -437,5 +437,5 @@ After smoke test passes:
 - report files changed, commands run, results, commit hash, and remaining risks.
 
 <!-- SPECKIT START -->
-Active Speckit plan: specs/022-xau-daily-research-workbench/plan.md
+Active Speckit plan: specs/023-xau-candidate-forward-outcomes/plan.md
 <!-- SPECKIT END -->
