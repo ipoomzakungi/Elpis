@@ -21,6 +21,7 @@ from src.api.routes import (
     xau_daily_workbench,
     xau_forward_journal,
     xau_quikstrike_fusion,
+    xau_range_desk,
     xau_reaction,
 )
 from src.config import get_settings
@@ -75,6 +76,11 @@ app.include_router(
     xau_forward_journal.router,
     prefix="/api/v1",
     tags=["xau-forward-journal"],
+)
+app.include_router(
+    xau_range_desk.router,
+    prefix="/api/v1",
+    tags=["xau-range-desk"],
 )
 
 

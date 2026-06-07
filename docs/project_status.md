@@ -11,6 +11,11 @@ orders, position sizing, or PnL logic.
 
 ## Current Result
 
+Feature 024A is implemented as a backend local XAU Range Desk / Diff-SD
+planner. It maps futures-side CME SD and OI levels into traded-instrument
+planning levels, while still avoiding entries, alerts, PnL, position sizing,
+paper trading, and live execution.
+
 Feature 023 is implemented as a backend local XAU candidate forward-outcomes
 layer on top of the Feature 021/022 candidate workflow.
 
@@ -58,12 +63,25 @@ Feature 023 attaches local price-bar forward outcome labels to saved Feature
 Feature 023 still does not implement PnL, entries, alerts, broker execution,
 position sizing, paper trading, live trading, or strategy profitability claims.
 
+Feature 024A adds the missing manual Range Desk bridge:
+
+- `diff_points = future_reference_price - traded_reference_price`
+- `traded_offset = traded_reference_price - future_reference_price`
+- `mapped_traded_level = futures_level + traded_offset`
+- mapped future SD table
+- mapped traded SD table
+- mapped OI wall levels
+- no-trade zone inside 1SD
+- 2SD-3SD upper/lower research stretch zones
+- planning-only target/invalidation references
+
 Default no-signal behavior remains explicit:
 
 ```text
 Feature 021 is research-only; signal generation is disabled.
 Feature 022 is a research-only daily workbench; signal generation is disabled.
 Feature 023 is research-only; candidate outcome labels are not trading signals.
+Feature 024A is research-only; Range Desk plans are not trading signals.
 ```
 
 ## Latest XAU Smoke Validation
@@ -171,6 +189,10 @@ Operational fix from this smoke:
   and workbench artifacts for API review.
 - Feature 023 consumes saved candidate sets plus local OHLCV bars and persists
   candidate outcome evidence for forward windows without PnL or execution.
+- Feature 024A consumes manual/research future reference, traded reference,
+  future-side SD levels, optional session open, and optional OI walls, then
+  returns mapped traded levels for practical chart review without execution
+  semantics.
 
 ## What Feature 021 Means
 
@@ -282,6 +304,34 @@ unresolved
 unavailable
 ```
 
+## Feature 024A Range Desk API
+
+Implemented local endpoint:
+
+```text
+POST /api/v1/research/xau/range-desk/plan
+```
+
+The request supplies future reference, traded reference, future-side SD levels,
+optional session open, and optional OI wall levels. The response returns:
+
+```text
+basis_snapshot
+futures_levels
+traded_levels
+mapped_oi_walls
+zones
+target_plans
+missing_inputs
+limitations
+signal_allowed=false
+research_only=true
+```
+
+The endpoint is a calculator/planner only. It does not fetch live prices,
+calculate PnL, create signals, issue alerts, size positions, connect to a
+broker, or place orders.
+
 ## Missing Before Systematic Trading
 
 - Frontend workbench page for the new Feature 022 API.
@@ -290,6 +340,8 @@ unavailable
 - Weekday fresh-data runs and freshness validation.
 - Automatic traded-price, GC reference, and XAU/GO/broker-side reference
   providers.
+- Data capability audit for current CME/QuikStrike fields, especially native
+  SD, Vol Chg, Future Chg, delta, gamma, and GEX availability.
 - Automatic candle reaction classification:
   `rejection`, `close_back_inside`, `acceptance`, `neutral`, `unavailable`.
 - Automatic IV state detection:
@@ -315,19 +367,34 @@ unavailable
 | M6 Candidate research classifier | Done | Feature 021, research-only. |
 | M7 Daily workbench API | Backend done | Feature 022, local bundle/latest-existing sources, candidate sidecars. |
 | M7B Local workbench dashboard | Not done | Needs frontend page wired to Feature 022 API. |
-| M8 Candle / IV / flow state engine | Not done | Turns raw data into candidate context states. |
-| M9 Forward outcome labels | Done | Feature 023 attaches local OHLCV outcome evidence to candidates. |
-| M10 Research backtest | Not done | Required before any strategy claim. |
-| M11 Dashboard / decision console | Partly planned | Should show data freshness, map, candidates, and no-trade reasons. |
-| M12 Paper/shadow mode | Not done | Not allowed until research gates are satisfied. |
-| M13 Live trading gate | Not allowed | Requires historical, forward, paper, and risk validation first. |
+| M8 Range Desk / Diff-SD planner | Backend done | Feature 024A maps CME future levels to traded chart levels. |
+| M9 Data capability audit | Not done | Needs source-field audit for SD, Vol Chg, Future Chg, delta, gamma, GEX. |
+| M10 Candle / IV / flow state engine | Not done | Turns raw data into candidate context states. |
+| M11 Forward outcome labels | Done | Feature 023 attaches local OHLCV outcome evidence to candidates. |
+| M12 Research backtest | Not done | Required before any strategy claim. |
+| M13 Dashboard / decision console | Partly planned | Should show data freshness, map, candidates, and no-trade reasons. |
+| M14 Paper/shadow mode | Not done | Not allowed until research gates are satisfied. |
+| M15 Live trading gate | Not allowed | Requires historical, forward, paper, and risk validation first. |
 
 ## Next Recommended Feature
 
-Create Feature 024:
+Create Feature 024B:
 
 ```text
-024-xau-reaction-state-engine
+024b-xau-data-capability-audit
+```
+
+Purpose:
+
+```text
+Audit current CME/QuikStrike local artifacts for native SD, Vol Chg, Future
+Chg, DTE, OI, OI Change, intraday volume, delta, gamma, and GEX availability.
+```
+
+Then create Feature 025:
+
+```text
+025-xau-reaction-state-engine
 ```
 
 Purpose:
