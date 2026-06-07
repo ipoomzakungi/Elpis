@@ -437,5 +437,5 @@ After smoke test passes:
 - report files changed, commands run, results, commit hash, and remaining risks.
 
 <!-- SPECKIT START -->
-Active Speckit plan: specs/024a-xau-range-desk-diff-sd-planner/plan.md
+Active Speckit plan: specs/024b-xau-data-capability-audit/plan.md
 <!-- SPECKIT END -->

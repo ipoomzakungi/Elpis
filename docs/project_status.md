@@ -11,10 +11,14 @@ orders, position sizing, or PnL logic.
 
 ## Current Result
 
+Feature 024B is implemented as a backend local XAU Data Capability Audit. It
+reads saved CME/QuikStrike and XAU artifacts and reports which fields are
+source-backed, partial, unavailable, or blocked. It still avoids entries,
+alerts, PnL, position sizing, paper trading, and live execution.
+
 Feature 024A is implemented as a backend local XAU Range Desk / Diff-SD
 planner. It maps futures-side CME SD and OI levels into traded-instrument
-planning levels, while still avoiding entries, alerts, PnL, position sizing,
-paper trading, and live execution.
+planning levels.
 
 Feature 023 is implemented as a backend local XAU candidate forward-outcomes
 layer on top of the Feature 021/022 candidate workflow.
@@ -75,6 +79,16 @@ Feature 024A adds the missing manual Range Desk bridge:
 - 2SD-3SD upper/lower research stretch zones
 - planning-only target/invalidation references
 
+Feature 024B adds a read-only data capability audit for saved local artifacts:
+
+- OI and OI change availability
+- intraday-volume qualification, including partial volume states
+- volatility, DTE, and future-reference availability
+- native SD and SD range availability
+- delta and gamma availability when present in local XAU source rows
+- GEX possibility only when source-backed gamma and OI are both available
+- explicit unavailable or blocked statuses for missing fields
+
 Default no-signal behavior remains explicit:
 
 ```text
@@ -82,6 +96,7 @@ Feature 021 is research-only; signal generation is disabled.
 Feature 022 is a research-only daily workbench; signal generation is disabled.
 Feature 023 is research-only; candidate outcome labels are not trading signals.
 Feature 024A is research-only; Range Desk plans are not trading signals.
+Feature 024B is research-only; capability audit rows are not trading signals.
 ```
 
 ## Latest XAU Smoke Validation
@@ -193,6 +208,9 @@ Operational fix from this smoke:
   future-side SD levels, optional session open, and optional OI walls, then
   returns mapped traded levels for practical chart review without execution
   semantics.
+- Feature 024B consumes saved local Vol2Vol, Matrix, Fusion, and XAU Vol-OI
+  artifacts, then returns capability evidence for data readiness without
+  signal, prediction, execution, or PnL semantics.
 
 ## What Feature 021 Means
 
@@ -332,6 +350,44 @@ The endpoint is a calculator/planner only. It does not fetch live prices,
 calculate PnL, create signals, issue alerts, size positions, connect to a
 broker, or place orders.
 
+## Feature 024B Data Capability Audit API
+
+Implemented local endpoint:
+
+```text
+POST /api/v1/research/xau/data-capability-audit/run
+```
+
+The request can use the latest saved local reports or selected report IDs for
+Vol2Vol, Matrix, Fusion, and XAU Vol-OI sources. The response returns:
+
+```text
+readiness
+source_reports
+capabilities
+missing_capabilities
+blocked_capabilities
+limitations
+signal_allowed=false
+research_only=true
+```
+
+Current audit semantics:
+
+- Vol2Vol and Matrix can provide OI, OI change, DTE, and future reference.
+- Vol2Vol can provide intraday volume and SD/range evidence when present.
+- Matrix and XAU Vol-OI volume are partial unless intraday qualification is
+  source-backed.
+- Fusion can provide native numeric SD and volatility context from expected
+  range snapshots.
+- Delta and gamma are only available when local XAU source rows contain them.
+- GEX possibility is blocked unless source-backed gamma and OI are both
+  available.
+
+The endpoint is an evidence inventory only. It does not fetch fresh data,
+calculate PnL, create signals, issue alerts, size positions, connect to a
+broker, or place orders.
+
 ## Missing Before Systematic Trading
 
 - Frontend workbench page for the new Feature 022 API.
@@ -340,8 +396,10 @@ broker, or place orders.
 - Weekday fresh-data runs and freshness validation.
 - Automatic traded-price, GC reference, and XAU/GO/broker-side reference
   providers.
-- Data capability audit for current CME/QuikStrike fields, especially native
-  SD, Vol Chg, Future Chg, delta, gamma, and GEX availability.
+- Frontend display and persistence for Range Desk and Data Capability Audit
+  results.
+- Fresh source-provider coverage for fields still unavailable in the audit,
+  especially Vol Chg, Future Chg, delta ranges, gamma, and GEX prerequisites.
 - Automatic candle reaction classification:
   `rejection`, `close_back_inside`, `acceptance`, `neutral`, `unavailable`.
 - Automatic IV state detection:
@@ -368,7 +426,7 @@ broker, or place orders.
 | M7 Daily workbench API | Backend done | Feature 022, local bundle/latest-existing sources, candidate sidecars. |
 | M7B Local workbench dashboard | Not done | Needs frontend page wired to Feature 022 API. |
 | M8 Range Desk / Diff-SD planner | Backend done | Feature 024A maps CME future levels to traded chart levels. |
-| M9 Data capability audit | Not done | Needs source-field audit for SD, Vol Chg, Future Chg, delta, gamma, GEX. |
+| M9 Data capability audit | Backend done | Feature 024B audits saved local artifacts for SD, Vol Chg, Future Chg, delta, gamma, GEX prerequisites. |
 | M10 Candle / IV / flow state engine | Not done | Turns raw data into candidate context states. |
 | M11 Forward outcome labels | Done | Feature 023 attaches local OHLCV outcome evidence to candidates. |
 | M12 Research backtest | Not done | Required before any strategy claim. |
@@ -378,23 +436,36 @@ broker, or place orders.
 
 ## Next Recommended Feature
 
-Create Feature 024B:
+Create Feature 024C:
 
 ```text
-024b-xau-data-capability-audit
+024c-xau-range-desk-audit-ui-persistence
 ```
 
 Purpose:
 
 ```text
-Audit current CME/QuikStrike local artifacts for native SD, Vol Chg, Future
-Chg, DTE, OI, OI Change, intraday volume, delta, gamma, and GEX availability.
+Persist and display Range Desk plans and Data Capability Audit output in the
+local research dashboard without signals, alerts, PnL, or execution semantics.
 ```
 
 Then create Feature 025:
 
 ```text
-025-xau-reaction-state-engine
+025-xau-fresh-snapshot-price-provider
+```
+
+Purpose:
+
+```text
+Add source-backed fresh snapshot and traded/futures reference providers for the
+daily XAU workbench and Range Desk.
+```
+
+Then create Feature 026:
+
+```text
+026-xau-reaction-state-engine
 ```
 
 Purpose:
@@ -404,15 +475,18 @@ Automatically compute confirmation_state, iv_state, and flow_state from
 source-backed price bars, IV context, volume, OI change, and wall interaction.
 ```
 
-Alternative useful slice:
+Then create Feature 027:
 
 ```text
-024B-xau-workbench-dashboard-page
+027-xau-outcome-statistics-backtest
 ```
 
-That slice would render Feature 022 and Feature 023 API outputs in the local
-dashboard. It must still remain research-only and must not implement signals,
-alerts, PnL, broker orders, paper trading, live trading, or position sizing.
+Purpose:
+
+```text
+Aggregate outcome labels by regime, IV state, flow state, OI freshness, wall
+proximity, and session context before any strategy claim.
+```
 
 ## Current System Stage
 

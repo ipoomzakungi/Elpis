@@ -19,6 +19,7 @@ from src.api.routes import (
     xau,
     xau_candidate_outcomes,
     xau_daily_workbench,
+    xau_data_capability_audit,
     xau_forward_journal,
     xau_quikstrike_fusion,
     xau_range_desk,
@@ -81,6 +82,11 @@ app.include_router(
     xau_range_desk.router,
     prefix="/api/v1",
     tags=["xau-range-desk"],
+)
+app.include_router(
+    xau_data_capability_audit.router,
+    prefix="/api/v1",
+    tags=["xau-data-capability-audit"],
 )
 
 
