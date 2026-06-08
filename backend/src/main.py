@@ -21,6 +21,7 @@ from src.api.routes import (
     xau_daily_workbench,
     xau_data_capability_audit,
     xau_forward_journal,
+    xau_plan_tracker,
     xau_quikstrike_fusion,
     xau_range_desk,
     xau_reaction,
@@ -93,6 +94,11 @@ app.include_router(
     xau_walk_forward.router,
     prefix="/api/v1",
     tags=["xau-walk-forward"],
+)
+app.include_router(
+    xau_plan_tracker.router,
+    prefix="/api/v1",
+    tags=["xau-plan-tracker"],
 )
 
 

@@ -42,13 +42,16 @@ This index locks the local course-source files that should guide future XAU/CME 
 - Feature 025 creates research-only walk-forward Range Desk snapshots and
   simulated order/outcome records from source-backed native SD and mapped Diff
   context while keeping `signal_allowed=false`.
+- Feature 026 imports or captures Dukascopy XAUUSD research bars, extracts
+  10:10/18:10 traded references, and tracks simulated Range Desk plan status,
+  PnL points, and drawdown points while keeping `signal_allowed=false`.
 
 ## Forbidden For Current Phase
 
 - OI-only buy/sell output.
 - `range_label` converted into fake numeric SD.
 - CME strikes placed on XAU/GO charts without basis mapping.
-- Live trading, broker execution, alerts, PnL, or strategy automation.
+- Live trading, broker execution, alerts, real PnL, or strategy automation.
 - 2SD/3.5SD entry-stop automation, PnL, alerts, execution, or strategy claims
   before outcome evidence is aggregated and validated.
 - Recovery sizing treated as live position management or martingale behavior
@@ -56,7 +59,7 @@ This index locks the local course-source files that should guide future XAU/CME 
 
 ## Current Next Milestone
 
-Feature 024 should compute reaction states automatically:
+Feature 027 should compute reaction states automatically:
 
 ```text
 confirmation_state

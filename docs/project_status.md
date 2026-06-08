@@ -11,6 +11,13 @@ orders, position sizing, or PnL logic.
 
 ## Current Result
 
+Feature 026 is implemented as a backend local XAU Dukascopy Price Capture and
+Plan Tracker. It imports local XAUUSD bars or runs a configurable Dukascopy CLI
+command template, extracts 10:10 and 18:10 Asia/Bangkok traded reference
+prices, reuses CME-native SD/Diff planning from Feature 025, tracks simulated
+plan status, current simulated PnL points, MFE, MAE/drawdown points, persists
+local plan history artifacts, and exposes API/CLI access.
+
 Feature 025 is implemented as a backend local XAU Walk-Forward Range Desk
 Research Runner. It creates scheduled research snapshots, resolves native CME
 SD from saved `range_bands.json` sidecars or fixture inputs, maps futures levels
@@ -105,6 +112,7 @@ Feature 023 is research-only; candidate outcome labels are not trading signals.
 Feature 024A is research-only; Range Desk plans are not trading signals.
 Feature 024B is research-only; capability audit rows are not trading signals.
 Feature 025 is research-only; walk-forward order templates and outcomes are not trading signals.
+Feature 026 is research-only; plan tracker PnL points and drawdown points are simulated research metrics, not real PnL or trading signals.
 ```
 
 ## Latest XAU Smoke Validation
@@ -437,6 +445,45 @@ signal_allowed = false
 research_only = true
 ```
 
+## Feature 026 XAU Plan Tracker API
+
+Implemented local endpoints:
+
+```text
+POST /api/v1/research/xau/plan-tracker/run
+GET  /api/v1/research/xau/plan-tracker/latest
+GET  /api/v1/research/xau/plan-tracker/runs/{run_id}
+GET  /api/v1/research/xau/plan-tracker/runs/{run_id}/orders
+GET  /api/v1/research/xau/plan-tracker/runs/{run_id}/snapshots
+```
+
+Local script:
+
+```text
+backend/scripts/run_xau_plan_tracker.py
+```
+
+Persisted artifacts:
+
+```text
+data/reports/xau_plan_tracker/{run_id}/plan_tracker_metadata.json
+data/reports/xau_plan_tracker/{run_id}/snapshots.json
+data/reports/xau_plan_tracker/{run_id}/tracked_orders.json
+data/reports/xau_plan_tracker/{run_id}/run.md
+data/reports/xau_plan_tracker/{run_id}/order_history.md
+```
+
+Feature 026 keeps CME/QuikStrike as the futures/options/SD/OI source and uses
+Dukascopy or local bars only for traded-side XAUUSD research price data. It
+does not treat `range_label` as numeric SD and does not place live/paper orders,
+issue alerts, size positions, connect to a broker, or report real PnL. Every
+output remains:
+
+```text
+signal_allowed = false
+research_only = true
+```
+
 ## Missing Before Systematic Trading
 
 - Frontend workbench page for the new Feature 022 API.
@@ -448,8 +495,9 @@ research_only = true
 - Frontend display and persistence for Range Desk and Data Capability Audit
   results.
 - Frontend page for Feature 025 walk-forward Range Desk history.
-- Source-backed automatic price-provider validation beyond manual/fixture and
-  optional Yahoo fallback.
+- Frontend page for Feature 026 plan tracker history and simulated order review.
+- Source-backed automatic price-provider validation beyond manual/fixture,
+  optional Yahoo fallback, local XAU bars, and configurable Dukascopy CLI.
 - Fresh source-provider coverage for fields still unavailable in the audit,
   especially Vol Chg, Future Chg, delta ranges, gamma, and GEX prerequisites.
 - Automatic candle reaction classification:
@@ -480,6 +528,7 @@ research_only = true
 | M8 Range Desk / Diff-SD planner | Backend done | Feature 024A maps CME future levels to traded chart levels. |
 | M9 Data capability audit | Backend done | Feature 024B audits saved local artifacts for SD, Vol Chg, Future Chg, delta, gamma, GEX prerequisites. |
 | M9B Walk-forward Range Desk runner | Backend done | Feature 025 creates scheduled research snapshots, order templates, and simulated outcomes. |
+| M9C XAU price plan tracker | Backend done | Feature 026 imports/captures XAU bars, extracts 10:10/18:10 references, and tracks simulated plan PnL/DD points. |
 | M10 Candle / IV / flow state engine | Not done | Turns raw data into candidate context states. |
 | M11 Forward outcome labels | Done | Feature 023 attaches local OHLCV outcome evidence to candidates. |
 | M12 Research backtest | Not done | Required before any strategy claim. |
@@ -502,10 +551,10 @@ Persist and display Range Desk plans and Data Capability Audit output in the
 local research dashboard without signals, alerts, PnL, or execution semantics.
 ```
 
-Then create Feature 026:
+Then create Feature 027:
 
 ```text
-026-xau-reaction-state-engine
+027-xau-reaction-state-engine
 ```
 
 Purpose:
