@@ -24,6 +24,7 @@ from src.api.routes import (
     xau_quikstrike_fusion,
     xau_range_desk,
     xau_reaction,
+    xau_walk_forward,
 )
 from src.config import get_settings
 from src.providers.errors import ProviderError
@@ -87,6 +88,11 @@ app.include_router(
     xau_data_capability_audit.router,
     prefix="/api/v1",
     tags=["xau-data-capability-audit"],
+)
+app.include_router(
+    xau_walk_forward.router,
+    prefix="/api/v1",
+    tags=["xau-walk-forward"],
 )
 
 
