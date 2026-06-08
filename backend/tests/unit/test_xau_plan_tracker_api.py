@@ -32,6 +32,7 @@ def test_plan_tracker_run_endpoint_returns_research_only_result(tmp_path: Path) 
             "cme_source": "fixture",
             "price_bars_path": str(bars_path),
             "output_root": str(tmp_path),
+            "near_miss_threshold_points": 0.25,
             "research_only_acknowledged": True,
         },
     )

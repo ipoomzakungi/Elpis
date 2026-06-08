@@ -18,6 +18,7 @@ def track_research_order(
     bars: list[XauDukasPriceBar],
     *,
     planning_time: datetime,
+    near_miss_threshold_points: float,
     run_until: datetime | None = None,
     recovery_plan: XauResearchOrderPlan | None = None,
     conservative_stop_first: bool = True,
@@ -33,6 +34,7 @@ def track_research_order(
         return _tracked_order(
             plan,
             planning_time=planning_time,
+            strict_triggered=False,
             status=XauTrackedOrderStatus.UNAVAILABLE,
             recovery_entry_level=recovery_entry,
             recovery_target_level=recovery_target,
@@ -44,10 +46,20 @@ def track_research_order(
     mfe = 0.0
     mae = 0.0
     current_price = relevant_bars[-1].close
+    closest_distance = None
+    closest_price = None
+    closest_time = None
+    threshold = near_miss_threshold_points
     for index, bar in enumerate(relevant_bars):
         if not triggered and _entry_hit(plan, bar):
             triggered = True
             trigger_time = bar.timestamp
+        if not triggered:
+            distance, nearest_price = _distance_to_entry(plan, bar)
+            if closest_distance is None or distance < closest_distance:
+                closest_distance = distance
+                closest_price = nearest_price
+                closest_time = bar.timestamp
         if not triggered:
             continue
 
@@ -67,6 +79,9 @@ def track_research_order(
                     mfe=mfe,
                     mae=mae,
                     bars_covered_count=len(relevant_bars),
+                    strict_triggered=True,
+                    near_miss=False,
+                    near_miss_threshold_points=threshold,
                     recovery_entry_level=recovery_entry,
                     recovery_target_level=recovery_target,
                     limitations=[
@@ -84,6 +99,9 @@ def track_research_order(
                 mfe=mfe,
                 mae=mae,
                 bars_covered_count=len(relevant_bars),
+                strict_triggered=True,
+                near_miss=False,
+                near_miss_threshold_points=threshold,
                 recovery_entry_level=recovery_entry,
                 recovery_target_level=recovery_target,
                 limitations=["Target and stop were inside the same candle."],
@@ -99,6 +117,9 @@ def track_research_order(
                 mfe=mfe,
                 mae=mae,
                 bars_covered_count=len(relevant_bars),
+                strict_triggered=True,
+                near_miss=False,
+                near_miss_threshold_points=threshold,
                 recovery_entry_level=recovery_entry,
                 recovery_target_level=recovery_target,
             )
@@ -118,6 +139,9 @@ def track_research_order(
                 mfe=mfe,
                 mae=mae,
                 bars_covered_count=len(relevant_bars),
+                strict_triggered=True,
+                near_miss=False,
+                near_miss_threshold_points=threshold,
                 recovery_entry_level=recovery_entry,
                 recovery_target_level=recovery_target,
             )
@@ -126,6 +150,9 @@ def track_research_order(
         return _tracked_order(
             plan,
             planning_time=planning_time,
+            strict_triggered=True,
+            near_miss=False,
+            near_miss_threshold_points=threshold,
             status=XauTrackedOrderStatus.OPEN,
             trigger_time=trigger_time,
             current_price=current_price,
@@ -137,10 +164,21 @@ def track_research_order(
             recovery_entry_level=recovery_entry,
             recovery_target_level=recovery_target,
         )
+    near_miss_distance = (
+        closest_distance
+        if closest_distance is not None and closest_distance <= threshold
+        else None
+    )
+    near_miss = near_miss_distance is not None
     status = (
         XauTrackedOrderStatus.EXPIRED
         if run_until is not None and relevant_bars[-1].timestamp >= run_until
         else XauTrackedOrderStatus.PLANNED
+    )
+    limitations = (
+        ["Plan did not trigger during supplied bars."]
+        if status == XauTrackedOrderStatus.EXPIRED
+        else []
     )
     return _tracked_order(
         plan,
@@ -149,11 +187,15 @@ def track_research_order(
         current_price=current_price,
         current_pnl_points=None,
         bars_covered_count=len(relevant_bars),
+        strict_triggered=False,
+        near_miss=near_miss,
+        near_miss_distance_points=near_miss_distance,
+        near_miss_threshold_points=threshold,
+        closest_price_to_entry=closest_price,
+        closest_time_to_entry=closest_time,
         recovery_entry_level=recovery_entry,
         recovery_target_level=recovery_target,
-        limitations=["Plan did not trigger during supplied bars."]
-        if status == XauTrackedOrderStatus.EXPIRED
-        else [],
+        limitations=limitations,
     )
 
 
@@ -226,14 +268,26 @@ def _exit_order(
     mfe: float,
     mae: float,
     bars_covered_count: int,
+    strict_triggered: bool,
+    near_miss: bool,
     recovery_entry_level: float | None,
     recovery_target_level: float | None,
+    near_miss_distance_points: float | None = None,
+    near_miss_threshold_points: float | None = None,
+    closest_price_to_entry: float | None = None,
+    closest_time_to_entry: datetime | None = None,
     limitations: list[str] | None = None,
 ) -> XauResearchTrackedOrder:
     return _tracked_order(
         plan,
         planning_time=planning_time,
         status=status,
+        strict_triggered=strict_triggered,
+        near_miss=near_miss,
+        near_miss_distance_points=near_miss_distance_points,
+        near_miss_threshold_points=near_miss_threshold_points,
+        closest_price_to_entry=closest_price_to_entry,
+        closest_time_to_entry=closest_time_to_entry,
         trigger_time=trigger_time,
         exit_time=exit_time,
         current_price=current_price,
@@ -262,6 +316,12 @@ def _tracked_order(
     max_favorable_excursion_points: float | None = None,
     max_adverse_excursion_points: float | None = None,
     drawdown_points: float | None = None,
+    strict_triggered: bool = False,
+    near_miss: bool = False,
+    near_miss_distance_points: float | None = None,
+    near_miss_threshold_points: float | None = None,
+    closest_price_to_entry: float | None = None,
+    closest_time_to_entry: datetime | None = None,
     bars_covered_count: int = 0,
     limitations: list[str] | None = None,
 ) -> XauResearchTrackedOrder:
@@ -272,6 +332,12 @@ def _tracked_order(
         entry_level=plan.entry_level,
         target_level=plan.target_level,
         stop_level=plan.stop_level,
+        strict_triggered=strict_triggered,
+        near_miss=near_miss,
+        near_miss_distance_points=near_miss_distance_points,
+        near_miss_threshold_points=near_miss_threshold_points,
+        closest_price_to_entry=closest_price_to_entry,
+        closest_time_to_entry=closest_time_to_entry,
         recovery_entry_level=recovery_entry_level,
         recovery_target_level=recovery_target_level,
         status=status,
@@ -287,6 +353,14 @@ def _tracked_order(
         research_only=True,
         signal_allowed=False,
     )
+
+
+def _distance_to_entry(plan: XauResearchOrderPlan, bar: XauDukasPriceBar) -> tuple[float, float]:
+    if plan.side == XauResearchOrderSide.LONG_REVERSION:
+        nearest = bar.low
+        return nearest - plan.entry_level, nearest
+    nearest = bar.high
+    return plan.entry_level - nearest, nearest
 
 
 __all__ = ["track_research_order"]

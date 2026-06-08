@@ -474,9 +474,11 @@ data/reports/xau_plan_tracker/{run_id}/order_history.md
 ```
 
 Feature 026 keeps CME/QuikStrike as the futures/options/SD/OI source and uses
-Dukascopy or local bars only for traded-side XAUUSD research price data. It
-does not treat `range_label` as numeric SD and does not place live/paper orders,
-issue alerts, size positions, connect to a broker, or report real PnL. Every
+Dukascopy or local bars only for traded-side XAUUSD research price data. It adds
+research-only near-miss diagnostics for non-triggering plans (`strict_triggered`,
+`near_miss`, closest-price/time, distance-to-entry, and threshold). It does not
+treat `range_label` as numeric SD and does not place live/paper orders, issue
+alerts, size positions, connect to a broker, or report real PnL. Every
 output remains:
 
 ```text

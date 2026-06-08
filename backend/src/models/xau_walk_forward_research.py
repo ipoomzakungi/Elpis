@@ -228,6 +228,7 @@ class XauResearchRiskConfig(XauBaseModel):
     min_liquidation_buffer_points: float | None = Field(default=None, ge=0)
     costs_per_order: float | None = Field(default=None, ge=0)
     recovery_enabled: bool = False
+    recovery_multiplier: float = Field(default=1.0, gt=0)
 
 
 class XauResearchOrderPlan(XauBaseModel):

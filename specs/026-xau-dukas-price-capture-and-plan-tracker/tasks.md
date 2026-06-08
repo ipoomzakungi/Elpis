@@ -30,6 +30,8 @@
 - [X] T017 Run focused tests.
 - [X] T018 Run import check, CLI help, and Ruff.
 - [X] T019 Update project status and active feature pointer.
+- [X] T020 Add near-miss diagnostics and thresholds to order tracking.
+- [X] T021 Add near-miss command-line option and model fields.
 
 ## Guardrails
 

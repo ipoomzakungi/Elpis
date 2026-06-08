@@ -30,6 +30,7 @@ def test_plan_tracker_service_uses_fixture_sd_and_bars(tmp_path: Path) -> None:
             cme_source="fixture",
             price_bars_path=bars_path,
             output_root=tmp_path,
+            near_miss_threshold_points=0.4,
         )
     )
 
@@ -40,3 +41,8 @@ def test_plan_tracker_service_uses_fixture_sd_and_bars(tmp_path: Path) -> None:
     snapshots = XauPlanTrackerService(reports_dir=tmp_path).get_snapshots(result.run_id)
     assert snapshots[0].diff_points == 30
     assert snapshots[0].long_plan is not None
+    tracked_orders = XauPlanTrackerService(reports_dir=tmp_path).get_orders(result.run_id)
+    assert len(tracked_orders) == 4
+    assert all(
+        order.near_miss_threshold_points == 0.4 for order in tracked_orders
+    )

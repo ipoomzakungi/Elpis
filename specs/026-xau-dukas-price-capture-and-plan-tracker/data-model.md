@@ -23,7 +23,10 @@ Capture ID, status, bar count, bars path, latest price, limitations, and researc
 
 ### XauPlanTrackerRequest
 
-Session date, planning times, CME source, price source, local bars path or Dukascopy CLI config, SD plan parameters, run-until time, output root, and research acknowledgement.
+Session date, planning times, CME source, price source, local bars path or Dukascopy CLI config, SD plan parameters, run-until time, near-miss threshold, output root, and research acknowledgement.
+
+Includes `recovery_multiplier` for research-only recovery sizing simulation.
+Includes `near_miss_threshold_points` (default `1.0` points).
 
 ### XauResearchPlanTrackerSnapshot
 
@@ -31,7 +34,7 @@ Planning time, future reference, traded reference, Diff, DTE, native SD values, 
 
 ### XauResearchTrackedOrder
 
-Order ID, planning time, side, entry/target/stop/recovery levels, simulated status, trigger/exit time, current price, current simulated PnL points, MFE, MAE/drawdown, bar coverage, limitations, and guardrails.
+Order ID, planning time, side, entry/target/stop/recovery levels, simulated status, trigger/exit time, strict trigger result, near-miss flags/points, nearest entry distance details, current price, current simulated PnL points, MFE, MAE/drawdown, bar coverage, limitations, and guardrails.
 
 ### XauPlanTrackerRunResult
 

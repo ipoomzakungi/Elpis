@@ -171,10 +171,21 @@ def _orders_markdown(orders: list[XauResearchTrackedOrder]) -> str:
     for order in orders:
         trigger = order.trigger_time.isoformat() if order.trigger_time else None
         exit_time = order.exit_time.isoformat() if order.exit_time else None
+        closest = (
+            f"{order.closest_price_to_entry}@{order.closest_time_to_entry.isoformat()}"
+            if order.closest_price_to_entry is not None
+            and order.closest_time_to_entry is not None
+            else None
+        )
         lines.append(
             f"- `{order.order_id}` {order.side.value}: status=`{order.status.value}` "
             f"trigger=`{trigger}` exit=`{exit_time}` current=`{order.current_price}` "
             f"pnl_points=`{order.current_pnl_points}` "
+            f"strict_triggered=`{order.strict_triggered}` "
+            f"near_miss=`{order.near_miss}` "
+            f"near_miss_distance=`{order.near_miss_distance_points}` "
+            f"near_miss_threshold=`{order.near_miss_threshold_points}` "
+            f"closest_entry=`{closest}` "
             f"mae_points=`{order.max_adverse_excursion_points}` signal_allowed=`false`"
         )
     return "\n".join(lines) + "\n"

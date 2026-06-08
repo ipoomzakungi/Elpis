@@ -15,6 +15,7 @@ def test_run_xau_plan_tracker_help_works() -> None:
 
     assert result.returncode == 0
     assert "research-only XAU plan tracker" in result.stdout
+    assert "--near-miss-threshold-points" in result.stdout
 
 
 def test_run_xau_plan_tracker_fixture_run_writes_artifacts(tmp_path: Path) -> None:
@@ -48,4 +49,5 @@ def test_run_xau_plan_tracker_fixture_run_writes_artifacts(tmp_path: Path) -> No
 
     assert result.returncode == 0
     assert '"signal_allowed": false' in result.stdout
+    assert "run_id" in result.stdout
     assert list((tmp_path / "xau_plan_tracker").glob("*/plan_tracker_metadata.json"))

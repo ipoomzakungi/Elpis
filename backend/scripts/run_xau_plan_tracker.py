@@ -25,6 +25,8 @@ def main() -> int:
     parser.add_argument("--stop-sd", type=float, default=2.5)
     parser.add_argument("--recovery-entry-sd", type=float, default=3.0)
     parser.add_argument("--recovery-target-sd", type=float, default=2.0)
+    parser.add_argument("--recovery-multiplier", type=float, default=1.0)
+    parser.add_argument("--near-miss-threshold-points", type=float, default=1.0)
     parser.add_argument("--run-until-time", default="21:50")
     parser.add_argument("--output-root")
     parser.add_argument("--cme-source", default="latest_existing")
@@ -44,6 +46,8 @@ def main() -> int:
         stop_sd=args.stop_sd,
         recovery_entry_sd=args.recovery_entry_sd,
         recovery_target_sd=args.recovery_target_sd,
+        recovery_multiplier=args.recovery_multiplier,
+        near_miss_threshold_points=args.near_miss_threshold_points,
         run_until_time=args.run_until_time,
         output_root=Path(args.output_root) if args.output_root else None,
         cme_source=args.cme_source,

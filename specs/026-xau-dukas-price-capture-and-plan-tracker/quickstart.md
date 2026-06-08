@@ -13,8 +13,10 @@ python scripts/run_xau_plan_tracker.py `
   --target-sd 1.0 `
   --stop-sd 2.5 `
   --recovery-entry-sd 3.0 `
-  --recovery-target-sd 2.0
-```
+  --recovery-target-sd 2.0 `
+  --recovery-multiplier 1.0 `
+  --near-miss-threshold-points 1.0
+``` 
 
 ## Run With Dukascopy CLI
 
@@ -25,8 +27,9 @@ python scripts/run_xau_plan_tracker.py `
   --planning-time 10:10 `
   --planning-time 18:10 `
   --dukas-cli-path "PATH_TO_DUKAS_CLI" `
-  --dukas-command-template "{cli} --symbol {symbol} --timeframe {timeframe} --from {start} --to {end} --output {output}"
-```
+  --dukas-command-template "{cli} --symbol {symbol} --timeframe {timeframe} --from {start} --to {end} --output {output}" `
+  --near-miss-threshold-points 0.5
+``` 
 
 ## API
 
@@ -35,8 +38,8 @@ Invoke-RestMethod `
   -Method Post `
   -Uri http://localhost:8000/api/v1/research/xau/plan-tracker/run `
   -ContentType "application/json" `
-  -Body '{"session_date":"2026-06-08","planning_times":["10:10","18:10"],"price_bars_path":"data/imports/xau_bars_20260608.csv","research_only_acknowledged":true}'
-```
+  -Body '{"session_date":"2026-06-08","planning_times":["10:10","18:10"],"price_bars_path":"data/imports/xau_bars_20260608.csv","near_miss_threshold_points":0.25,"research_only_acknowledged":true}'
+``` 
 
 ## Expected Output
 

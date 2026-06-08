@@ -146,6 +146,8 @@ class XauPlanTrackerRequest(XauBaseModel):
     recovery_entry_sd: float = Field(default=3.0, gt=0)
     recovery_target_sd: float = Field(default=2.0, gt=0)
     max_recovery_steps: int = Field(default=1, ge=0, le=2)
+    recovery_multiplier: float = Field(default=1.0, gt=0)
+    near_miss_threshold_points: float = Field(default=1.0, gt=0)
     run_until_time: time = time(21, 50)
     output_root: Path | None = None
     overwrite: bool = False
@@ -207,6 +209,12 @@ class XauResearchTrackedOrder(XauBaseModel):
     recovery_entry_level: float | None = Field(default=None, gt=0)
     recovery_target_level: float | None = Field(default=None, gt=0)
     status: XauTrackedOrderStatus
+    strict_triggered: bool = False
+    near_miss: bool = False
+    near_miss_distance_points: float | None = Field(default=None, ge=0)
+    near_miss_threshold_points: float | None = Field(default=None, ge=0)
+    closest_price_to_entry: float | None = Field(default=None, gt=0)
+    closest_time_to_entry: datetime | None = None
     trigger_time: datetime | None = None
     exit_time: datetime | None = None
     current_price: float | None = Field(default=None, gt=0)

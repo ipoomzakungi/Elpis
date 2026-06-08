@@ -95,7 +95,11 @@ class XauPlanTrackerService:
                     price_snapshot=price_snapshot,
                     sd_snapshot=sd_snapshot,
                     config=_order_config(request),
-                    risk_config=XauResearchRiskConfig(recovery_enabled=False),
+                    risk_config=XauResearchRiskConfig(
+                        recovery_enabled=True,
+                        recovery_multiplier=request.recovery_multiplier,
+                        point_value_per_size_unit=1.0,
+                    ),
                 )
                 tracked_orders.extend(
                     _track_initial_orders(
@@ -103,6 +107,7 @@ class XauPlanTrackerService:
                         bars=bars,
                         planning_time=planning_time,
                         run_until=run_until,
+                        near_miss_threshold_points=request.near_miss_threshold_points,
                     )
                 )
             long_plan, short_plan = _plan_levels(plans)
@@ -237,6 +242,7 @@ def _track_initial_orders(
     bars: list[XauDukasPriceBar],
     planning_time: datetime,
     run_until: datetime,
+    near_miss_threshold_points: float,
 ) -> list[XauResearchTrackedOrder]:
     recovery_by_side = {
         plan.side: plan for plan in plans if plan.stage == XauResearchOrderStage.RECOVERY_1
@@ -251,6 +257,7 @@ def _track_initial_orders(
                 bars,
                 planning_time=planning_time,
                 run_until=run_until,
+                near_miss_threshold_points=near_miss_threshold_points,
                 recovery_plan=recovery_by_side.get(plan.side),
             )
         )
