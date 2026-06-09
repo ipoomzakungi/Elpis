@@ -43,6 +43,21 @@ class XauPlanTrackerReportStore:
             raise FileNotFoundError(run_id)
         return XauPlanTrackerRunResult.model_validate_json(path.read_text(encoding="utf-8"))
 
+    def list_results(self) -> list[XauPlanTrackerRunResult]:
+        if not self.plan_tracker_root.exists():
+            return []
+        results: list[XauPlanTrackerRunResult] = []
+        for path in self.plan_tracker_root.glob("*/plan_tracker_metadata.json"):
+            try:
+                results.append(
+                    XauPlanTrackerRunResult.model_validate_json(
+                        path.read_text(encoding="utf-8")
+                    )
+                )
+            except (OSError, ValueError, json.JSONDecodeError):
+                continue
+        return sorted(results, key=lambda item: item.created_at, reverse=True)
+
     def read_snapshots(self, run_id: str) -> list[XauResearchPlanTrackerSnapshot]:
         path = self.report_dir(run_id) / "snapshots.json"
         if not path.exists():

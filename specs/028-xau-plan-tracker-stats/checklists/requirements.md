@@ -1,0 +1,10 @@
+- [x] Aggregate output remains research-only (`signal_allowed=false`)
+- [x] Missing runs are handled explicitly (no fabricated stats)
+- [x] Filtering works by date, planning time, side, status
+- [x] Run-specific endpoint returns only requested run
+- [x] New feature CLI script exists and prints JSON
+- [x] Tests added for service/API/script
+- [x] Feature store listing supports stable run ordering
+- [x] API run endpoint returns 404 for unknown run_id
+- [x] Tests validate no-signal guardrail (`signal_allowed=false`)
+- [x] Report artifacts are read from existing Feature 026 output schema

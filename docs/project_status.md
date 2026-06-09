@@ -1,6 +1,6 @@
 # Elpis Project Status
 
-**Updated**: 2026-06-08
+**Updated**: 2026-06-09
 **Current branch**: `codex/xau-vol-oi-research-pipeline`
 **Current phase**: v0 Research Platform
 
@@ -113,7 +113,9 @@ Feature 024A is research-only; Range Desk plans are not trading signals.
 Feature 024B is research-only; capability audit rows are not trading signals.
 Feature 025 is research-only; walk-forward order templates and outcomes are not trading signals.
 Feature 026 is research-only; plan tracker PnL points and drawdown points are simulated research metrics, not real PnL or trading signals.
-```
+Feature 027 is research-only; dashboard review is for evidence inspection only.
+Feature 028 is research-only; aggregate outcomes are statistics, not trade recommendations.
+``` 
 
 ## Latest XAU Smoke Validation
 
@@ -486,6 +488,35 @@ signal_allowed = false
 research_only = true
 ```
 
+## Feature 028 XAU Plan Tracker Stats API
+
+Implemented local endpoints:
+
+```text
+POST /api/v1/research/xau/plan-tracker/stats
+GET  /api/v1/research/xau/plan-tracker/stats/{run_id}
+```
+
+Local script:
+
+```text
+backend/scripts/run_xau_plan_tracker_stats.py
+```
+
+Behavior:
+
+- aggregates persisted plan-tracker snapshots and tracked orders;
+- supports filtering by session-date window, planning time, side, and status;
+- returns deterministic research-only summaries with run-level details;
+- keeps synthetic and unavailable states explicit (no fabricated values).
+
+All outputs remain:
+
+```text
+signal_allowed = false
+research_only = true
+```
+
 ## Missing Before Systematic Trading
 
 - Frontend workbench page for the new Feature 022 API.
@@ -496,8 +527,9 @@ research_only = true
   providers.
 - Frontend display and persistence for Range Desk and Data Capability Audit
   results.
-- Frontend page for Feature 025 walk-forward Range Desk history.
-- Frontend page for Feature 026 plan tracker history and simulated order review.
+- Frontend display for Feature 025 walk-forward Range Desk history.
+- Feature 027 dashboard is implemented for Feature 026 plan tracker history.
+- Feature 028 stats API and script are implemented for feature-level rollups.
 - Source-backed automatic price-provider validation beyond manual/fixture,
   optional Yahoo fallback, local XAU bars, and configurable Dukascopy CLI.
 - Fresh source-provider coverage for fields still unavailable in the audit,
@@ -531,45 +563,33 @@ research_only = true
 | M9 Data capability audit | Backend done | Feature 024B audits saved local artifacts for SD, Vol Chg, Future Chg, delta, gamma, GEX prerequisites. |
 | M9B Walk-forward Range Desk runner | Backend done | Feature 025 creates scheduled research snapshots, order templates, and simulated outcomes. |
 | M9C XAU price plan tracker | Backend done | Feature 026 imports/captures XAU bars, extracts 10:10/18:10 references, and tracks simulated plan PnL/DD points. |
-| M10 Candle / IV / flow state engine | Not done | Turns raw data into candidate context states. |
-| M11 Forward outcome labels | Done | Feature 023 attaches local OHLCV outcome evidence to candidates. |
-| M12 Research backtest | Not done | Required before any strategy claim. |
-| M13 Dashboard / decision console | Partly planned | Should show data freshness, map, candidates, and no-trade reasons. |
+| M10 Plan tracker dashboard | Frontend done | Feature 027 shows Feature 026 snapshots, outcomes, and diagnostics. |
+| M11 Plan tracker outcome stats | Done | Feature 028 aggregates plan-tracker outcomes for sessions, sides, statuses, and planning times. |
+| M12 Candle / IV / flow state engine | Not done | Turns raw data into candidate context states. |
+| M12 Forward outcome labels | Done | Feature 023 attaches local OHLCV outcome evidence to candidates. |
+| M13 Research backtest | Not done | Required before any strategy claim. |
 | M14 Paper/shadow mode | Not done | Not allowed until research gates are satisfied. |
 | M15 Live trading gate | Not allowed | Requires historical, forward, paper, and risk validation first. |
 
 ## Next Recommended Feature
 
-Create Feature 024C:
+Create Feature 029:
 
 ```text
-024c-xau-range-desk-audit-ui-persistence
+029-xau-plan-tracker-outcome-statistics-backtest
 ```
 
 Purpose:
 
 ```text
-Persist and display Range Desk plans and Data Capability Audit output in the
-local research dashboard without signals, alerts, PnL, or execution semantics.
+Aggregate plan tracker and walk-forward outcome labels by session, side, DTE, and
+near-miss/recovery states to produce reusable research statistics.
 ```
 
-Then create Feature 027:
+Then continue with:
 
 ```text
-027-xau-reaction-state-engine
-```
-
-Purpose:
-
-```text
-Automatically compute confirmation_state, iv_state, and flow_state from
-source-backed price bars, IV context, volume, OI change, and wall interaction.
-```
-
-Then create Feature 027:
-
-```text
-027-xau-outcome-statistics-backtest
+029-xau-regime-aware-backtest
 ```
 
 Purpose:
