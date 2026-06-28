@@ -437,5 +437,5 @@ After smoke test passes:
 - report files changed, commands run, results, commit hash, and remaining risks.
 
 <!-- SPECKIT START -->
-Active Speckit plan: specs/020a-xau-real-structural-map-from-bundle/plan.md
+Active Speckit plan: specs/028-xau-plan-tracker-stats/plan.md
 <!-- SPECKIT END -->

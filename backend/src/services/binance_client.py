@@ -1,13 +1,11 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
 
 import httpx
 import polars as pl
 
 from src.config import get_settings
-
 
 logger = logging.getLogger(__name__)
 
@@ -58,8 +56,8 @@ class BinanceClient:
         self,
         symbol: str = "BTCUSDT",
         interval: str = "15m",
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
+        start_time: int | None = None,
+        end_time: int | None = None,
         limit: int = 1500,
     ) -> list[list]:
         """Get kline/candlestick data."""
@@ -80,8 +78,8 @@ class BinanceClient:
         self,
         symbol: str = "BTCUSDT",
         period: str = "15m",
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
+        start_time: int | None = None,
+        end_time: int | None = None,
         limit: int = 500,
     ) -> list[dict]:
         """Get open interest history."""
@@ -101,8 +99,8 @@ class BinanceClient:
     async def get_funding_rate(
         self,
         symbol: str = "BTCUSDT",
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
+        start_time: int | None = None,
+        end_time: int | None = None,
         limit: int = 1000,
     ) -> list[dict]:
         """Get funding rate history."""
@@ -147,7 +145,11 @@ class BinanceClient:
                 break
 
             all_data.extend(data)
-            current_start = data[-1][0] + 1  # Next millisecond after last candle
+            next_start = data[-1][0] + 1  # Next millisecond after last candle
+            if next_start <= current_start:
+                logger.warning("Stopping OHLCV pagination because the cursor did not advance")
+                break
+            current_start = next_start
 
             # Small delay to be nice to the API
             await asyncio.sleep(0.1)
@@ -192,21 +194,28 @@ class BinanceClient:
         end_ms = int(end_time.timestamp() * 1000)
 
         all_data = []
-        current_start = start_ms
+        current_end = end_ms
 
-        while current_start < end_ms:
+        while current_end >= start_ms:
             data = await self.get_open_interest_history(
                 symbol=symbol,
                 period=period,
-                start_time=current_start,
-                end_time=end_ms,
+                start_time=start_ms,
+                end_time=current_end,
                 limit=500,
             )
             if not data:
                 break
 
             all_data.extend(data)
-            current_start = int(data[-1]["timestamp"]) + 1
+            first_timestamp = int(data[0]["timestamp"])
+            next_end = first_timestamp - 1
+            if next_end >= current_end:
+                logger.warning(
+                    "Stopping open interest pagination because the cursor did not retreat"
+                )
+                break
+            current_end = next_end
 
             await asyncio.sleep(0.1)
 
@@ -258,7 +267,11 @@ class BinanceClient:
                 break
 
             all_data.extend(data)
-            current_start = int(data[-1]["fundingTime"]) + 1
+            next_start = int(data[-1]["fundingTime"]) + 1
+            if next_start <= current_start:
+                logger.warning("Stopping funding pagination because the cursor did not advance")
+                break
+            current_start = next_start
 
             await asyncio.sleep(0.1)
 

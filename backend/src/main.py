@@ -17,9 +17,15 @@ from src.api.routes import (
     research,
     research_execution,
     xau,
+    xau_candidate_outcomes,
+    xau_daily_workbench,
+    xau_data_capability_audit,
     xau_forward_journal,
+    xau_plan_tracker,
     xau_quikstrike_fusion,
+    xau_range_desk,
     xau_reaction,
+    xau_walk_forward,
 )
 from src.config import get_settings
 from src.providers.errors import ProviderError
@@ -53,6 +59,16 @@ app.include_router(quikstrike_matrix.router, prefix="/api/v1", tags=["quikstrike
 app.include_router(research.router, prefix="/api/v1", tags=["research"])
 app.include_router(research_execution.router, prefix="/api/v1", tags=["research-execution"])
 app.include_router(xau.router, prefix="/api/v1", tags=["xau"])
+app.include_router(
+    xau_candidate_outcomes.router,
+    prefix="/api/v1",
+    tags=["xau-candidate-outcomes"],
+)
+app.include_router(
+    xau_daily_workbench.router,
+    prefix="/api/v1",
+    tags=["xau-daily-workbench"],
+)
 app.include_router(xau_reaction.router, prefix="/api/v1", tags=["xau-reaction"])
 app.include_router(
     xau_quikstrike_fusion.router,
@@ -63,6 +79,26 @@ app.include_router(
     xau_forward_journal.router,
     prefix="/api/v1",
     tags=["xau-forward-journal"],
+)
+app.include_router(
+    xau_range_desk.router,
+    prefix="/api/v1",
+    tags=["xau-range-desk"],
+)
+app.include_router(
+    xau_data_capability_audit.router,
+    prefix="/api/v1",
+    tags=["xau-data-capability-audit"],
+)
+app.include_router(
+    xau_walk_forward.router,
+    prefix="/api/v1",
+    tags=["xau-walk-forward"],
+)
+app.include_router(
+    xau_plan_tracker.router,
+    prefix="/api/v1",
+    tags=["xau-plan-tracker"],
 )
 
 

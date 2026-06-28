@@ -1,6 +1,9 @@
+from datetime import datetime
+
 import httpx
 import pytest
 
+import src.services.binance_client as binance_client_module
 from src.services.binance_client import BinanceClient
 
 
@@ -19,6 +22,15 @@ def kline_row(timestamp: int) -> list:
         "500.0",
         "0",
     ]
+
+
+def open_interest_row(timestamp: int) -> dict:
+    return {
+        "symbol": "BTCUSDT",
+        "sumOpenInterest": "1000.0",
+        "sumOpenInterestValue": "100000.0",
+        "timestamp": timestamp,
+    }
 
 
 @pytest.mark.asyncio()
@@ -66,14 +78,7 @@ async def test_download_ohlcv_converts_and_deduplicates_rows():
 async def test_download_open_interest_converts_payload():
     responses = iter(
         [
-            [
-                {
-                    "symbol": "BTCUSDT",
-                    "sumOpenInterest": "1000.0",
-                    "sumOpenInterestValue": "100000.0",
-                    "timestamp": 1000,
-                }
-            ],
+            [open_interest_row(1000)],
             [],
         ]
     )
@@ -90,6 +95,40 @@ async def test_download_open_interest_converts_payload():
 
     assert len(data) == 1
     assert data.row(0, named=True)["open_interest"] == pytest.approx(1000.0)
+
+
+@pytest.mark.asyncio()
+async def test_download_open_interest_stops_when_backward_cursor_does_not_retreat(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    class FixedDatetime(datetime):
+        @classmethod
+        def utcnow(cls):
+            return cls(1970, 1, 10, 0, 0, 0)
+
+    monkeypatch.setattr(binance_client_module, "datetime", FixedDatetime)
+    end_times: list[int] = []
+    responses = iter(
+        [
+            [open_interest_row(700_000_000), open_interest_row(710_000_000)],
+            [open_interest_row(710_000_000)],
+        ]
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        end_times.append(int(request.url.params["endTime"]))
+        return httpx.Response(200, json=next(responses))
+
+    client = BinanceClient()
+    await client.client.aclose()
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    data = await client.download_open_interest(days=1)
+    await client.close()
+
+    assert len(end_times) == 2
+    assert end_times[1] == 699_999_999
+    assert len(data) == 2
 
 
 @pytest.mark.asyncio()

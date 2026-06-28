@@ -8,6 +8,9 @@ PostgreSQL, Kafka, Kubernetes, or ML training.
 
 ## Current XAU Workflow
 
+Project status and next milestone tracking are maintained in
+`docs/project_status.md`.
+
 The local daily QuikStrike runner captures:
 
 - QuikStrike Vol2Vol

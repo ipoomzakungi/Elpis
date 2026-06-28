@@ -1,12 +1,18 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { createChart, IChartApi, ISeriesApi, CandlestickData, LineData } from 'lightweight-charts'
+import { createChart, IChartApi, CandlestickData, LineData, UTCTimestamp } from 'lightweight-charts'
 import { Feature } from '@/types'
 
 interface CandlestickChartProps {
   data: Feature[]
   height?: number
+}
+
+function toChartTime(timestamp: string): UTCTimestamp {
+  const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/.test(timestamp)
+  const parsed = Date.parse(hasTimezone ? timestamp : `${timestamp}Z`)
+  return Math.floor(parsed / 1000) as UTCTimestamp
 }
 
 export default function CandlestickChart({ data, height = 400 }: CandlestickChartProps) {
@@ -20,16 +26,20 @@ export default function CandlestickChart({ data, height = 400 }: CandlestickChar
       width: chartContainerRef.current.clientWidth,
       height: height,
       layout: {
-        background: { color: '#1a1a1a' },
-        textColor: '#d1d5db',
+        background: { color: '#09090b' },
+        textColor: '#d4d4d8',
       },
       grid: {
-        vertLines: { color: '#2d2d2d' },
-        horzLines: { color: '#2d2d2d' },
+        vertLines: { color: 'rgba(255, 255, 255, 0.06)' },
+        horzLines: { color: 'rgba(255, 255, 255, 0.06)' },
       },
     })
 
     chartRef.current = chart
+
+    const orderedData = data
+      .slice()
+      .sort((left, right) => toChartTime(left.timestamp) - toChartTime(right.timestamp))
 
     // Candlestick series
     const candlestickSeries = chart.addCandlestickSeries({
@@ -41,8 +51,8 @@ export default function CandlestickChart({ data, height = 400 }: CandlestickChar
       wickUpColor: '#22c55e',
     })
 
-    const candlestickData: CandlestickData[] = data.map((d) => ({
-      time: d.timestamp as any,
+    const candlestickData: CandlestickData[] = orderedData.map((d) => ({
+      time: toChartTime(d.timestamp),
       open: d.open,
       high: d.high,
       low: d.low,
@@ -53,14 +63,14 @@ export default function CandlestickChart({ data, height = 400 }: CandlestickChar
 
     // Range High line
     const rangeHighSeries = chart.addLineSeries({
-      color: '#3b82f6',
+      color: '#38bdf8',
       lineWidth: 1,
       lineStyle: 2,
       title: 'Range High',
     })
 
-    const rangeHighData: LineData[] = data.map((d) => ({
-      time: d.timestamp as any,
+    const rangeHighData: LineData[] = orderedData.map((d) => ({
+      time: toChartTime(d.timestamp),
       value: d.range_high,
     }))
 
@@ -68,14 +78,14 @@ export default function CandlestickChart({ data, height = 400 }: CandlestickChar
 
     // Range Low line
     const rangeLowSeries = chart.addLineSeries({
-      color: '#3b82f6',
+      color: '#38bdf8',
       lineWidth: 1,
       lineStyle: 2,
       title: 'Range Low',
     })
 
-    const rangeLowData: LineData[] = data.map((d) => ({
-      time: d.timestamp as any,
+    const rangeLowData: LineData[] = orderedData.map((d) => ({
+      time: toChartTime(d.timestamp),
       value: d.range_low,
     }))
 
@@ -83,14 +93,14 @@ export default function CandlestickChart({ data, height = 400 }: CandlestickChar
 
     // Range Mid line
     const rangeMidSeries = chart.addLineSeries({
-      color: '#6b7280',
+      color: '#a1a1aa',
       lineWidth: 1,
       lineStyle: 1,
       title: 'Range Mid',
     })
 
-    const rangeMidData: LineData[] = data.map((d) => ({
-      time: d.timestamp as any,
+    const rangeMidData: LineData[] = orderedData.map((d) => ({
+      time: toChartTime(d.timestamp),
       value: d.range_mid,
     }))
 
