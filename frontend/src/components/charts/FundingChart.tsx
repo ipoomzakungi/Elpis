@@ -18,25 +18,25 @@ export default function FundingChart({ data, height = 200 }: FundingChartProps) 
   return (
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={chartData}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#2d2d2d" />
-        <XAxis dataKey="timestamp" tick={{ fill: '#9ca3af', fontSize: 12 }} />
-        <YAxis tick={{ fill: '#9ca3af', fontSize: 12 }} />
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+        <XAxis dataKey="timestamp" tick={{ fill: '#a1a1aa', fontSize: 12 }} />
+        <YAxis tick={{ fill: '#a1a1aa', fontSize: 12 }} />
         <Tooltip
-          contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151' }}
-          labelStyle={{ color: '#f3f4f6' }}
+          contentStyle={{ backgroundColor: '#18181b', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 6 }}
+          labelStyle={{ color: '#f4f4f5' }}
         />
-        <Legend />
+        <Legend wrapperStyle={{ color: '#d4d4d8' }} />
         <Line
           type="monotone"
           dataKey="funding_rate"
-          stroke="#8b5cf6"
+          stroke="#a78bfa"
           name="Funding Rate"
           dot={false}
         />
         <Line
           type="monotone"
           dataKey="funding_rate_change"
-          stroke="#ec4899"
+          stroke="#fb7185"
           name="Rate Change"
           dot={false}
         />

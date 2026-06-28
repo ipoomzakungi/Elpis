@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
 
 import {
   ApiResponse,
@@ -91,6 +91,9 @@ import {
   XauQuikStrikeFusionRequest,
   XauVolOiReportListResponse,
   XauVolOiReportRequest,
+  XauPlanTrackerOrder,
+  XauPlanTrackerRunResult,
+  XauPlanTrackerSnapshot,
   XauWallTableResponse,
   XauZoneTableResponse,
 } from '@/types';
@@ -753,5 +756,46 @@ export const api = {
       outcomes,
       priceCoverage: null,
     };
+  },
+
+  // XAU plan tracker
+  getLatestXauPlanTrackerRun: async (): Promise<XauPlanTrackerRunResult> => {
+    return fetchApi('/research/xau/plan-tracker/latest');
+  },
+
+  getXauPlanTrackerRun: async (runId: string): Promise<XauPlanTrackerRunResult> => {
+    return fetchApi(`/research/xau/plan-tracker/runs/${encodeURIComponent(runId)}`);
+  },
+
+  getXauPlanTrackerOrders: async (
+    runId: string,
+  ): Promise<XauPlanTrackerOrder[]> => {
+    return fetchApi(`/research/xau/plan-tracker/runs/${encodeURIComponent(runId)}/orders`);
+  },
+
+  getXauPlanTrackerSnapshots: async (
+    runId: string,
+  ): Promise<XauPlanTrackerSnapshot[]> => {
+    return fetchApi(`/research/xau/plan-tracker/runs/${encodeURIComponent(runId)}/snapshots`);
+  },
+
+  getXauPlanTrackerDashboardData: async (
+    runId: string,
+  ): Promise<{
+    run: XauPlanTrackerRunResult;
+    snapshots: XauPlanTrackerSnapshot[];
+    orders: XauPlanTrackerOrder[];
+  }> => {
+    const encodedRunId = encodeURIComponent(runId);
+    const [run, snapshots, orders] = await Promise.all([
+      fetchApi<XauPlanTrackerRunResult>(`/research/xau/plan-tracker/runs/${encodedRunId}`),
+      fetchApi<XauPlanTrackerSnapshot[]>(
+        `/research/xau/plan-tracker/runs/${encodedRunId}/snapshots`,
+      ),
+      fetchApi<XauPlanTrackerOrder[]>(
+        `/research/xau/plan-tracker/runs/${encodedRunId}/orders`,
+      ),
+    ]);
+    return { run, snapshots, orders };
   },
 };

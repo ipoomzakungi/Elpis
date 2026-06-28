@@ -18,21 +18,21 @@ export default function VolumeChart({ data, height = 200 }: VolumeChartProps) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={chartData}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#2d2d2d" />
-        <XAxis dataKey="timestamp" tick={{ fill: '#9ca3af', fontSize: 12 }} />
-        <YAxis yAxisId="left" tick={{ fill: '#9ca3af', fontSize: 12 }} />
-        <YAxis yAxisId="right" orientation="right" tick={{ fill: '#9ca3af', fontSize: 12 }} />
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+        <XAxis dataKey="timestamp" tick={{ fill: '#a1a1aa', fontSize: 12 }} />
+        <YAxis yAxisId="left" tick={{ fill: '#a1a1aa', fontSize: 12 }} />
+        <YAxis yAxisId="right" orientation="right" tick={{ fill: '#a1a1aa', fontSize: 12 }} />
         <Tooltip
-          contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151' }}
-          labelStyle={{ color: '#f3f4f6' }}
+          contentStyle={{ backgroundColor: '#18181b', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 6 }}
+          labelStyle={{ color: '#f4f4f5' }}
         />
-        <Legend />
-        <Bar yAxisId="left" dataKey="volume" fill="#22c55e" name="Volume" />
+        <Legend wrapperStyle={{ color: '#d4d4d8' }} />
+        <Bar yAxisId="left" dataKey="volume" fill="#34d399" name="Volume" radius={[3, 3, 0, 0]} />
         <Line
           yAxisId="right"
           type="monotone"
           dataKey="volume_ratio"
-          stroke="#f59e0b"
+          stroke="#fbbf24"
           name="Volume Ratio"
         />
       </BarChart>

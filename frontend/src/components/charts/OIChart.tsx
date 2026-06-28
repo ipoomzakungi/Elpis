@@ -18,20 +18,20 @@ export default function OIChart({ data, height = 200 }: OIChartProps) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={chartData}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#2d2d2d" />
-        <XAxis dataKey="timestamp" tick={{ fill: '#9ca3af', fontSize: 12 }} />
-        <YAxis yAxisId="left" tick={{ fill: '#9ca3af', fontSize: 12 }} />
-        <YAxis yAxisId="right" orientation="right" tick={{ fill: '#9ca3af', fontSize: 12 }} />
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+        <XAxis dataKey="timestamp" tick={{ fill: '#a1a1aa', fontSize: 12 }} />
+        <YAxis yAxisId="left" tick={{ fill: '#a1a1aa', fontSize: 12 }} />
+        <YAxis yAxisId="right" orientation="right" tick={{ fill: '#a1a1aa', fontSize: 12 }} />
         <Tooltip
-          contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151' }}
-          labelStyle={{ color: '#f3f4f6' }}
+          contentStyle={{ backgroundColor: '#18181b', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 6 }}
+          labelStyle={{ color: '#f4f4f5' }}
         />
-        <Legend />
+        <Legend wrapperStyle={{ color: '#d4d4d8' }} />
         <Line
           yAxisId="left"
           type="monotone"
           dataKey="open_interest"
-          stroke="#3b82f6"
+          stroke="#38bdf8"
           name="Open Interest"
           dot={false}
         />
@@ -39,7 +39,7 @@ export default function OIChart({ data, height = 200 }: OIChartProps) {
           yAxisId="right"
           type="monotone"
           dataKey="oi_change_pct"
-          stroke="#f59e0b"
+          stroke="#fbbf24"
           name="OI Change %"
           dot={false}
         />

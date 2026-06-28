@@ -2542,3 +2542,110 @@ export interface DataSourceDashboardData {
   freeDerivativesRuns: FreeDerivativesBootstrapRunListResponse;
   latestFreeDerivativesRun: FreeDerivativesBootstrapRun | null;
 }
+
+export type XauPlanTrackerReadiness = 'complete' | 'partial' | 'blocked';
+export type XauReferenceAlignmentStatus =
+  | 'exact'
+  | 'within_tolerance'
+  | 'stale'
+  | 'unavailable';
+export type XauPlanTrackerOrderSide = 'long_reversion' | 'short_reversion';
+export type XauPlanTrackerOrderStatus =
+  | 'planned'
+  | 'triggered'
+  | 'target_hit'
+  | 'stop_hit'
+  | 'recovery_triggered'
+  | 'recovery_target_hit'
+  | 'expired'
+  | 'open'
+  | 'ambiguous'
+  | 'unavailable';
+
+export interface XauPlanTrackerLevel {
+  side: XauPlanTrackerOrderSide;
+  entry_level: number;
+  target_level: number;
+  stop_level: number;
+  recovery_entry_level: number | null;
+  recovery_target_level: number | null;
+}
+
+export interface XauPlanTrackerRunResult {
+  run_id: string;
+  created_at: string;
+  session_date: string;
+  snapshot_count: number;
+  tracked_order_count: number;
+  open_order_count: number;
+  completed_order_count: number;
+  artifact_paths: string[];
+  readiness: XauPlanTrackerReadiness;
+  missing_inputs: string[];
+  limitations: string[];
+  no_signal_reasons: string[];
+  research_only: boolean;
+  signal_allowed: boolean;
+}
+
+export interface XauPlanTrackerSnapshot {
+  snapshot_id: string;
+  planning_time: string;
+  future_reference_price: number | null;
+  traded_reference_price: number | null;
+  diff_points: number | null;
+  dte: number | null;
+  native_1sd: number | null;
+  native_2sd: number | null;
+  native_3sd: number | null;
+  reference_alignment: XauReferenceAlignmentStatus;
+  long_plan: XauPlanTrackerLevel | null;
+  short_plan: XauPlanTrackerLevel | null;
+  missing_inputs: string[];
+  limitations: string[];
+  research_only: boolean;
+  signal_allowed: boolean;
+}
+
+export interface XauPlanTrackerOrder {
+  order_id: string;
+  planning_time: string;
+  side: XauPlanTrackerOrderSide;
+  entry_level: number;
+  target_level: number;
+  stop_level: number;
+  recovery_entry_level: number | null;
+  recovery_target_level: number | null;
+  status: XauPlanTrackerOrderStatus;
+  strict_triggered: boolean;
+  near_miss: boolean;
+  near_miss_distance_points: number | null;
+  near_miss_threshold_points: number | null;
+  closest_price_to_entry: number | null;
+  closest_time_to_entry: string | null;
+  trigger_time: string | null;
+  exit_time: string | null;
+  current_price: number | null;
+  current_pnl_points: number | null;
+  max_favorable_excursion_points: number | null;
+  max_adverse_excursion_points: number | null;
+  drawdown_points: number | null;
+  bars_covered_count: number;
+  limitations: string[];
+  research_only: boolean;
+  signal_allowed: boolean;
+}
+
+export interface XauPlanTrackerSnapshotListResponse {
+  snapshots: XauPlanTrackerSnapshot[];
+}
+
+export interface XauPlanTrackerOrderListResponse {
+  orders: XauPlanTrackerOrder[];
+}
+
+export interface XauPlanTrackerDashboardResponse {
+  run: XauPlanTrackerRunResult;
+  snapshots: XauPlanTrackerSnapshot[];
+  orders: XauPlanTrackerOrder[];
+}

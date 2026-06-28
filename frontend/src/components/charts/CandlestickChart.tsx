@@ -26,12 +26,12 @@ export default function CandlestickChart({ data, height = 400 }: CandlestickChar
       width: chartContainerRef.current.clientWidth,
       height: height,
       layout: {
-        background: { color: '#1a1a1a' },
-        textColor: '#d1d5db',
+        background: { color: '#09090b' },
+        textColor: '#d4d4d8',
       },
       grid: {
-        vertLines: { color: '#2d2d2d' },
-        horzLines: { color: '#2d2d2d' },
+        vertLines: { color: 'rgba(255, 255, 255, 0.06)' },
+        horzLines: { color: 'rgba(255, 255, 255, 0.06)' },
       },
     })
 
@@ -63,7 +63,7 @@ export default function CandlestickChart({ data, height = 400 }: CandlestickChar
 
     // Range High line
     const rangeHighSeries = chart.addLineSeries({
-      color: '#3b82f6',
+      color: '#38bdf8',
       lineWidth: 1,
       lineStyle: 2,
       title: 'Range High',
@@ -78,7 +78,7 @@ export default function CandlestickChart({ data, height = 400 }: CandlestickChar
 
     // Range Low line
     const rangeLowSeries = chart.addLineSeries({
-      color: '#3b82f6',
+      color: '#38bdf8',
       lineWidth: 1,
       lineStyle: 2,
       title: 'Range Low',
@@ -93,7 +93,7 @@ export default function CandlestickChart({ data, height = 400 }: CandlestickChar
 
     // Range Mid line
     const rangeMidSeries = chart.addLineSeries({
-      color: '#6b7280',
+      color: '#a1a1aa',
       lineWidth: 1,
       lineStyle: 1,
       title: 'Range Mid',
