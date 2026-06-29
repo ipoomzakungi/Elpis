@@ -39,7 +39,9 @@ class XauMarketContextBuilderRequest:
     fusion_report_id: str | None = None
     fusion_report_path: Path | None = None
     xauusd_spot_price: float | None = None
+    xauusd_spot_timestamp: datetime | None = None
     gc_futures_price: float | None = None
+    gc_futures_timestamp: datetime | None = None
     current_timestamp: datetime | None = None
     session_date: date | None = None
     timezone: str = "Asia/Bangkok"
@@ -73,13 +75,15 @@ class XauMarketContextBuilder:
         )
         gc_price, gc_timestamp = _gc_reference(
             explicit_price=request.gc_futures_price,
+            explicit_timestamp=request.gc_futures_timestamp,
             fusion_report=fusion_report,
             current_timestamp=current_timestamp,
         )
         basis = build_basis_snapshot(
             xauusd_spot_price=spot_price,
             gc_futures_price=gc_price,
-            spot_timestamp=current_timestamp if spot_price is not None else None,
+            spot_timestamp=request.xauusd_spot_timestamp
+            or (current_timestamp if spot_price is not None else None),
             futures_timestamp=gc_timestamp,
             max_alignment_seconds=request.max_basis_alignment_seconds,
         )
@@ -213,11 +217,12 @@ def _fusion_report_root(reports_dir: Path | None) -> Path:
 def _gc_reference(
     *,
     explicit_price: float | None,
+    explicit_timestamp: datetime | None,
     fusion_report: XauQuikStrikeFusionReport | None,
     current_timestamp: datetime,
 ) -> tuple[float | None, datetime | None]:
     if explicit_price is not None:
-        return explicit_price, current_timestamp
+        return explicit_price, explicit_timestamp or current_timestamp
     if fusion_report is None:
         return None, None
     values: list[float] = []
