@@ -1,0 +1,16 @@
+{
+  "cycle_label": "manual",
+  "cycle_time": "manual",
+  "timezone": "Asia/Bangkok",
+  "cme_source_mode": "latest_existing",
+  "price_provider": "latest_local_import",
+  "traded_symbol": "XAUUSD",
+  "dukascopy_symbol": "xauusd",
+  "dukascopy_timeframe": "m1",
+  "dukascopy_node_command_template": "npx dukascopy-node -i {symbol} -from {from_iso} -to {to_iso} -t {timeframe} -f csv -o {output_path}",
+  "max_cme_age_minutes": 180,
+  "max_price_age_minutes": 15,
+  "max_basis_alignment_seconds": 120,
+  "allow_stale_basis": false,
+  "research_only_acknowledged": true
+}
