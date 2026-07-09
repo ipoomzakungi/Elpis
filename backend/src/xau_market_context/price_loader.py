@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -106,6 +106,11 @@ def _parse_datetime(value: Any, default_timezone: str) -> datetime:
         parsed = value
     else:
         text = str(value).strip()
+        if _is_numeric_timestamp(text):
+            number = float(text)
+            seconds = number / 1000 if number > 10_000_000_000 else number
+            parsed = datetime.fromtimestamp(seconds, tz=UTC)
+            return parsed.astimezone(ZoneInfo(default_timezone))
         if text.endswith("Z"):
             text = text[:-1] + "+00:00"
         parsed = datetime.fromisoformat(text)
@@ -114,8 +119,15 @@ def _parse_datetime(value: Any, default_timezone: str) -> datetime:
     return parsed.astimezone(ZoneInfo(default_timezone))
 
 
+def _is_numeric_timestamp(value: str) -> bool:
+    try:
+        float(value)
+    except ValueError:
+        return False
+    return True
+
+
 def _ensure_aware(value: datetime) -> datetime:
     if value.tzinfo is None:
         raise ValueError("timestamp must be timezone-aware")
     return value
-

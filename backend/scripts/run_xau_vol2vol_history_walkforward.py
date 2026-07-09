@@ -7,12 +7,15 @@ from datetime import date, datetime, time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from src.models.xau_market_context import XauPriceBar
 from src.models.xau_vol2vol_history_walkforward import (
     XauHistorySourceMode,
     XauSdEntryLevel,
     XauSlMode,
     XauTpMode,
+    XauVol2VolRangeDeskSnapshot,
 )
+from src.xau_market_context.price_loader import latest_bar_at_or_before
 from src.xau_vol2vol_history_walkforward.history_client import load_history_payloads
 from src.xau_vol2vol_history_walkforward.history_normalizer import (
     latest_range_by_session,
@@ -117,6 +120,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         range_snapshots.extend(normalized_ranges)
         warnings.extend(normalized_warnings)
 
+    bars = (
+        load_traded_bars(Path(args.price_bars_path), timezone=args.timezone)
+        if args.price_bars_path
+        else []
+    )
+    if bars:
+        range_snapshots = _enrich_range_snapshots_with_bars(range_snapshots, bars)
     range_by_session = latest_range_by_session(range_snapshots)
     strikes_by_session = latest_strikes_by_session(strike_rows)
     entry_sds = _entry_sds(args.entry_sd, args.include_one_sd)
@@ -133,7 +143,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     plans = []
     for session_date, range_snapshot in sorted(range_by_session.items()):
-        if session_date_from <= session_date <= session_date_to:
+        if session_date_from <= session_date <= session_date_to and _has_sd_plan_inputs(
+            range_snapshot
+        ):
             plans.extend(
                 build_sd_mean_reversion_plans(
                     range_snapshot=range_snapshot,
@@ -143,8 +155,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
 
     outcomes = []
-    if args.price_bars_path:
-        bars = load_traded_bars(Path(args.price_bars_path), timezone=args.timezone)
+    if bars:
         simulation_end = _simulation_end(session_date_to, args.simulation_end_time, args.timezone)
         outcomes = simulate_plans(
             plans,
@@ -204,6 +215,45 @@ def _entry_sds(values: list[str], include_one_sd: bool) -> list[XauSdEntryLevel]
     if include_one_sd and XauSdEntryLevel.ONE_SD not in selected:
         selected.insert(0, XauSdEntryLevel.ONE_SD)
     return selected
+
+
+def _enrich_range_snapshots_with_bars(
+    snapshots: list[XauVol2VolRangeDeskSnapshot],
+    bars: list[XauPriceBar],
+) -> list[XauVol2VolRangeDeskSnapshot]:
+    enriched: list[XauVol2VolRangeDeskSnapshot] = []
+    for snapshot in snapshots:
+        if snapshot.cfd_open is not None or snapshot.future_open is None:
+            enriched.append(snapshot)
+            continue
+        bar = latest_bar_at_or_before(bars, snapshot.observed_at)
+        if bar is None:
+            enriched.append(snapshot)
+            continue
+        cfd_open = bar.close
+        diff = snapshot.future_open - cfd_open
+        enriched.append(snapshot.model_copy(update={"cfd_open": cfd_open, "diff": diff}))
+    return enriched
+
+
+def _has_sd_plan_inputs(snapshot: XauVol2VolRangeDeskSnapshot) -> bool:
+    return any(
+        value is not None
+        for value in (
+            snapshot.cfd_buy_1sd,
+            snapshot.cfd_buy_2sd,
+            snapshot.cfd_buy_3sd,
+            snapshot.cfd_sell_1sd,
+            snapshot.cfd_sell_2sd,
+            snapshot.cfd_sell_3sd,
+            snapshot.future_buy_1sd,
+            snapshot.future_buy_2sd,
+            snapshot.future_buy_3sd,
+            snapshot.future_sell_1sd,
+            snapshot.future_sell_2sd,
+            snapshot.future_sell_3sd,
+        )
+    )
 
 
 def _simulation_end(session_date: date, value: str, timezone: str) -> datetime:
