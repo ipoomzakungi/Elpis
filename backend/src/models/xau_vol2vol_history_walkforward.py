@@ -55,6 +55,13 @@ class XauWalkforwardTradeStatus(StrEnum):
     UNAVAILABLE = "unavailable"
 
 
+class XauWindowAlignmentStatus(StrEnum):
+    ALIGNED = "aligned"
+    NO_BARS_IN_WINDOW = "no_bars_in_window"
+    STALE_PLAN = "stale_plan"
+    INVALID = "invalid"
+
+
 class XauPlanReadiness(StrEnum):
     READY = "ready"
     PARTIAL = "partial"
@@ -212,6 +219,12 @@ class XauWalkforwardTradeOutcome(XauBaseModel):
     max_drawdown_points: float | None = None
     time_to_exit_minutes: float | None = Field(default=None, ge=0)
     bars_evaluated: int = Field(ge=0)
+    simulation_window_start: datetime | None = None
+    simulation_window_end: datetime | None = None
+    plan_observed_at: datetime | None = None
+    first_bar_used: datetime | None = None
+    last_bar_used: datetime | None = None
+    window_alignment_status: XauWindowAlignmentStatus = XauWindowAlignmentStatus.INVALID
     ambiguity_notes: list[str] = Field(default_factory=list)
     research_only: bool = True
     signal_allowed: bool = False

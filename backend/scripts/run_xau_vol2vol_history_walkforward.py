@@ -3,9 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 from collections.abc import Sequence
-from datetime import date, datetime, time
+from datetime import date, time
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 from src.models.xau_market_context import XauPriceBar
 from src.models.xau_vol2vol_history_walkforward import (
@@ -16,6 +15,7 @@ from src.models.xau_vol2vol_history_walkforward import (
     XauVol2VolRangeDeskSnapshot,
 )
 from src.xau_market_context.price_loader import latest_bar_at_or_before
+from src.xau_vol2vol_history_walkforward.data_lake import load_vol2vol_data_lake
 from src.xau_vol2vol_history_walkforward.history_client import load_history_payloads
 from src.xau_vol2vol_history_walkforward.history_normalizer import (
     latest_range_by_session,
@@ -46,12 +46,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--history-source-mode",
         choices=[item.value for item in XauHistorySourceMode],
-        required=True,
+        default=XauHistorySourceMode.UNAVAILABLE.value,
     )
     parser.add_argument("--history-file")
     parser.add_argument("--history-folder")
     parser.add_argument("--history-endpoint-template")
     parser.add_argument("--rate-limit-seconds", type=float, default=1.0)
+    parser.add_argument("--use-data-lake", action="store_true")
+    parser.add_argument("--vol2vol-data-root", default="data/imports/vol2vol")
+    parser.add_argument("--monthly-target")
     parser.add_argument("--price-bars-path")
     parser.add_argument("--cycle-label", default="manual")
     parser.add_argument(
@@ -85,6 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["ambiguous", "conservative_stop_first", "optimistic_target_first"],
         default="ambiguous",
     )
+    parser.add_argument("--planning-time", default="00:00")
     parser.add_argument("--simulation-end-time", default="23:00")
     parser.add_argument("--timezone", default="Asia/Bangkok")
     parser.add_argument("--output-root")
@@ -101,15 +105,23 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     session_date_from = date.fromisoformat(args.session_date_from)
     session_date_to = date.fromisoformat(args.session_date_to)
-    load_result = load_history_payloads(
-        source_mode=XauHistorySourceMode(args.history_source_mode),
-        session_date_from=session_date_from,
-        session_date_to=session_date_to,
-        history_file=Path(args.history_file) if args.history_file else None,
-        history_folder=Path(args.history_folder) if args.history_folder else None,
-        endpoint_template=args.history_endpoint_template,
-        rate_limit_seconds=args.rate_limit_seconds,
-    )
+    if args.use_data_lake:
+        load_result = load_vol2vol_data_lake(
+            root=Path(args.vol2vol_data_root),
+            session_date_from=session_date_from,
+            session_date_to=session_date_to,
+            monthly_target=args.monthly_target,
+        )
+    else:
+        load_result = load_history_payloads(
+            source_mode=XauHistorySourceMode(args.history_source_mode),
+            session_date_from=session_date_from,
+            session_date_to=session_date_to,
+            history_file=Path(args.history_file) if args.history_file else None,
+            history_folder=Path(args.history_folder) if args.history_folder else None,
+            endpoint_template=args.history_endpoint_template,
+            rate_limit_seconds=args.rate_limit_seconds,
+        )
 
     strike_rows = []
     range_snapshots = []
@@ -156,11 +168,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     outcomes = []
     if bars:
-        simulation_end = _simulation_end(session_date_to, args.simulation_end_time, args.timezone)
         outcomes = simulate_plans(
             plans,
             bars,
-            simulation_end=simulation_end,
+            planning_time=_parse_hhmm(args.planning_time),
+            session_end_time=_parse_hhmm(args.simulation_end_time),
             entry_touch_policy=args.entry_touch_policy,
             same_bar_policy=args.same_bar_policy,
         )
@@ -184,7 +196,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         plans=plans,
         outcomes=outcomes,
         raw_manifest={
-            "source_mode": args.history_source_mode,
+            "source_mode": "data_lake" if args.use_data_lake else args.history_source_mode,
             "source_paths": [str(path) for path in load_result.source_paths],
             "warnings": warnings,
             "research_only": True,
@@ -256,9 +268,9 @@ def _has_sd_plan_inputs(snapshot: XauVol2VolRangeDeskSnapshot) -> bool:
     )
 
 
-def _simulation_end(session_date: date, value: str, timezone: str) -> datetime:
+def _parse_hhmm(value: str) -> time:
     hour, minute = [int(part) for part in value.split(":", maxsplit=1)]
-    return datetime.combine(session_date, time(hour=hour, minute=minute), tzinfo=ZoneInfo(timezone))
+    return time(hour=hour, minute=minute)
 
 
 if __name__ == "__main__":

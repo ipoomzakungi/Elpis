@@ -12,6 +12,7 @@ from src.models.xau_vol2vol_history_walkforward import (
     XauTradeSide,
     XauVolRegimeLabel,
     XauWalkforwardTradeStatus,
+    XauWindowAlignmentStatus,
 )
 from src.xau_vol2vol_history_walkforward.walkforward_simulator import simulate_plan
 
@@ -44,6 +45,41 @@ def test_same_bar_target_and_stop_is_ambiguous_by_default() -> None:
     assert outcome.ambiguity_notes
 
 
+def test_earlier_bars_do_not_trigger_later_plan() -> None:
+    early = _bar(
+        low=4055,
+        high=4085,
+        timestamp=datetime.fromisoformat("2026-06-26T10:01:00+07:00"),
+    )
+
+    outcome = simulate_plan(_plan(), [early])
+
+    assert outcome.status == XauWalkforwardTradeStatus.UNAVAILABLE
+    assert outcome.window_alignment_status == XauWindowAlignmentStatus.NO_BARS_IN_WINDOW
+    assert outcome.triggered_at is None
+
+
+def test_triggered_at_is_on_or_after_window_start() -> None:
+    early = _bar(
+        low=4055,
+        high=4085,
+        timestamp=datetime.fromisoformat("2026-06-26T10:01:00+07:00"),
+    )
+    valid = _bar(
+        low=4069,
+        high=4085,
+        timestamp=datetime.fromisoformat("2026-07-08T10:01:00+07:00"),
+    )
+
+    outcome = simulate_plan(_plan(), [early, valid])
+
+    assert outcome.status == XauWalkforwardTradeStatus.TARGET_HIT
+    assert outcome.simulation_window_start is not None
+    assert outcome.triggered_at is not None
+    assert outcome.triggered_at >= outcome.simulation_window_start
+    assert outcome.first_bar_used == valid.timestamp
+
+
 def _plan() -> XauSdMeanReversionPlan:
     return XauSdMeanReversionPlan(
         plan_id="fixture",
@@ -64,9 +100,14 @@ def _plan() -> XauSdMeanReversionPlan:
     )
 
 
-def _bar(*, low: float, high: float) -> XauPriceBar:
+def _bar(
+    *,
+    low: float,
+    high: float,
+    timestamp: datetime | None = None,
+) -> XauPriceBar:
     return XauPriceBar(
-        timestamp=datetime.fromisoformat("2026-07-08T10:01:00+07:00"),
+        timestamp=timestamp or datetime.fromisoformat("2026-07-08T10:01:00+07:00"),
         open=(low + high) / 2,
         high=high,
         low=low,

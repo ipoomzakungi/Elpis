@@ -22,11 +22,12 @@ def test_stats_grouped_by_side_entry_sd_and_tp_mode() -> None:
         _outcome(XauWalkforwardTradeStatus.TARGET_HIT, mfe=20, mae=-4),
         _outcome(XauWalkforwardTradeStatus.STOP_HIT, mfe=3, mae=-12),
         _outcome(XauWalkforwardTradeStatus.NO_FILL, mfe=None, mae=None),
+        _outcome(XauWalkforwardTradeStatus.UNAVAILABLE, mfe=None, mae=None),
     ]
 
     stats = build_walkforward_stats(run_id="run", plans=[plan], outcomes=outcomes)
 
-    assert stats.fill_rate == 2 / 3
+    assert stats.fill_rate == 2 / 4
     assert stats.target_hit_rate_after_fill == 0.5
     assert stats.stop_hit_rate_after_fill == 0.5
     assert stats.worst_mae_points == -12

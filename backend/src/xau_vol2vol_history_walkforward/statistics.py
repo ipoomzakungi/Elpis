@@ -12,6 +12,13 @@ from src.models.xau_vol2vol_history_walkforward import (
     XauWalkforwardTradeStatus,
 )
 
+_FILLED_STATUSES = {
+    XauWalkforwardTradeStatus.TARGET_HIT,
+    XauWalkforwardTradeStatus.STOP_HIT,
+    XauWalkforwardTradeStatus.EXPIRED,
+    XauWalkforwardTradeStatus.AMBIGUOUS,
+}
+
 
 def build_walkforward_stats(
     *,
@@ -25,17 +32,7 @@ def build_walkforward_stats(
     status_counts = defaultdict(int)
     for outcome in outcomes:
         status_counts[outcome.status] += 1
-    filled = [
-        item
-        for item in outcomes
-        if item.status
-        in {
-            XauWalkforwardTradeStatus.TARGET_HIT,
-            XauWalkforwardTradeStatus.STOP_HIT,
-            XauWalkforwardTradeStatus.EXPIRED,
-            XauWalkforwardTradeStatus.AMBIGUOUS,
-        }
-    ]
+    filled = [item for item in outcomes if _is_filled(item)]
     warnings: list[str] = []
     if len(outcomes) < minimum_sample_size:
         warnings.append("Small sample is not proof.")
@@ -102,7 +99,7 @@ def _grouped_stats(
             "group": key[1],
             "count": len(items),
             "fill_rate": _rate(
-                sum(item.status != XauWalkforwardTradeStatus.NO_FILL for item in items),
+                sum(_is_filled(item) for item in items),
                 len(items),
             ),
             "target_hit_rate_after_fill": _target_rate_after_fill(items),
@@ -114,11 +111,15 @@ def _grouped_stats(
 
 
 def _target_rate_after_fill(items: list[XauWalkforwardTradeOutcome]) -> float | None:
-    filled = [item for item in items if item.status != XauWalkforwardTradeStatus.NO_FILL]
+    filled = [item for item in items if _is_filled(item)]
     return _rate(
         sum(item.status == XauWalkforwardTradeStatus.TARGET_HIT for item in filled),
         len(filled),
     )
+
+
+def _is_filled(item: XauWalkforwardTradeOutcome) -> bool:
+    return item.status in _FILLED_STATUSES
 
 
 def _rate(numerator: int, denominator: int) -> float | None:
