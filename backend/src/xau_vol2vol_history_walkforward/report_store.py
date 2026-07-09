@@ -89,7 +89,7 @@ class XauVol2VolHistoryWalkforwardReportStore:
 
 
 def new_walkforward_run_id() -> str:
-    return f"xau_vol2vol_history_walkforward_{datetime.now(UTC).strftime('%Y%m%dT%H%M%S')}"
+    return f"xau_vol2vol_history_walkforward_{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%f')}"
 
 
 def _write_json(path: Path, payload: Any) -> None:

@@ -6,8 +6,8 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+
+import httpx
 
 from src.config import get_settings
 from src.models.xau_vol2vol_history_walkforward import XauHistorySourceMode
@@ -89,23 +89,33 @@ def _fetch_range(
     payloads: list[Any] = []
     source_paths: list[Path] = []
     warnings: list[str] = []
+    fetched_by_url: dict[str, Any] = {}
     current = session_date_from
     while current <= session_date_to:
         url = _format_url(endpoint_template, current)
         target = root / current.isoformat() / "raw.json"
-        try:
-            payload = _fetch_json(url)
-        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
-            warnings.append(f"{current.isoformat()} fetch failed: {exc}")
+        fetched_live = False
+        if url in fetched_by_url:
+            payload = fetched_by_url[url]
         else:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(
-                json.dumps(payload, indent=2, sort_keys=True) + "\n",
-                encoding="utf-8",
-            )
-            payloads.append(payload)
-            source_paths.append(target)
-        if rate_limit_seconds > 0:
+            try:
+                payload = _fetch_json(url)
+            except (httpx.HTTPError, TimeoutError, json.JSONDecodeError, OSError) as exc:
+                warnings.append(f"{current.isoformat()} fetch failed: {exc}")
+                current += timedelta(days=1)
+                if rate_limit_seconds > 0:
+                    time.sleep(rate_limit_seconds)
+                continue
+            fetched_by_url[url] = payload
+            fetched_live = True
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        payloads.append(payload)
+        source_paths.append(target)
+        if rate_limit_seconds > 0 and fetched_live:
             time.sleep(rate_limit_seconds)
         current += timedelta(days=1)
     if not payloads:
@@ -119,9 +129,14 @@ def _format_url(template: str, session_date: date) -> str:
 
 
 def _fetch_json(url: str) -> Any:
-    request = Request(url, headers={"User-Agent": "Elpis research data client"})
-    with urlopen(request, timeout=30) as response:  # noqa: S310 - user-configured public source.
-        return json.loads(response.read().decode("utf-8"))
+    response = httpx.get(
+        url,
+        headers={"User-Agent": "Elpis research data client"},
+        follow_redirects=True,
+        timeout=30,
+    )
+    response.raise_for_status()
+    return response.json()
 
 
 def _default_imports_root() -> Path:

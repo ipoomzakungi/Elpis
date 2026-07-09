@@ -80,11 +80,11 @@ def test_http_history_client_uses_configured_template_without_real_network(
     result = history_client.load_history_payloads(
         source_mode=XauHistorySourceMode.HTTP_ENDPOINT,
         session_date_from=date(2026, 6, 1),
-        session_date_to=date(2026, 6, 1),
+        session_date_to=date(2026, 6, 2),
         endpoint_template="https://example.test/api/monthly-oi?targetMonth={target_month}",
         cache_root=tmp_path,
         rate_limit_seconds=0,
     )
 
-    assert len(result.payloads) == 1
+    assert len(result.payloads) == 2
     assert fetched_urls == ["https://example.test/api/monthly-oi?targetMonth=2026-06"]
