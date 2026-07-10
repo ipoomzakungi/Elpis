@@ -9,6 +9,7 @@ from src.models.xau_vol2vol_history_walkforward import (
     XauEntryType,
     XauPlanReadiness,
     XauSdMeanReversionPlan,
+    XauTimeExitPolicy,
     XauTradeSide,
     XauWalkforwardTradeOutcome,
     XauWalkforwardTradeStatus,
@@ -74,6 +75,7 @@ def simulate_plans(
     entry_touch_policy: str = "touch",
     same_bar_policy: str = "ambiguous",
     cost_points: float = 0.0,
+    time_exit_policy: XauTimeExitPolicy = XauTimeExitPolicy.CLOSE_AT_CYCLE_END,
 ) -> list[XauWalkforwardTradeOutcome]:
     sorted_bars = sorted(bars, key=lambda item: item.timestamp)
     return [
@@ -87,6 +89,7 @@ def simulate_plans(
             entry_touch_policy=entry_touch_policy,
             same_bar_policy=same_bar_policy,
             cost_points=cost_points,
+            time_exit_policy=time_exit_policy,
         )
         for plan in plans
     ]
@@ -103,6 +106,7 @@ def simulate_plan(
     entry_touch_policy: str = "touch",
     same_bar_policy: str = "ambiguous",
     cost_points: float = 0.0,
+    time_exit_policy: XauTimeExitPolicy = XauTimeExitPolicy.CLOSE_AT_CYCLE_END,
 ) -> XauWalkforwardTradeOutcome:
     window_start, window_end, alignment = _plan_window(
         plan,
@@ -126,6 +130,7 @@ def simulate_plan(
             window_end=window_end,
             alignment_status=alignment,
             cost_points=cost_points,
+            time_exit_policy=time_exit_policy,
         )
     window_bars = [
         bar
@@ -143,6 +148,7 @@ def simulate_plan(
             window_end=window_end,
             alignment_status=XauWindowAlignmentStatus.NO_BARS_IN_WINDOW,
             cost_points=cost_points,
+            time_exit_policy=time_exit_policy,
         )
 
     triggered_at: datetime | None = None
@@ -282,11 +288,31 @@ def simulate_plan(
             last_bar_used=last_bar_used,
             alignment_status=alignment,
             cost_points=cost_points,
+            time_exit_policy=time_exit_policy,
+        )
+    if time_exit_policy == XauTimeExitPolicy.UNAVAILABLE:
+        return _outcome(
+            plan,
+            XauWalkforwardTradeStatus.UNAVAILABLE,
+            bars_evaluated=bars_evaluated,
+            window_start=window_start,
+            window_end=window_end,
+            first_bar_used=first_bar_used,
+            last_bar_used=last_bar_used,
+            alignment_status=alignment,
+            cost_points=cost_points,
+            time_exit_policy=time_exit_policy,
         )
     last_bar = window_bars[-1]
+    gross_points = _gross_points(plan, last_bar.close)
+    status = (
+        XauWalkforwardTradeStatus.TIME_EXIT_PROFIT
+        if gross_points is not None and gross_points >= 0
+        else XauWalkforwardTradeStatus.TIME_EXIT_LOSS
+    )
     return _exit(
         plan,
-        XauWalkforwardTradeStatus.EXPIRED,
+        status,
         triggered_at,
         last_bar.timestamp,
         last_bar.close,
@@ -299,6 +325,10 @@ def simulate_plan(
         last_bar_used=last_bar_used,
         alignment_status=alignment,
         cost_points=cost_points,
+        time_exit_policy=time_exit_policy,
+        include_in_expectancy=(
+            time_exit_policy == XauTimeExitPolicy.CLOSE_AT_CYCLE_END
+        ),
     )
 
 
@@ -360,6 +390,8 @@ def _exit(
     cost_points: float = 0.0,
     same_bar_ambiguous: bool = False,
     raw_result: str | None = None,
+    time_exit_policy: XauTimeExitPolicy = XauTimeExitPolicy.CLOSE_AT_CYCLE_END,
+    include_in_expectancy: bool = True,
 ) -> XauWalkforwardTradeOutcome:
     gross_points = _gross_points(plan, exit_level)
     total_cost = cost_points if gross_points is not None else None
@@ -398,6 +430,8 @@ def _exit(
         gross_points=gross_points,
         total_cost_points=total_cost,
         net_points=gross_points - cost_points if gross_points is not None else None,
+        time_exit_policy=time_exit_policy,
+        include_in_expectancy=include_in_expectancy,
     )
 
 
@@ -412,6 +446,7 @@ def _outcome(
     last_bar_used: datetime | None = None,
     alignment_status: XauWindowAlignmentStatus = XauWindowAlignmentStatus.INVALID,
     cost_points: float = 0.0,
+    time_exit_policy: XauTimeExitPolicy = XauTimeExitPolicy.CLOSE_AT_CYCLE_END,
 ) -> XauWalkforwardTradeOutcome:
     return XauWalkforwardTradeOutcome(
         plan_id=plan.plan_id,
@@ -436,6 +471,8 @@ def _outcome(
         last_bar_used=last_bar_used,
         window_alignment_status=alignment_status,
         raw_result=status.value,
+        time_exit_policy=time_exit_policy,
+        include_in_expectancy=False,
     )
 
 

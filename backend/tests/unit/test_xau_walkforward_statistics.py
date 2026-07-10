@@ -37,6 +37,19 @@ def test_stats_grouped_by_side_entry_sd_and_tp_mode() -> None:
     assert ("tp_mode", "half_sd") in groups
 
 
+def test_mark_only_time_exit_does_not_enter_expectancy() -> None:
+    marked = _outcome(XauWalkforwardTradeStatus.TIME_EXIT_PROFIT, mfe=8, mae=-2)
+    marked = marked.model_copy(
+        update={"net_points": 6, "gross_points": 6, "include_in_expectancy": False}
+    )
+
+    stats = build_walkforward_stats(run_id="run", plans=[_plan()], outcomes=[marked])
+
+    assert stats.triggered_count == 1
+    assert stats.time_exit_profit_count == 1
+    assert stats.net_expectancy_points is None
+
+
 def _plan() -> XauSdMeanReversionPlan:
     return XauSdMeanReversionPlan(
         plan_id="fixture",

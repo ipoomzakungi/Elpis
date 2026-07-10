@@ -71,6 +71,60 @@ def test_predefined_plans_persist_cycle_and_basis_metadata() -> None:
     assert all(plan.signal_allowed is False and plan.research_only is True for plan in plans)
 
 
+def test_fixed_morning_selects_only_pre_0700_snapshot_and_runs_to_day_end() -> None:
+    selections, issues = select_planning_cycles(
+        range_snapshots=[_snapshot("06:55"), _snapshot("07:05")],
+        strike_rows=[],
+        bars=[_bar("06:59", 4095), _bar("08:00", 4080), _bar("18:30", 4120)],
+        session_date_from=date(2026, 7, 7),
+        session_date_to=date(2026, 7, 7),
+        planning_times=(time(7, 0),),
+        timezone="Asia/Bangkok",
+        planning_mode="fixed_morning",
+    )
+
+    assert len(selections) == 1
+    selection = selections[0]
+    assert selection.range_snapshot.observed_at.hour == 6
+    assert selection.range_snapshot.observed_at.minute == 55
+    assert selection.simulation_window_start.time() == time(7, 1)
+    assert selection.simulation_window_end.time() == time(23, 59, 59)
+    assert issues["future_snapshot_used_count"] == 0
+
+
+def test_fixed_morning_is_unavailable_without_pre_0700_snapshot() -> None:
+    selections, issues = select_planning_cycles(
+        range_snapshots=[_snapshot("07:05")],
+        strike_rows=[],
+        bars=[_bar("06:59", 4095), _bar("08:00", 4080)],
+        session_date_from=date(2026, 7, 7),
+        session_date_to=date(2026, 7, 7),
+        planning_times=(time(7, 0),),
+        timezone="Asia/Bangkok",
+        planning_mode="fixed_morning",
+    )
+
+    assert selections == []
+    assert issues["cycles_without_snapshot_count"] == 1
+
+
+def test_fixed_morning_rejects_partial_candle_window() -> None:
+    selections, issues = select_planning_cycles(
+        range_snapshots=[_snapshot("06:55")],
+        strike_rows=[],
+        bars=[_bar("06:59", 4095), _bar("08:00", 4080)],
+        session_date_from=date(2026, 7, 7),
+        session_date_to=date(2026, 7, 7),
+        planning_times=(time(7, 0),),
+        timezone="Asia/Bangkok",
+        planning_mode="fixed_morning",
+        require_complete_window=True,
+    )
+
+    assert selections == []
+    assert issues["incomplete_candle_window_count"] == 1
+
+
 def _snapshot(hhmm: str) -> XauVol2VolRangeDeskSnapshot:
     return XauVol2VolRangeDeskSnapshot(
         session_date=date(2026, 7, 7),

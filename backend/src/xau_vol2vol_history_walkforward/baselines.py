@@ -9,7 +9,10 @@ from src.models.xau_vol2vol_history_walkforward import (
     XauSlMode,
     XauTpMode,
 )
-from src.xau_vol2vol_history_walkforward.planning import XauPlanningSelection
+from src.xau_vol2vol_history_walkforward.planning import (
+    XauPlanningSelection,
+    planning_plan_metadata,
+)
 from src.xau_vol2vol_history_walkforward.range_plan_builder import (
     XauRangePlanBuildConfig,
     build_sd_mean_reversion_plans,
@@ -107,6 +110,7 @@ def build_predefined_baseline_plans(
                             "plan_created_at": selection.planning_at,
                             "simulation_window_start": selection.simulation_window_start,
                             "simulation_window_end": selection.simulation_window_end,
+                            **planning_plan_metadata(selection),
                         }
                     )
                 )

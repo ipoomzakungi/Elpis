@@ -14,6 +14,8 @@ FILLED_STATUSES = {
     XauWalkforwardTradeStatus.TARGET_HIT,
     XauWalkforwardTradeStatus.STOP_HIT,
     XauWalkforwardTradeStatus.EXPIRED,
+    XauWalkforwardTradeStatus.TIME_EXIT_PROFIT,
+    XauWalkforwardTradeStatus.TIME_EXIT_LOSS,
     XauWalkforwardTradeStatus.AMBIGUOUS,
 }
 
@@ -82,8 +84,11 @@ def _grouped_summary(outcomes: list[XauWalkforwardTradeOutcome]) -> list[dict[st
     summaries = []
     for key, items in sorted(groups.items()):
         filled = [item for item in items if item.status in FILLED_STATUSES]
-        net = [item.net_points for item in filled if item.net_points is not None]
-        gross = [item.gross_points for item in filled if item.gross_points is not None]
+        expectancy_items = [item for item in filled if item.include_in_expectancy]
+        net = [item.net_points for item in expectancy_items if item.net_points is not None]
+        gross = [
+            item.gross_points for item in expectancy_items if item.gross_points is not None
+        ]
         target_hits = sum(item.status == XauWalkforwardTradeStatus.TARGET_HIT for item in filled)
         summaries.append(
             {
@@ -100,6 +105,15 @@ def _grouped_summary(outcomes: list[XauWalkforwardTradeOutcome]) -> list[dict[st
                 "target_hit_count": target_hits,
                 "stop_hit_count": sum(
                     item.status == XauWalkforwardTradeStatus.STOP_HIT for item in filled
+                ),
+                "time_exit_count": sum(
+                    item.status
+                    in {
+                        XauWalkforwardTradeStatus.TIME_EXIT_PROFIT,
+                        XauWalkforwardTradeStatus.TIME_EXIT_LOSS,
+                        XauWalkforwardTradeStatus.EXPIRED,
+                    }
+                    for item in filled
                 ),
                 "fill_rate": _rate(len(filled), len(items)),
                 "win_rate_after_fill": _rate(target_hits, len(filled)),
@@ -178,7 +192,11 @@ def _clustered_bootstrap(
             sampled = [rng.choice(dates) for _ in dates]
             trades = [trade for day in sampled for trade in by_date[day]]
             filled = [trade for trade in trades if trade.status in FILLED_STATUSES]
-            net = [trade.net_points for trade in filled if trade.net_points is not None]
+            net = [
+                trade.net_points
+                for trade in filled
+                if trade.include_in_expectancy and trade.net_points is not None
+            ]
             if net:
                 expectancy_samples.append(mean(net))
             if filled:

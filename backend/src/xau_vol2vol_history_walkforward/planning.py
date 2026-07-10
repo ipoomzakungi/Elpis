@@ -34,6 +34,10 @@ def select_planning_cycles(
     planning_times: tuple[time, ...],
     timezone: str,
     basis_tolerance_seconds: int = 300,
+    planning_mode: str = "scheduled_refresh",
+    day_end_time: time = time(23, 59, 59),
+    require_complete_window: bool = False,
+    require_one_sd: bool = False,
 ) -> tuple[list[XauPlanningSelection], dict[str, int]]:
     zone = ZoneInfo(timezone)
     selections: list[XauPlanningSelection] = []
@@ -43,6 +47,8 @@ def select_planning_cycles(
         "plans_missing_sd_count": 0,
         "cycles_without_bars_count": 0,
         "cycles_without_snapshot_count": 0,
+        "incomplete_candle_window_count": 0,
+        "non_monotonic_sd_count": 0,
     }
     current = session_date_from
     while current <= session_date_to:
@@ -52,7 +58,13 @@ def select_planning_cycles(
         ]
         for cycle in planning_times:
             planning_at = datetime.combine(current, cycle, tzinfo=zone)
-            window_start, window_end = _cycle_window(current, cycle, zone)
+            window_start, window_end = _cycle_window(
+                current,
+                cycle,
+                zone,
+                planning_mode=planning_mode,
+                day_end_time=day_end_time,
+            )
             simulation_bars = [
                 item
                 for item in session_bars
@@ -60,6 +72,14 @@ def select_planning_cycles(
             ]
             if not simulation_bars:
                 issues["cycles_without_bars_count"] += 1
+                continue
+            if require_complete_window and not _window_is_complete(
+                simulation_bars,
+                window_start=window_start,
+                window_end=window_end,
+                zone=zone,
+            ):
+                issues["incomplete_candle_window_count"] += 1
                 continue
             past_ranges = [
                 item
@@ -69,7 +89,7 @@ def select_planning_cycles(
             eligible = [
                 item
                 for item in past_ranges
-                if _has_numeric_sd(item)
+                if _has_numeric_sd(item, require_one_sd=require_one_sd)
             ]
             if not eligible:
                 if past_ranges:
@@ -78,6 +98,9 @@ def select_planning_cycles(
                     issues["cycles_without_snapshot_count"] += 1
                 continue
             selected_range = max(eligible, key=lambda item: item.observed_at)
+            if not _levels_are_monotonic(selected_range):
+                issues["non_monotonic_sd_count"] += 1
+                continue
             if selected_range.observed_at.astimezone(zone) > planning_at:
                 issues["future_snapshot_used_count"] += 1
                 continue
@@ -112,7 +135,11 @@ def select_planning_cycles(
             selections.append(
                 XauPlanningSelection(
                     session_date=current,
-                    cycle_label=cycle.strftime("%H:%M"),
+                    cycle_label=(
+                        f"fixed_morning_{cycle.strftime('%H%M')}"
+                        if planning_mode == "fixed_morning"
+                        else cycle.strftime("%H:%M")
+                    ),
                     planning_at=planning_at,
                     simulation_window_start=window_start,
                     simulation_window_end=window_end,
@@ -151,22 +178,91 @@ def _select_strikes(
     ]
 
 
-def _cycle_window(session_date: date, cycle: time, zone: ZoneInfo) -> tuple[datetime, datetime]:
+def _cycle_window(
+    session_date: date,
+    cycle: time,
+    zone: ZoneInfo,
+    *,
+    planning_mode: str,
+    day_end_time: time,
+) -> tuple[datetime, datetime]:
     start = datetime.combine(session_date, cycle, tzinfo=zone) + timedelta(minutes=1)
-    if cycle < time(19, 0):
+    if planning_mode == "fixed_morning":
+        end = datetime.combine(session_date, day_end_time, tzinfo=zone)
+    elif cycle < time(19, 0):
         end = datetime.combine(session_date, time(18, 59, 59, 999999), tzinfo=zone)
     else:
         end = datetime.combine(session_date, time(23, 59, 59, 999999), tzinfo=zone)
     return start, end
 
 
-def _has_numeric_sd(snapshot: XauVol2VolRangeDeskSnapshot) -> bool:
-    return all(
-        value is not None
-        for value in (
-            snapshot.future_buy_2sd,
-            snapshot.future_buy_3sd,
-            snapshot.future_sell_2sd,
-            snapshot.future_sell_3sd,
-        )
+def _window_is_complete(
+    bars: list[XauPriceBar],
+    *,
+    window_start: datetime,
+    window_end: datetime,
+    zone: ZoneInfo,
+) -> bool:
+    expected = int((window_end - window_start).total_seconds() // 60) + 1
+    observed = {
+        bar.timestamp.astimezone(zone).replace(second=0, microsecond=0)
+        for bar in bars
+    }
+    return len(observed) >= expected
+
+
+def _has_numeric_sd(
+    snapshot: XauVol2VolRangeDeskSnapshot,
+    *,
+    require_one_sd: bool = False,
+) -> bool:
+    values = [
+        snapshot.future_buy_2sd,
+        snapshot.future_buy_3sd,
+        snapshot.future_sell_2sd,
+        snapshot.future_sell_3sd,
+    ]
+    if require_one_sd:
+        values.extend([snapshot.future_buy_1sd, snapshot.future_sell_1sd])
+    return all(value is not None for value in values)
+
+
+def planning_plan_metadata(selection: XauPlanningSelection) -> dict:
+    snapshot = selection.range_snapshot
+    diff = snapshot.diff
+    if diff is None:
+        raise ValueError("planning selection requires basis")
+    return {
+        "selected_series": snapshot.series,
+        "selected_dte": snapshot.dte,
+        "future_reference_price": snapshot.future_open,
+        "traded_reference_price": snapshot.cfd_open,
+        "basis_points": diff,
+        "expected_move": snapshot.expected_move,
+        "mapped_lower_1sd": _mapped(snapshot.future_buy_1sd, diff),
+        "mapped_lower_2sd": _mapped(snapshot.future_buy_2sd, diff),
+        "mapped_lower_3sd": _mapped(snapshot.future_buy_3sd, diff),
+        "mapped_upper_1sd": _mapped(snapshot.future_sell_1sd, diff),
+        "mapped_upper_2sd": _mapped(snapshot.future_sell_2sd, diff),
+        "mapped_upper_3sd": _mapped(snapshot.future_sell_3sd, diff),
+    }
+
+
+def _levels_are_monotonic(snapshot: XauVol2VolRangeDeskSnapshot) -> bool:
+    lower = [snapshot.future_buy_3sd, snapshot.future_buy_2sd, snapshot.future_buy_1sd]
+    upper = [snapshot.future_sell_1sd, snapshot.future_sell_2sd, snapshot.future_sell_3sd]
+    center = snapshot.future_open
+    if center is None:
+        return False
+    present_lower = [value for value in lower if value is not None]
+    present_upper = [value for value in upper if value is not None]
+    return (
+        present_lower == sorted(present_lower)
+        and all(value < center for value in present_lower)
+        and present_upper == sorted(present_upper)
+        and all(value > center for value in present_upper)
     )
+
+
+def _mapped(value: float | None, diff: float) -> float | None:
+    return value - diff if value is not None else None

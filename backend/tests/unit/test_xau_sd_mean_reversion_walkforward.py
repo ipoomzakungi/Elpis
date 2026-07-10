@@ -9,6 +9,7 @@ from src.models.xau_vol2vol_history_walkforward import (
     XauSdEntryLevel,
     XauSdMeanReversionPlan,
     XauSlMode,
+    XauTimeExitPolicy,
     XauTpMode,
     XauTradeSide,
     XauVolRegimeLabel,
@@ -129,6 +130,25 @@ def test_triggered_at_is_on_or_after_window_start() -> None:
     assert outcome.triggered_at is not None
     assert outcome.triggered_at >= outcome.simulation_window_start
     assert outcome.first_bar_used == valid.timestamp
+
+
+def test_cycle_end_is_an_explicit_time_exit() -> None:
+    outcome = simulate_plan(_plan(), [_bar(low=4069, high=4075)])
+
+    assert outcome.status == XauWalkforwardTradeStatus.TIME_EXIT_PROFIT
+    assert outcome.include_in_expectancy is True
+
+
+def test_mark_only_time_exit_is_excluded_from_expectancy() -> None:
+    outcome = simulate_plan(
+        _plan(),
+        [_bar(low=4069, high=4075)],
+        time_exit_policy=XauTimeExitPolicy.MARK_ONLY_EXCLUDE_FROM_EXPECTANCY,
+    )
+
+    assert outcome.status == XauWalkforwardTradeStatus.TIME_EXIT_PROFIT
+    assert outcome.include_in_expectancy is False
+    assert outcome.mfe_points is not None
 
 
 def _plan() -> XauSdMeanReversionPlan:

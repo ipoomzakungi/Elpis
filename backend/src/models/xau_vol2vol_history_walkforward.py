@@ -56,7 +56,15 @@ class XauWalkforwardTradeStatus(StrEnum):
     TARGET_HIT = "target_hit"
     STOP_HIT = "stop_hit"
     EXPIRED = "expired"
+    TIME_EXIT_PROFIT = "time_exit_profit"
+    TIME_EXIT_LOSS = "time_exit_loss"
     AMBIGUOUS = "ambiguous"
+    UNAVAILABLE = "unavailable"
+
+
+class XauTimeExitPolicy(StrEnum):
+    CLOSE_AT_CYCLE_END = "close_at_cycle_end"
+    MARK_ONLY_EXCLUDE_FROM_EXPECTANCY = "mark_only_exclude_from_expectancy"
     UNAVAILABLE = "unavailable"
 
 
@@ -201,6 +209,18 @@ class XauSdMeanReversionPlan(XauBaseModel):
     plan_created_at: datetime | None = None
     simulation_window_start: datetime | None = None
     simulation_window_end: datetime | None = None
+    selected_series: str | None = None
+    selected_dte: float | None = Field(default=None, ge=0)
+    future_reference_price: float | None = Field(default=None, gt=0)
+    traded_reference_price: float | None = Field(default=None, gt=0)
+    basis_points: float | None = None
+    expected_move: float | None = Field(default=None, ge=0)
+    mapped_lower_1sd: float | None = Field(default=None, gt=0)
+    mapped_lower_2sd: float | None = Field(default=None, gt=0)
+    mapped_lower_3sd: float | None = Field(default=None, gt=0)
+    mapped_upper_1sd: float | None = Field(default=None, gt=0)
+    mapped_upper_2sd: float | None = Field(default=None, gt=0)
+    mapped_upper_3sd: float | None = Field(default=None, gt=0)
     research_only: bool = True
     signal_allowed: bool = False
 
@@ -248,6 +268,8 @@ class XauWalkforwardTradeOutcome(XauBaseModel):
     gross_points: float | None = None
     total_cost_points: float | None = Field(default=None, ge=0)
     net_points: float | None = None
+    time_exit_policy: XauTimeExitPolicy = XauTimeExitPolicy.CLOSE_AT_CYCLE_END
+    include_in_expectancy: bool = True
     research_only: bool = True
     signal_allowed: bool = False
 
@@ -272,6 +294,8 @@ class XauWalkforwardStats(XauBaseModel):
     expired_count: int = Field(ge=0)
     ambiguous_count: int = Field(ge=0)
     unavailable_count: int = Field(default=0, ge=0)
+    time_exit_profit_count: int = Field(default=0, ge=0)
+    time_exit_loss_count: int = Field(default=0, ge=0)
     fill_rate: float | None = Field(default=None, ge=0, le=1)
     target_hit_rate_after_fill: float | None = Field(default=None, ge=0, le=1)
     stop_hit_rate_after_fill: float | None = Field(default=None, ge=0, le=1)
@@ -284,6 +308,7 @@ class XauWalkforwardStats(XauBaseModel):
     mae_p95_points: float | None = None
     gross_expectancy_points: float | None = None
     net_expectancy_points: float | None = None
+    target_hit_expectancy_points: float | None = None
     profit_factor_points: float | None = None
     maximum_cumulative_drawdown_points: float | None = None
     maximum_consecutive_losses: int = Field(default=0, ge=0)
@@ -300,4 +325,81 @@ class XauWalkforwardStats(XauBaseModel):
             raise ValueError("Vol2Vol walk-forward stats cannot enable signals")
         if not self.research_only:
             raise ValueError("Vol2Vol walk-forward stats must remain research_only")
+        return self
+
+
+class XauDailySdPathRecord(XauBaseModel):
+    morning_plan_id: str
+    session_date: date
+    cycle_label: str
+    planning_at: datetime
+    simulation_window_start: datetime
+    simulation_window_end: datetime
+    selected_snapshot_time: datetime
+    selected_xau_price_time: datetime
+    selected_series: str | None = None
+    dte: float | None = Field(default=None, ge=0)
+    future_reference_price: float
+    traded_reference_price: float
+    basis_points: float
+    basis_alignment_seconds: float = Field(ge=0)
+    expected_move: float | None = Field(default=None, ge=0)
+    lower_1sd: float
+    lower_1_5sd: float
+    lower_2sd: float
+    lower_2_5sd: float
+    lower_3sd: float
+    upper_1sd: float
+    upper_1_5sd: float
+    upper_2sd: float
+    upper_2_5sd: float
+    upper_3sd: float
+    reached_lower_1sd: bool
+    reached_lower_1_5sd: bool
+    reached_lower_2sd: bool
+    reached_lower_2_5sd: bool
+    reached_lower_3sd: bool
+    reached_upper_1sd: bool
+    reached_upper_1_5sd: bool
+    reached_upper_2sd: bool
+    reached_upper_2_5sd: bool
+    reached_upper_3sd: bool
+    first_lower_2sd_touch_time: datetime | None = None
+    first_upper_2sd_touch_time: datetime | None = None
+    first_lower_3sd_touch_time: datetime | None = None
+    first_upper_3sd_touch_time: datetime | None = None
+    maximum_positive_sd: float
+    maximum_negative_sd: float
+    research_only: bool = True
+    signal_allowed: bool = False
+
+    @model_validator(mode="after")
+    def validate_research_only(self) -> XauDailySdPathRecord:
+        if self.signal_allowed or not self.research_only:
+            raise ValueError("Daily SD paths must remain research-only")
+        return self
+
+
+class XauMarketOpportunity(XauBaseModel):
+    opportunity_id: str
+    morning_plan_id: str
+    session_date: date
+    cycle_label: str
+    side: XauTradeSide
+    entry_sd: XauSdEntryLevel
+    entry_level: float
+    first_touch_time: datetime
+    configuration_plan_ids: list[str] = Field(default_factory=list)
+    configuration_fill_count: int = Field(default=0, ge=0)
+    cost_scenario_filled_row_count: int = Field(default=0, ge=0)
+    target_configuration_count: int = Field(default=0, ge=0)
+    stop_configuration_count: int = Field(default=0, ge=0)
+    time_exit_configuration_count: int = Field(default=0, ge=0)
+    research_only: bool = True
+    signal_allowed: bool = False
+
+    @model_validator(mode="after")
+    def validate_research_only(self) -> XauMarketOpportunity:
+        if self.signal_allowed or not self.research_only:
+            raise ValueError("Market opportunities must remain research-only")
         return self

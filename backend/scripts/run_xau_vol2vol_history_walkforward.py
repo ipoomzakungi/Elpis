@@ -13,6 +13,7 @@ from src.models.xau_vol2vol_history_walkforward import (
     XauSdEntryLevel,
     XauSdMeanReversionPlan,
     XauSlMode,
+    XauTimeExitPolicy,
     XauTpMode,
     XauVol2VolRangeDeskSnapshot,
     XauWalkforwardTradeStatus,
@@ -33,8 +34,13 @@ from src.xau_vol2vol_history_walkforward.coverage_audit import (
 from src.xau_vol2vol_history_walkforward.data_lake import load_vol2vol_data_lake
 from src.xau_vol2vol_history_walkforward.history_client import load_history_payloads
 from src.xau_vol2vol_history_walkforward.history_normalizer import normalize_payload
+from src.xau_vol2vol_history_walkforward.morning_path_analysis import (
+    build_daily_sd_paths,
+    build_opportunity_map,
+)
 from src.xau_vol2vol_history_walkforward.planning import (
     XauPlanningSelection,
+    planning_plan_metadata,
     select_planning_cycles,
 )
 from src.xau_vol2vol_history_walkforward.range_plan_builder import (
@@ -114,13 +120,27 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["ambiguous", "conservative_stop_first", "optimistic_target_first"],
         default="conservative_stop_first",
     )
+    parser.add_argument(
+        "--planning-mode",
+        choices=["fixed_morning", "scheduled_refresh"],
+        default="scheduled_refresh",
+    )
+    parser.add_argument("--morning-plan-time", default="07:00")
+    parser.add_argument("--day-end-time", default="23:59:59")
+    parser.add_argument("--refresh-time", action="append", default=[])
     parser.add_argument("--planning-time", action="append", default=[])
     parser.add_argument("--simulation-end-time", default="23:00")
     parser.add_argument("--spread-points", action="append", type=float, default=[])
     parser.add_argument("--slippage-points", type=float, default=0.0)
+    parser.add_argument(
+        "--time-exit-policy",
+        choices=[item.value for item in XauTimeExitPolicy],
+        default=XauTimeExitPolicy.CLOSE_AT_CYCLE_END.value,
+    )
     parser.add_argument("--bootstrap-seed", type=int, default=31)
     parser.add_argument("--timezone", default="Asia/Bangkok")
     parser.add_argument("--output-root")
+    parser.add_argument("--comparison-report")
     parser.add_argument("--overwrite", action="store_true")
     return parser
 
@@ -198,9 +218,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     bars = price_result.bars
     warnings.extend(price_result.warnings)
-    planning_times = tuple(
-        _parse_hhmm(value) for value in (args.planning_time or ["10:00", "19:00"])
+    planning_values = (
+        [args.morning_plan_time]
+        if args.planning_mode == "fixed_morning"
+        else (args.refresh_time or args.planning_time or ["10:00", "19:00"])
     )
+    planning_times = tuple(_parse_hhmm(value) for value in planning_values)
     selections, planning_issues = select_planning_cycles(
         range_snapshots=range_snapshots,
         strike_rows=strike_rows,
@@ -210,6 +233,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         planning_times=planning_times,
         timezone=args.timezone,
         basis_tolerance_seconds=args.basis_tolerance_seconds,
+        planning_mode=args.planning_mode,
+        day_end_time=_parse_hhmmss(args.day_end_time),
+        require_complete_window=args.planning_mode == "fixed_morning",
+        require_one_sd=args.planning_mode == "fixed_morning",
     )
     plans = (
         build_predefined_baseline_plans(selections, args.baseline_config)
@@ -231,6 +258,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             "future_snapshot_used_count": planning_issues["future_snapshot_used_count"],
             "plans_missing_basis_count": planning_issues["plans_missing_basis_count"],
             "plans_missing_sd_count": planning_issues["plans_missing_sd_count"],
+        }
+    )
+    coverage.update(
+        {
+            "planning_mode": args.planning_mode,
+            "planning_selection_issue_counts": planning_issues,
+            "fully_testable_morning_sessions": (
+                len({item.session_date for item in selections})
+                if args.planning_mode == "fixed_morning"
+                else None
+            ),
         }
     )
     blockers = integrity_blocks_backtest(integrity)
@@ -256,6 +294,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     entry_touch_policy=args.entry_touch_policy,
                     same_bar_policy=args.same_bar_policy,
                     cost_points=spread + args.slippage_points,
+                    time_exit_policy=XauTimeExitPolicy(args.time_exit_policy),
                 )
             )
     else:
@@ -290,6 +329,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         outcomes,
         bootstrap_seed=args.bootstrap_seed,
     )
+    daily_paths = (
+        build_daily_sd_paths(selections, bars)
+        if args.planning_mode == "fixed_morning"
+        else []
+    )
+    opportunities, opportunity_stats = build_opportunity_map(
+        daily_paths,
+        plans,
+        outcomes,
+    )
+    comparison_report = _summarize_comparison_report(
+        Path(args.comparison_report) if args.comparison_report else None
+    )
     collection_manifest = _load_optional_json(
         Path(args.vol2vol_data_root) / "catalog" / "collection_manifest.json"
     )
@@ -301,6 +353,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         stats=stats,
         conservative=conservative,
         plans=plans,
+        planning_mode=args.planning_mode,
+        opportunity_stats=opportunity_stats,
+        comparison_report=comparison_report,
     )
     report_dir = report_store.persist_run(
         stats=stats,
@@ -322,6 +377,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             "development_stats.json": conservative["development_stats"],
             "holdout_stats.json": conservative["holdout_stats"],
             "config_comparison.json": conservative["config_comparison"],
+            "daily_path_analysis.json": [
+                item.model_dump(mode="json") for item in daily_paths
+            ],
+            "opportunity_map.json": [
+                item.model_dump(mode="json") for item in opportunities
+            ],
+            "opportunity_stats.json": opportunity_stats,
+            "comparison_report.json": comparison_report,
         },
         review_handoff_markdown=review_handoff,
         overwrite=args.overwrite,
@@ -337,6 +400,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         "overlap_session_count": coverage.get("overlap_session_count", 0),
         "fill_count": stats.triggered_count,
         "holdout_fill_count": _holdout_fill_count(conservative["holdout_stats"]),
+        "planning_mode": args.planning_mode,
+        "testable_morning_sessions": opportunity_stats["testable_morning_sessions"],
+        "sessions_reaching_either_2sd": opportunity_stats[
+            "sessions_reaching_either_2sd"
+        ],
+        "sessions_reaching_either_3sd": opportunity_stats[
+            "sessions_reaching_either_3sd"
+        ],
+        "unique_2sd_opportunities": opportunity_stats[
+            "unique_2sd_opportunity_count"
+        ],
+        "unique_3sd_opportunities": opportunity_stats[
+            "unique_3sd_opportunity_count"
+        ],
+        "configuration_fill_count": opportunity_stats["configuration_fill_count"],
+        "evidence_status": opportunity_stats["evidence_status"],
+        "comparison_report": comparison_report,
         "integrity": integrity,
         "warnings": warnings,
         "signal_allowed": False,
@@ -400,6 +480,15 @@ def _parse_hhmm(value: str) -> time:
     return time(hour=hour, minute=minute)
 
 
+def _parse_hhmmss(value: str) -> time:
+    parts = [int(part) for part in value.split(":")]
+    if len(parts) == 2:
+        return time(hour=parts[0], minute=parts[1])
+    if len(parts) == 3:
+        return time(hour=parts[0], minute=parts[1], second=parts[2])
+    raise ValueError("time must use HH:MM or HH:MM:SS")
+
+
 def _load_price_inputs(args: argparse.Namespace) -> XauPriceBarFolderLoadResult:
     if args.price_bars_folder:
         return load_traded_bars_folder(Path(args.price_bars_folder), timezone=args.timezone)
@@ -448,6 +537,7 @@ def _build_custom_plans(
                         "plan_created_at": selection.planning_at,
                         "simulation_window_start": selection.simulation_window_start,
                         "simulation_window_end": selection.simulation_window_end,
+                        **planning_plan_metadata(selection),
                     }
                 )
             )
@@ -534,8 +624,67 @@ def _load_optional_json(path: Path) -> dict:
     return payload if isinstance(payload, dict) else {}
 
 
+def _load_optional_json_list(path: Path) -> list[dict]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    return payload if isinstance(payload, list) else []
+
+
 def _holdout_fill_count(holdout_stats: dict) -> int:
     return sum(int(item.get("fill_count") or 0) for item in holdout_stats.get("groups", []))
+
+
+def _summarize_comparison_report(report_dir: Path | None) -> dict:
+    if report_dir is None:
+        return {
+            "report_dir": None,
+            "available": False,
+            "research_only": True,
+            "signal_allowed": False,
+        }
+    plans_payload = _load_optional_json_list(report_dir / "plans.json")
+    outcomes_payload = _load_optional_json_list(report_dir / "outcomes.json")
+    costs = [float(item.get("cost_points") or 0) for item in outcomes_payload]
+    minimum_cost = min(costs, default=0.0)
+    filled_statuses = {
+        "target_hit",
+        "stop_hit",
+        "expired",
+        "time_exit_profit",
+        "time_exit_loss",
+        "ambiguous",
+    }
+    base_fills = [
+        item
+        for item in outcomes_payload
+        if float(item.get("cost_points") or 0) == minimum_cost
+        and item.get("status") in filled_statuses
+    ]
+    opportunity_keys = {
+        (
+            item.get("session_date"),
+            item.get("cycle_label"),
+            item.get("side"),
+            item.get("entry_sd"),
+            round(float(item.get("entry_level") or 0), 4),
+        )
+        for item in base_fills
+    }
+    return {
+        "report_dir": report_dir.resolve().as_posix(),
+        "available": bool(plans_payload or outcomes_payload),
+        "planning_mode": "existing_1000_1900",
+        "testable_sessions": len({item.get("session_date") for item in plans_payload}),
+        "unique_market_opportunities": len(opportunity_keys),
+        "configuration_fills": len(base_fills),
+        "cost_scenario_filled_rows": sum(
+            item.get("status") in filled_statuses for item in outcomes_payload
+        ),
+        "research_only": True,
+        "signal_allowed": False,
+    }
 
 
 def _base_cost_outcomes(outcomes: list) -> list:
@@ -553,13 +702,16 @@ def _build_review_handoff(
     stats,
     conservative: dict,
     plans: list[XauSdMeanReversionPlan],
+    planning_mode: str,
+    opportunity_stats: dict,
+    comparison_report: dict,
 ) -> str:
     holdout_fills = _holdout_fill_count(conservative["holdout_stats"])
     comparison = conservative["config_comparison"].get("groups", [])
     tested_dates = sorted({plan.session_date for plan in plans})
     resolved_report_dir = report_dir.resolve()
     lines = [
-        "# XAU Vol2Vol Conservative Walk-Forward Review",
+        "# XAU Vol2Vol Fixed-Morning Walk-Forward Review",
         "",
         "Research-only. Not a buy/sell signal.",
         "",
@@ -571,6 +723,9 @@ def _build_review_handoff(
         f"- XAU candles: `{coverage.get('xau_candle_row_count')}`",
         f"- Overlap sessions: `{coverage.get('overlap_session_count')}`",
         f"- Independently tested sessions: `{len(tested_dates)}`",
+        f"- Planning mode: `{planning_mode}`",
+        f"- Fully testable morning sessions: "
+        f"`{opportunity_stats['testable_morning_sessions']}`",
         f"- Tested date range: `{tested_dates[0] if tested_dates else None}` to "
         f"`{tested_dates[-1] if tested_dates else None}`",
         "",
@@ -584,12 +739,33 @@ def _build_review_handoff(
         "",
         "## Results",
         f"- Plans: `{stats.plan_count}`",
-        f"- Independent fills: `{stats.triggered_count}`",
+        f"- Sessions reaching either 2SD: "
+        f"`{opportunity_stats['sessions_reaching_either_2sd']}`",
+        f"- Sessions reaching either 3SD: "
+        f"`{opportunity_stats['sessions_reaching_either_3sd']}`",
+        f"- Unique 2SD opportunities: "
+        f"`{opportunity_stats['unique_2sd_opportunity_count']}`",
+        f"- Unique 3SD opportunities: "
+        f"`{opportunity_stats['unique_3sd_opportunity_count']}`",
+        f"- Filled market opportunities: "
+        f"`{opportunity_stats['filled_opportunity_count']}`",
+        f"- Configuration fills: `{opportunity_stats['configuration_fill_count']}`",
+        f"- Cost-scenario filled rows: "
+        f"`{opportunity_stats['cost_scenario_filled_row_count']}`",
         f"- Cost-scenario outcome rows: `{sum(item['outcome_count'] for item in comparison)}`",
         f"- Holdout fills across grouped scenarios: `{holdout_fills}`",
         f"- Net expectancy points: `{stats.net_expectancy_points}`",
         f"- Maximum cumulative drawdown points: "
         f"`{stats.maximum_cumulative_drawdown_points}`",
+        f"- Evidence status: `{opportunity_stats['evidence_status']}`",
+        "",
+        "## Former 10:00/19:00 Comparison",
+        f"- Report: `{comparison_report.get('report_dir')}`",
+        f"- Testable sessions: `{comparison_report.get('testable_sessions')}`",
+        f"- Unique market opportunities: "
+        f"`{comparison_report.get('unique_market_opportunities')}`",
+        f"- Configuration fills: `{comparison_report.get('configuration_fills')}`",
+        "- Planning modes are separate experiments; their counts are not combined.",
         "",
         "## Baseline Comparison",
     ]
@@ -621,6 +797,10 @@ def _build_review_handoff(
             f"- Review: `{(resolved_report_dir / 'review_handoff.md').as_posix()}`",
             f"- Stats: `{(resolved_report_dir / 'stats.json').as_posix()}`",
             f"- Outcomes: `{(resolved_report_dir / 'outcomes.json').as_posix()}`",
+            f"- Daily paths: "
+            f"`{(resolved_report_dir / 'daily_path_analysis.json').as_posix()}`",
+            f"- Opportunities: "
+            f"`{(resolved_report_dir / 'opportunity_map.json').as_posix()}`",
             f"- Integrity: `{(resolved_report_dir / 'integrity_report.json').as_posix()}`",
             "",
             "signal_allowed=false",

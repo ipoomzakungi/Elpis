@@ -16,6 +16,8 @@ _FILLED_STATUSES = {
     XauWalkforwardTradeStatus.TARGET_HIT,
     XauWalkforwardTradeStatus.STOP_HIT,
     XauWalkforwardTradeStatus.EXPIRED,
+    XauWalkforwardTradeStatus.TIME_EXIT_PROFIT,
+    XauWalkforwardTradeStatus.TIME_EXIT_LOSS,
     XauWalkforwardTradeStatus.AMBIGUOUS,
 }
 
@@ -38,8 +40,17 @@ def build_walkforward_stats(
         warnings.append("Small sample is not proof.")
     if len(filled) < minimum_sample_size:
         warnings.append("Results are provisional because fewer than 30 plans filled.")
-    net_values = [item.net_points for item in filled if item.net_points is not None]
-    gross_values = [item.gross_points for item in filled if item.gross_points is not None]
+    expectancy_outcomes = [item for item in filled if item.include_in_expectancy]
+    net_values = [item.net_points for item in expectancy_outcomes if item.net_points is not None]
+    gross_values = [
+        item.gross_points for item in expectancy_outcomes if item.gross_points is not None
+    ]
+    target_net_values = [
+        item.net_points
+        for item in filled
+        if item.status == XauWalkforwardTradeStatus.TARGET_HIT
+        and item.net_points is not None
+    ]
     mae_values = [item.mae_points for item in outcomes if item.mae_points is not None]
     return XauWalkforwardStats(
         run_id=run_id,
@@ -53,6 +64,8 @@ def build_walkforward_stats(
         expired_count=status_counts[XauWalkforwardTradeStatus.EXPIRED],
         ambiguous_count=status_counts[XauWalkforwardTradeStatus.AMBIGUOUS],
         unavailable_count=status_counts[XauWalkforwardTradeStatus.UNAVAILABLE],
+        time_exit_profit_count=status_counts[XauWalkforwardTradeStatus.TIME_EXIT_PROFIT],
+        time_exit_loss_count=status_counts[XauWalkforwardTradeStatus.TIME_EXIT_LOSS],
         fill_rate=_rate(len(filled), len(outcomes)),
         target_hit_rate_after_fill=_rate(
             status_counts[XauWalkforwardTradeStatus.TARGET_HIT],
@@ -71,6 +84,7 @@ def build_walkforward_stats(
         mae_p95_points=_adverse_percentile(mae_values, 0.95),
         gross_expectancy_points=_avg(gross_values),
         net_expectancy_points=_avg(net_values),
+        target_hit_expectancy_points=_avg(target_net_values),
         profit_factor_points=_profit_factor(net_values),
         maximum_cumulative_drawdown_points=_maximum_drawdown(net_values),
         maximum_consecutive_losses=_maximum_consecutive_losses(net_values),
@@ -123,7 +137,9 @@ def _grouped_stats(
             "target_hit_rate_after_fill": _target_rate_after_fill(items),
             "avg_mfe_points": _avg([item.mfe_points for item in items]),
             "avg_mae_points": _avg([item.mae_points for item in items]),
-            "net_expectancy_points": _avg([item.net_points for item in items]),
+            "net_expectancy_points": _avg(
+                [item.net_points for item in items if item.include_in_expectancy]
+            ),
             "fill_count": sum(_is_filled(item) for item in items),
             "small_sample_warning": sum(_is_filled(item) for item in items) < 20,
         }
