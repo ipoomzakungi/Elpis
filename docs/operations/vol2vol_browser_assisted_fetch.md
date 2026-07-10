@@ -17,7 +17,7 @@ Do not store or commit:
 - browser session material
 - private URLs or replayable session artifacts
 
-Acceptable future flow:
+Implemented flow:
 
 1. The user opens Vol2Vol in their own browser session.
 2. A user-controlled browser tool requests the same public JSON endpoint.
@@ -43,13 +43,50 @@ Vol2Vol structure data is useful for research preparation:
 
 It is not a buy/sell signal and does not replace traded-side XAUUSD/GO candles.
 
-## Current Status
+## Collector
 
-The code currently includes only a safe persistence stub:
+Start a visible Chrome or Edge instance with local CDP enabled and a dedicated,
+local-only profile. Complete any browser challenge manually, then leave the
+Vol2Vol history page open.
 
-```text
-backend/src/xau_vol2vol_history_walkforward/browser_assisted_fetch.py
+```powershell
+& "C:\Program Files\Google\Chrome\Application\chrome.exe" `
+  --remote-debugging-port=9222 `
+  --user-data-dir="$env:LOCALAPPDATA\Elpis\vol2vol-browser-profile" `
+  https://www.vol2vol.com/history
 ```
 
-Full browser automation should be added only if it can save sanitized response
-bodies without persisting cookies, headers, or session tokens.
+Run the collector from `backend`:
+
+```powershell
+python scripts/collect_vol2vol_browser_history.py `
+  --cdp-url http://127.0.0.1:9222 `
+  --base-url https://www.vol2vol.com `
+  --all-available `
+  --output-root data/imports/vol2vol `
+  --min-delay-seconds 1.5
+```
+
+The collector:
+
+- discovers the server-advertised session catalog;
+- excludes the current incomplete session by default;
+- rejects HTTP 200 responses whose returned `sessionDate` does not match the request;
+- skips an existing valid matching file unless `--refresh` is supplied;
+- writes only response JSON and sanitized collection metadata;
+- uses atomic daily-file replacement and bounded retries.
+
+Implementation:
+
+```text
+backend/src/xau_vol2vol_history_walkforward/browser_collector.py
+backend/src/xau_vol2vol_history_walkforward/collection_manifest.py
+backend/scripts/collect_vol2vol_browser_history.py
+```
+
+If the browser is absent, the CDP port is unavailable, the challenge is not
+cleared, or the session expires, collection fails closed and records no browser
+credentials. Close the dedicated browser and remove
+`%LOCALAPPDATA%\Elpis\vol2vol-browser-profile` to remove its local state. A new
+profile or a cleared challenge rotates that state; it must never be copied into
+the repository.

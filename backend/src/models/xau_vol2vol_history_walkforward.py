@@ -45,6 +45,11 @@ class XauTradeSide(StrEnum):
     SHORT_REVERSION = "short_reversion"
 
 
+class XauEntryType(StrEnum):
+    TOUCH = "touch"
+    REJECTION_CONFIRMED = "rejection_confirmed"
+
+
 class XauWalkforwardTradeStatus(StrEnum):
     NO_FILL = "no_fill"
     TRIGGERED = "triggered"
@@ -171,6 +176,8 @@ class XauSdMeanReversionPlan(XauBaseModel):
     plan_id: str
     session_date: date
     cycle_label: str
+    baseline_config: str = "custom"
+    entry_type: XauEntryType = XauEntryType.TOUCH
     observed_at: datetime
     side: XauTradeSide
     entry_sd: XauSdEntryLevel
@@ -188,6 +195,12 @@ class XauSdMeanReversionPlan(XauBaseModel):
     vol_regime_label: XauVolRegimeLabel
     readiness: XauPlanReadiness
     blocked_reasons: list[str] = Field(default_factory=list)
+    selected_vol2vol_snapshot_time: datetime | None = None
+    selected_xau_price_time: datetime | None = None
+    basis_alignment_seconds: float | None = Field(default=None, ge=0)
+    plan_created_at: datetime | None = None
+    simulation_window_start: datetime | None = None
+    simulation_window_end: datetime | None = None
     research_only: bool = True
     signal_allowed: bool = False
 
@@ -208,6 +221,10 @@ class XauWalkforwardTradeOutcome(XauBaseModel):
     tp_mode: XauTpMode
     sl_mode: XauSlMode
     status: XauWalkforwardTradeStatus
+    baseline_config: str = "custom"
+    entry_type: XauEntryType = XauEntryType.TOUCH
+    cycle_label: str = "manual"
+    cost_points: float = Field(default=0, ge=0)
     triggered_at: datetime | None = None
     exited_at: datetime | None = None
     entry_level: float | None = None
@@ -226,6 +243,11 @@ class XauWalkforwardTradeOutcome(XauBaseModel):
     last_bar_used: datetime | None = None
     window_alignment_status: XauWindowAlignmentStatus = XauWindowAlignmentStatus.INVALID
     ambiguity_notes: list[str] = Field(default_factory=list)
+    same_bar_ambiguous: bool = False
+    raw_result: str | None = None
+    gross_points: float | None = None
+    total_cost_points: float | None = Field(default=None, ge=0)
+    net_points: float | None = None
     research_only: bool = True
     signal_allowed: bool = False
 
@@ -249,12 +271,22 @@ class XauWalkforwardStats(XauBaseModel):
     stop_hit_count: int = Field(ge=0)
     expired_count: int = Field(ge=0)
     ambiguous_count: int = Field(ge=0)
+    unavailable_count: int = Field(default=0, ge=0)
     fill_rate: float | None = Field(default=None, ge=0, le=1)
     target_hit_rate_after_fill: float | None = Field(default=None, ge=0, le=1)
     stop_hit_rate_after_fill: float | None = Field(default=None, ge=0, le=1)
     avg_mfe_points: float | None = None
     avg_mae_points: float | None = None
     worst_mae_points: float | None = None
+    median_mfe_points: float | None = None
+    median_mae_points: float | None = None
+    mae_p90_points: float | None = None
+    mae_p95_points: float | None = None
+    gross_expectancy_points: float | None = None
+    net_expectancy_points: float | None = None
+    profit_factor_points: float | None = None
+    maximum_cumulative_drawdown_points: float | None = None
+    maximum_consecutive_losses: int = Field(default=0, ge=0)
     avg_time_to_exit_minutes: float | None = Field(default=None, ge=0)
     grouped_stats: list[dict] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)

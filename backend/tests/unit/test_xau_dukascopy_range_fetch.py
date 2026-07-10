@@ -6,6 +6,9 @@ from scripts.fetch_xau_dukascopy_range import (
     fetch_chunk,
     write_monthly_files,
 )
+from src.xau_vol2vol_history_walkforward.walkforward_simulator import (
+    load_traded_bars_folder,
+)
 
 
 def test_fetch_chunk_uses_mocked_subprocess_and_normalizes_epoch_ms(
@@ -73,3 +76,23 @@ def test_write_monthly_files_deduplicates_by_timestamp(tmp_path) -> None:
     lines = written[0].read_text(encoding="utf-8").splitlines()
     assert len(lines) == 2
     assert lines[1].endswith(",2.5,1")
+
+
+def test_price_bars_folder_loads_months_and_deduplicates_timestamps(tmp_path) -> None:
+    header = "timestamp,open,high,low,close,volume\n"
+    (tmp_path / "2026-06.csv").write_text(
+        header + "2026-06-30T23:59:00Z,1,2,0.5,1.5,1\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "2026-07.csv").write_text(
+        header
+        + "2026-06-30T23:59:00Z,1,3,0.5,2.5,1\n"
+        + "2026-07-01T00:00:00Z,2,3,1.5,2.5,1\n",
+        encoding="utf-8",
+    )
+
+    result = load_traded_bars_folder(tmp_path, timezone="UTC")
+
+    assert len(result.bars) == 2
+    assert result.duplicate_timestamp_count == 1
+    assert result.bars[0].close == 2.5

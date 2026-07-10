@@ -37,6 +37,8 @@ class XauVol2VolHistoryWalkforwardReportStore:
         plans: list[XauSdMeanReversionPlan],
         outcomes: list[XauWalkforwardTradeOutcome],
         raw_manifest: dict[str, Any],
+        additional_artifacts: dict[str, Any] | None = None,
+        review_handoff_markdown: str | None = None,
         overwrite: bool = False,
     ) -> Path:
         report_dir = self.report_dir(stats.run_id)
@@ -55,6 +57,10 @@ class XauVol2VolHistoryWalkforwardReportStore:
             [item.model_dump(mode="json") for item in outcomes],
         )
         _write_json(report_dir / "stats.json", stats.model_dump(mode="json"))
+        for name, payload in (additional_artifacts or {}).items():
+            if not name.endswith(".json"):
+                raise ValueError("Additional report artifacts must be JSON files")
+            _write_json(report_dir / name, payload)
         markdown = build_ai_pack_markdown(
             stats=stats,
             range_snapshots=range_snapshots,
@@ -63,6 +69,11 @@ class XauVol2VolHistoryWalkforwardReportStore:
             outcomes=outcomes,
         )
         (report_dir / "ai_walkforward_pack.md").write_text(markdown, encoding="utf-8")
+        if review_handoff_markdown is not None:
+            (report_dir / "review_handoff.md").write_text(
+                review_handoff_markdown,
+                encoding="utf-8",
+            )
         _write_json(
             report_dir / "ai_walkforward_pack.json",
             {

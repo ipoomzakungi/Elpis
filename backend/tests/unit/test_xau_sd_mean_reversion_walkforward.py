@@ -4,6 +4,7 @@ from datetime import date, datetime
 
 from src.models.xau_market_context import XauPriceBar
 from src.models.xau_vol2vol_history_walkforward import (
+    XauEntryType,
     XauPlanReadiness,
     XauSdEntryLevel,
     XauSdMeanReversionPlan,
@@ -43,6 +44,56 @@ def test_same_bar_target_and_stop_is_ambiguous_by_default() -> None:
 
     assert outcome.status == XauWalkforwardTradeStatus.AMBIGUOUS
     assert outcome.ambiguity_notes
+
+
+def test_conservative_same_bar_policy_chooses_stop_and_marks_ambiguity() -> None:
+    outcome = simulate_plan(
+        _plan(),
+        [_bar(low=4055, high=4085)],
+        same_bar_policy="conservative_stop_first",
+    )
+
+    assert outcome.status == XauWalkforwardTradeStatus.STOP_HIT
+    assert outcome.same_bar_ambiguous is True
+    assert outcome.raw_result == "target_and_stop_same_bar"
+
+
+def test_rejection_entry_occurs_after_closed_five_minute_confirmation() -> None:
+    plan = _plan().model_copy(update={"entry_type": XauEntryType.REJECTION_CONFIRMED})
+    bars = [
+        _bar(
+            low=4068,
+            high=4073,
+            timestamp=datetime.fromisoformat("2026-07-08T10:01:00+07:00"),
+        ),
+        XauPriceBar(
+            timestamp=datetime.fromisoformat("2026-07-08T10:04:00+07:00"),
+            open=4071,
+            high=4074,
+            low=4069,
+            close=4072,
+            volume=1,
+        ),
+        _bar(
+            low=4071,
+            high=4082,
+            timestamp=datetime.fromisoformat("2026-07-08T10:05:00+07:00"),
+        ),
+    ]
+
+    outcome = simulate_plan(plan, bars)
+
+    assert outcome.triggered_at == datetime.fromisoformat("2026-07-08T10:05:00+07:00")
+    assert outcome.status == XauWalkforwardTradeStatus.TARGET_HIT
+    assert outcome.mae_points is not None and outcome.mae_points <= 0
+
+
+def test_costs_reduce_net_points() -> None:
+    outcome = simulate_plan(_plan(), [_bar(low=4069, high=4085)], cost_points=1.0)
+
+    assert outcome.gross_points == 10
+    assert outcome.total_cost_points == 1
+    assert outcome.net_points == 9
 
 
 def test_earlier_bars_do_not_trigger_later_plan() -> None:
