@@ -53,8 +53,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         session_date_to=date_to,
     )
     ranges = []
+    strike_rows = []
     for payload in loaded.payloads:
-        _, normalized, _ = normalize_payload(payload)
+        normalized_strikes, normalized, _ = normalize_payload(payload)
+        strike_rows.extend(normalized_strikes)
         ranges.extend(normalized)
     spot = load_traded_bars_folder(Path(args.spot_bars_folder), timezone=args.timezone)
     proxy = load_traded_bars_folder(
@@ -64,7 +66,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     day_end = time(23, 59, 59)
     spot_selections, spot_issues = select_planning_cycles(
         range_snapshots=ranges,
-        strike_rows=[],
+        strike_rows=strike_rows,
         bars=spot.bars,
         session_date_from=date_from,
         session_date_to=date_to,
@@ -95,7 +97,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         for mapping_mode in XauMappingMode:
             selections, issues = select_planning_cycles(
                 range_snapshots=ranges,
-                strike_rows=[],
+                strike_rows=strike_rows,
                 bars=proxy.bars,
                 session_date_from=date_from,
                 session_date_to=date_to,

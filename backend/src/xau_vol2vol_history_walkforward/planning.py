@@ -71,6 +71,11 @@ def select_planning_cycles(
         range_snapshots,
         zone,
     )
+    strikes_by_session_series: dict[
+        tuple[date, str | None], list[XauVol2VolStrikeSnapshot]
+    ] = {}
+    for row in strike_rows:
+        strikes_by_session_series.setdefault((row.session_date, row.series), []).append(row)
     while current <= session_date_to:
         session_ranges = [
             item
@@ -209,7 +214,9 @@ def select_planning_cycles(
                 }
             )
             selected_strikes = _select_strikes(
-                strike_rows,
+                strikes_by_session_series.get(
+                    (selected_range.session_date, selected_range.series), []
+                ),
                 session_date=selected_range.session_date,
                 planning_at=planning_at,
                 zone=zone,

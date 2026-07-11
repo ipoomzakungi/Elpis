@@ -288,6 +288,8 @@ def _diagnostic(
         ),
         "snapshot_age_at_planning_seconds": selection.snapshot_age_at_planning_seconds,
         "future_reference": selection.range_snapshot.future_open,
+        "atm_vol": selection.range_snapshot.vol_now,
+        "atm_vol_change": selection.range_snapshot.vol_chg,
         "xau_reference": center,
         "mapping_mode": selection.mapping_mode.value,
         "calculated_diff": selection.range_snapshot.diff,

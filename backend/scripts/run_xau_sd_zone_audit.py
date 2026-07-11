@@ -58,8 +58,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         session_date_to=date_to,
     )
     ranges = []
+    strike_rows = []
     for payload in load_result.payloads:
-        _, normalized_ranges, _ = normalize_payload(payload)
+        normalized_strikes, normalized_ranges, _ = normalize_payload(payload)
+        strike_rows.extend(normalized_strikes)
         ranges.extend(normalized_ranges)
     price_result = load_traded_bars_folder(
         Path(args.price_bars_folder),
@@ -75,7 +77,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         for mapping_mode in XauMappingMode:
             selections, issues = select_planning_cycles(
                 range_snapshots=ranges,
-                strike_rows=[],
+                strike_rows=strike_rows,
                 bars=price_result.bars,
                 session_date_from=date_from,
                 session_date_to=date_to,
