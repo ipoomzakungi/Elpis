@@ -27,7 +27,8 @@ def test_multiple_rolling_plans_share_episode_until_reset() -> None:
     )
 
     assert result["plan_version_count"] == 2
-    assert result["unique_opportunity_count"] == 1
+    assert result["unique_opportunity_count"] == 2
+    assert result["matched_anchor_opportunity_count"] == 1
     assert result["unique_episode_count"] == 1
 
 

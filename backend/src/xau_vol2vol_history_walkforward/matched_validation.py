@@ -60,14 +60,31 @@ def build_episode_maps(
         exited = datetime.fromisoformat(outcome["exited_at"])
         exit_by_key[key] = min(exit_by_key.get(key, exited), exited)
     plan_versions = []
+    all_plan_version_ids = set()
     for result in primary_results:
+        for diagnostic in result.get("diagnostics", []):
+            all_plan_version_ids.add(
+                f"{result['planning_mode']}:{diagnostic['session_date']}:"
+                f"{diagnostic['planning_at']}"
+            )
         for row in result["opportunities"]:
             if not row["touched"] or row["entry_definition"] not in {
                 "zone_2_entry",
                 "zone_2_mid",
             }:
                 continue
-            plan_versions.append({**row, "plan_version_id": row["opportunity_id"]})
+            all_plan_version_ids.add(
+                f"{result['planning_mode']}:{row['session_date']}:{row['planning_at']}"
+            )
+            plan_versions.append(
+                {
+                    **row,
+                    "plan_version_id": (
+                        f"{result['planning_mode']}:{row['session_date']}:"
+                        f"{row['planning_at']}"
+                    ),
+                }
+            )
     episodes = []
     for planning_mode in ("fixed_morning", "rolling_30m"):
         mode_rows = [row for row in plan_versions if row["planning_mode"] == planning_mode]
@@ -134,19 +151,21 @@ def build_episode_maps(
                         reset_sd=reset_sd,
                     )
                 )
-    opportunity_ids = {
+    matched_anchor_opportunity_ids = {
         row["opportunity_id"]
         for row in features
         if row["mapping_mode"] == "same_time_basis"
     }
+    market_opportunity_ids = {row["opportunity_id"] for row in plan_versions}
     sessions = {row["session_date"] for row in features if row["mapping_mode"] == "same_time_basis"}
     ordered_sessions = sorted(sessions)
     split = max(int(len(ordered_sessions) * 0.7), 1) if ordered_sessions else 0
     holdout_sessions = set(ordered_sessions[split:])
     return {
         "reset_sd": reset_sd,
-        "plan_version_count": len(plan_versions),
-        "unique_opportunity_count": len(opportunity_ids),
+        "plan_version_count": len(all_plan_version_ids),
+        "unique_opportunity_count": len(market_opportunity_ids),
+        "matched_anchor_opportunity_count": len(matched_anchor_opportunity_ids),
         "unique_episode_count": len(episodes),
         "independent_session_count": len(sessions),
         "holdout_episode_count": sum(
@@ -513,6 +532,12 @@ class AppendOnlyJournal:
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(payload, sort_keys=True) + "\n")
         return path
+
+    def contains(self, stream: str, record_id: str) -> bool:
+        return any(
+            row.get("record_id") == record_id
+            for row in self._read(self.root / f"{stream}.jsonl")
+        )
 
     @staticmethod
     def _read(path: Path) -> list[dict[str, Any]]:
