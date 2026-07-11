@@ -432,6 +432,7 @@ def build_conditional_variants(
         }
     base = _base_outcomes(exit_backtest)
     variants = []
+    variant_outcomes: dict[str, list[dict[str, Any]]] = {}
     for variant in ("F0", "F1"):
         selected = []
         for feature in features:
@@ -442,7 +443,9 @@ def build_conditional_variants(
                 continue
             selected.extend(base.get(feature["opportunity_id"], []))
         variants.append(_variant_summary(variant, selected))
+        variant_outcomes[variant] = selected
     confirmation_records = []
+    br_condition_records = []
     if bars is None or daily_index is None:
         variants.extend(
             _unavailable_confirmation_variant(name) for name in ("F2", "F3", "BR")
@@ -461,12 +464,22 @@ def build_conditional_variants(
             plan_oi = feature["plan_state"]["oi"] or {}
             touch_volume = feature["touch_state"]["volume"] or {}
             wall = plan_oi.get("mapped_xauusd_strike")
-            if (
-                wall is not None
-                and _accepted_beyond_wall(feature, bars, wall)
-                and (touch_volume.get("change_percentile") or 0) >= 0.75
-                and bool(plan_oi.get("low_activity_gap_toward_stop"))
-            ):
+            accepted_beyond = wall is not None and _accepted_beyond_wall(
+                feature, bars, wall
+            )
+            high_volume_delta = (touch_volume.get("change_percentile") or 0) >= 0.75
+            low_gap = bool(plan_oi.get("low_activity_gap_toward_stop"))
+            all_br_conditions = accepted_beyond and high_volume_delta and low_gap
+            br_condition_records.append(
+                {
+                    "opportunity_id": feature["opportunity_id"],
+                    "accepted_beyond_wall": accepted_beyond,
+                    "high_volume_delta": high_volume_delta,
+                    "low_activity_gap_toward_next_wall": low_gap,
+                    "all_conditions": all_br_conditions,
+                }
+            )
+            if all_br_conditions:
                 breakout_blocked.add(feature["opportunity_id"])
             if labels["top5_wall_near_entry"] != "yes":
                 continue
@@ -528,6 +541,8 @@ def build_conditional_variants(
             )
         variants.append(_variant_summary("F2", f2_rows))
         variants.append(_variant_summary("F3", f3_rows))
+        variant_outcomes["F2"] = f2_rows
+        variant_outcomes["F3"] = f3_rows
         br_rows = [
             outcome
             for opportunity_id, items in base.items()
@@ -537,6 +552,7 @@ def build_conditional_variants(
         br_summary = _variant_summary("BR", br_rows)
         br_summary["blocked_opportunity_count"] = len(breakout_blocked)
         variants.append(br_summary)
+        variant_outcomes["BR"] = br_rows
     f0 = next((row for row in variants if row["variant"] == "F0"), None)
     if f0:
         for row in variants:
@@ -550,6 +566,8 @@ def build_conditional_variants(
     return {
         "coverage_gate_passed": True,
         "variants": variants,
+        "variant_outcomes": variant_outcomes,
+        "br_condition_records": br_condition_records if bars is not None else [],
         "confirmation_records": confirmation_records if bars is not None else [],
         "evidence_status": "insufficient_sample",
         "research_only": True,
@@ -592,11 +610,19 @@ def _snapshot_feature(
         (row, _map_strike(row.strike, diagnostic, mapping_mode)) for row in group.rows
     ]
     nearest, mapped_strike = min(mapped, key=lambda item: abs(item[1] - entry))
-    values = [float(row.total) for row, _ in mapped if row.total is not None]
+    all_values = [float(row.total) for row, _ in mapped if row.total is not None]
+    values = [value for value in all_values if value > 0]
+    active_strike_count = len(values)
+    sufficient_active_strikes = active_strike_count >= 5
+    all_zero_snapshot = bool(all_values) and not values
     ranked = sorted(values, reverse=True)
     value = float(nearest.total) if nearest.total is not None else None
-    rank = ranked.index(value) + 1 if value is not None and value in ranked else None
-    percentile = _percentile_rank(values, value)
+    rank = (
+        ranked.index(value) + 1
+        if sufficient_active_strikes and value is not None and value > 0 and value in ranked
+        else None
+    )
+    percentile = _percentile_rank(values, value) if sufficient_active_strikes else None
     previous_row = None
     if previous:
         previous_row = next(
@@ -645,6 +671,12 @@ def _snapshot_feature(
         "percentile": percentile,
         "top_5": rank is not None and rank <= 5,
         "top_10": rank is not None and rank <= 10,
+        "active_strike_count": active_strike_count,
+        "all_zero_snapshot": all_zero_snapshot,
+        "insufficient_active_strikes": not sufficient_active_strikes,
+        "maximum_value_tie_count": max(
+            (values.count(item) for item in set(values)), default=0
+        ),
         "call": nearest.call,
         "put": nearest.put,
         "total": nearest.total,

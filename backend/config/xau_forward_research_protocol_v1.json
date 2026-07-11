@@ -1,0 +1,50 @@
+{
+  "protocol_version": "xau_forward_research_protocol_v1",
+  "protocol_hash": "d24f343180682eddcd1a3cdf72f0e42d5c512b820951aeef5b5ff804c6710305",
+  "research_only": true,
+  "signal_allowed": false,
+  "mapping_mode": "same_time_basis",
+  "planning": {
+    "timezone": "Asia/Bangkok",
+    "fixed_morning_time": "07:00",
+    "rolling_interval_minutes": 30,
+    "holding_horizon": "intraday_close_23:59"
+  },
+  "confirmation": {
+    "timeframe_minutes": 5,
+    "entry_timing": "next_executable_m1_bar_after_closed_confirmation",
+    "same_bar_policy": "conservative_stop_first"
+  },
+  "strategies": {
+    "A": {"entry_sd": 1.0, "target_sd": 0.25, "stop_sd": 2.0},
+    "B": {"entry_sd": 1.0, "target_sd": 0.5, "stop_sd": 2.0},
+    "C": {"entry_sd": 1.5, "target_sd": 0.25, "stop_sd": 2.5},
+    "D": {"entry_sd": 1.5, "target_sd": 0.5, "stop_sd": 2.5}
+  },
+  "variants": {
+    "F0": "unchanged_sd_touch_control",
+    "F1": "plan_top5_oi_wall_within_0.25sd",
+    "F2": "F1_plus_closed_5m_rejection_next_m1_entry",
+    "F3": "F2_plus_confirmation_volume_delta_below_top_quartile",
+    "BR": "block_if_acceptance_plus_top_quartile_volume_plus_low_oi_gap"
+  },
+  "cost_assumptions": {
+    "spread_points": [0.3, 0.5, 1.0, 1.5],
+    "slippage_points_per_side": [0.0, 0.2, 0.5]
+  },
+  "episode_reset": {
+    "default_inside_return_sd": 0.5,
+    "sensitivity_sd": [0.25, 0.5, 1.0],
+    "additional_resets": [
+      "crossed_mapped_center",
+      "previous_filled_trade_exited",
+      "new_trading_session"
+    ]
+  },
+  "data_freshness_limits_seconds": {
+    "price_source_alignment": 300,
+    "plan_options_snapshot": 1800,
+    "touch_options_snapshot": 1800
+  },
+  "series_selection_rule": "nearest_positive_dte_covering_monitoring_window"
+}
