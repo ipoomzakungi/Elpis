@@ -39,7 +39,7 @@ def load_traded_bars_folder(
         path
         for pattern in ("*.csv", "*.json")
         for path in folder.rglob(pattern)
-        if path.is_file()
+        if path.is_file() and path.name != "coverage_manifest.json"
     )
     by_timestamp: dict[datetime, XauPriceBar] = {}
     duplicate_count = 0
