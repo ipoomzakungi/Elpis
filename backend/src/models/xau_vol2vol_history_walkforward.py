@@ -21,6 +21,20 @@ class XauMappingMode(StrEnum):
     DISTANCE_REANCHORED = "distance_reanchored"
 
 
+class XauSourceClass(StrEnum):
+    EXACT_FUTURES_CONTRACT = "exact_futures_contract"
+    CONTINUOUS_FUTURES_PROXY = "continuous_futures_proxy"
+    SPOT_BASIS = "spot_basis"
+    DISTANCE_REANCHORED = "distance_reanchored"
+
+
+class XauContractAlignmentStatus(StrEnum):
+    EXACT = "exact"
+    PROXY = "proxy"
+    MISMATCH = "mismatch"
+    UNAVAILABLE = "unavailable"
+
+
 class XauSdEntryLevel(StrEnum):
     ONE_SD = "one_sd"
     TWO_SD = "two_sd"
