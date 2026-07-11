@@ -10,6 +10,7 @@ from src.config import get_settings
 from src.models.xau_market_context import XauPriceBar
 from src.models.xau_vol2vol_history_walkforward import (
     XauHistorySourceMode,
+    XauMappingMode,
     XauSdEntryLevel,
     XauSdMeanReversionPlan,
     XauSlMode,
@@ -82,6 +83,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--price-bars-folder")
     parser.add_argument("--audit-only", action="store_true")
     parser.add_argument("--basis-tolerance-seconds", type=int, default=300)
+    parser.add_argument(
+        "--mapping-mode",
+        choices=[item.value for item in XauMappingMode],
+        default=XauMappingMode.DISTANCE_REANCHORED.value,
+    )
+    parser.add_argument("--source-alignment-tolerance-seconds", type=int, default=300)
+    parser.add_argument("--snapshot-freshness-tolerance-seconds", type=int, default=1800)
     parser.add_argument("--cycle-label", default="manual")
     parser.add_argument(
         "--baseline-config",
@@ -237,6 +245,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         day_end_time=_parse_hhmmss(args.day_end_time),
         require_complete_window=args.planning_mode == "fixed_morning",
         require_one_sd=args.planning_mode == "fixed_morning",
+        mapping_mode=XauMappingMode(args.mapping_mode),
+        source_alignment_tolerance_seconds=(
+            args.source_alignment_tolerance_seconds
+        ),
+        snapshot_freshness_tolerance_seconds=(
+            args.snapshot_freshness_tolerance_seconds
+        ),
     )
     plans = (
         build_predefined_baseline_plans(selections, args.baseline_config)
@@ -263,6 +278,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     coverage.update(
         {
             "planning_mode": args.planning_mode,
+            "mapping_mode": args.mapping_mode,
             "planning_selection_issue_counts": planning_issues,
             "fully_testable_morning_sessions": (
                 len({item.session_date for item in selections})
@@ -401,6 +417,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "fill_count": stats.triggered_count,
         "holdout_fill_count": _holdout_fill_count(conservative["holdout_stats"]),
         "planning_mode": args.planning_mode,
+        "mapping_mode": args.mapping_mode,
         "testable_morning_sessions": opportunity_stats["testable_morning_sessions"],
         "sessions_reaching_either_2sd": opportunity_stats[
             "sessions_reaching_either_2sd"

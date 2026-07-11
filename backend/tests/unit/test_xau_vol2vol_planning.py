@@ -33,6 +33,7 @@ def test_monthly_oi_without_sd_cannot_create_plan() -> None:
         session_date=date(2026, 7, 7),
         observed_at=datetime.fromisoformat("2026-07-07T09:55:00+07:00"),
         future_open=4100,
+        dte=1.0,
     )
 
     selections, issues = select_planning_cycles(
@@ -129,6 +130,7 @@ def _snapshot(hhmm: str) -> XauVol2VolRangeDeskSnapshot:
     return XauVol2VolRangeDeskSnapshot(
         session_date=date(2026, 7, 7),
         observed_at=datetime.fromisoformat(f"2026-07-07T{hhmm}:00+07:00"),
+        dte=1.0,
         future_open=4100,
         future_buy_1sd=4090,
         future_buy_2sd=4080,

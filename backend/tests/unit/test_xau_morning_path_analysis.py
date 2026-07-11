@@ -90,7 +90,7 @@ def _selection():
     selections, _ = select_planning_cycles(
         range_snapshots=[_snapshot("06:55")],
         strike_rows=[],
-        bars=[_bar("06:59", 4095), _bar("08:00", 4095)],
+        bars=[_bar("06:54", 4095), _bar("06:59", 4095), _bar("08:00", 4095)],
         session_date_from=date(2026, 7, 7),
         session_date_to=date(2026, 7, 7),
         planning_times=(time(7, 0),),

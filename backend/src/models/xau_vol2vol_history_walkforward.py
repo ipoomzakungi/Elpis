@@ -16,6 +16,11 @@ class XauHistorySourceMode(StrEnum):
     UNAVAILABLE = "unavailable"
 
 
+class XauMappingMode(StrEnum):
+    SAME_TIME_BASIS = "same_time_basis"
+    DISTANCE_REANCHORED = "distance_reanchored"
+
+
 class XauSdEntryLevel(StrEnum):
     ONE_SD = "one_sd"
     TWO_SD = "two_sd"
@@ -206,6 +211,12 @@ class XauSdMeanReversionPlan(XauBaseModel):
     selected_vol2vol_snapshot_time: datetime | None = None
     selected_xau_price_time: datetime | None = None
     basis_alignment_seconds: float | None = Field(default=None, ge=0)
+    mapping_mode: XauMappingMode = XauMappingMode.DISTANCE_REANCHORED
+    source_alignment_seconds: float | None = Field(default=None, ge=0)
+    xau_price_age_at_planning_seconds: float | None = Field(default=None, ge=0)
+    snapshot_age_at_planning_seconds: float | None = Field(default=None, ge=0)
+    series_selection_reason: str | None = None
+    candidate_series: list[dict] = Field(default_factory=list)
     plan_created_at: datetime | None = None
     simulation_window_start: datetime | None = None
     simulation_window_end: datetime | None = None

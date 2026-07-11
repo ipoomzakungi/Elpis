@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 from src.models.xau_market_context import XauPriceBar
 from src.models.xau_vol2vol_history_walkforward import (
+    XauMappingMode,
     XauVol2VolRangeDeskSnapshot,
     XauVol2VolStrikeSnapshot,
 )
@@ -22,6 +23,12 @@ class XauPlanningSelection:
     strike_rows: list[XauVol2VolStrikeSnapshot] = field(default_factory=list)
     selected_xau_price_time: datetime | None = None
     basis_alignment_seconds: float | None = None
+    mapping_mode: XauMappingMode = XauMappingMode.DISTANCE_REANCHORED
+    source_alignment_seconds: float | None = None
+    xau_price_age_at_planning_seconds: float | None = None
+    snapshot_age_at_planning_seconds: float | None = None
+    series_selection_reason: str | None = None
+    candidate_series: list[dict] = field(default_factory=list)
 
 
 def select_planning_cycles(
@@ -38,6 +45,9 @@ def select_planning_cycles(
     day_end_time: time = time(23, 59, 59),
     require_complete_window: bool = False,
     require_one_sd: bool = False,
+    mapping_mode: XauMappingMode = XauMappingMode.DISTANCE_REANCHORED,
+    source_alignment_tolerance_seconds: int = 300,
+    snapshot_freshness_tolerance_seconds: int = 1800,
 ) -> tuple[list[XauPlanningSelection], dict[str, int]]:
     zone = ZoneInfo(timezone)
     selections: list[XauPlanningSelection] = []
@@ -49,6 +59,9 @@ def select_planning_cycles(
         "cycles_without_snapshot_count": 0,
         "incomplete_candle_window_count": 0,
         "non_monotonic_sd_count": 0,
+        "source_alignment_rejected_count": 0,
+        "series_without_covering_dte_count": 0,
+        "stale_snapshot_rejected_count": 0,
     }
     current = session_date_from
     while current <= session_date_to:
@@ -56,7 +69,7 @@ def select_planning_cycles(
         session_bars = [
             item for item in bars if item.timestamp.astimezone(zone).date() == current
         ]
-        for cycle in planning_times:
+        for cycle_index, cycle in enumerate(planning_times):
             planning_at = datetime.combine(current, cycle, tzinfo=zone)
             window_start, window_end = _cycle_window(
                 current,
@@ -64,6 +77,11 @@ def select_planning_cycles(
                 zone,
                 planning_mode=planning_mode,
                 day_end_time=day_end_time,
+                next_cycle=(
+                    planning_times[cycle_index + 1]
+                    if cycle_index + 1 < len(planning_times)
+                    else None
+                ),
             )
             simulation_bars = [
                 item
@@ -97,7 +115,23 @@ def select_planning_cycles(
                 else:
                     issues["cycles_without_snapshot_count"] += 1
                 continue
-            selected_range = max(eligible, key=lambda item: item.observed_at)
+            selected_range, candidates, selection_reason = _select_series_snapshot(
+                eligible,
+                required_horizon_days=max(
+                    (window_end - planning_at).total_seconds() / 86_400,
+                    0,
+                ),
+                planning_at=planning_at,
+            )
+            if selected_range is None:
+                issues["series_without_covering_dte_count"] += 1
+                continue
+            snapshot_age_seconds = (
+                planning_at - selected_range.observed_at.astimezone(zone)
+            ).total_seconds()
+            if snapshot_age_seconds > snapshot_freshness_tolerance_seconds:
+                issues["stale_snapshot_rejected_count"] += 1
+                continue
             if not _levels_are_monotonic(selected_range):
                 issues["non_monotonic_sd_count"] += 1
                 continue
@@ -110,20 +144,52 @@ def select_planning_cycles(
             if not eligible_bars:
                 issues["cycles_without_bars_count"] += 1
                 continue
-            selected_bar = eligible_bars[-1]
-            alignment_seconds = (
-                planning_at - selected_bar.timestamp.astimezone(zone)
+            planning_bar = eligible_bars[-1]
+            xau_age_seconds = (
+                planning_at - planning_bar.timestamp.astimezone(zone)
             ).total_seconds()
-            if alignment_seconds > basis_tolerance_seconds:
+            if xau_age_seconds > basis_tolerance_seconds:
                 issues["plans_missing_basis_count"] += 1
+                continue
+            source_bars = [
+                item
+                for item in session_bars
+                if item.timestamp.astimezone(zone)
+                <= selected_range.observed_at.astimezone(zone)
+            ]
+            if not source_bars and mapping_mode == XauMappingMode.SAME_TIME_BASIS:
+                issues["plans_missing_basis_count"] += 1
+                continue
+            source_bar = source_bars[-1] if source_bars else None
+            source_alignment_seconds = (
+                abs(
+                    (
+                        selected_range.observed_at.astimezone(zone)
+                        - source_bar.timestamp.astimezone(zone)
+                    ).total_seconds()
+                )
+                if source_bar is not None
+                else None
+            )
+            if (
+                mapping_mode == XauMappingMode.SAME_TIME_BASIS
+                and source_alignment_seconds is not None
+                and source_alignment_seconds > source_alignment_tolerance_seconds
+            ):
+                issues["source_alignment_rejected_count"] += 1
                 continue
             if selected_range.future_open is None:
                 issues["plans_missing_basis_count"] += 1
                 continue
+            mapping_bar = (
+                source_bar
+                if mapping_mode == XauMappingMode.SAME_TIME_BASIS
+                else planning_bar
+            )
             enriched = selected_range.model_copy(
                 update={
-                    "cfd_open": selected_bar.close,
-                    "diff": selected_range.future_open - selected_bar.close,
+                    "cfd_open": mapping_bar.close,
+                    "diff": selected_range.future_open - mapping_bar.close,
                 }
             )
             selected_strikes = _select_strikes(
@@ -131,6 +197,7 @@ def select_planning_cycles(
                 session_date=current,
                 planning_at=planning_at,
                 zone=zone,
+                series=selected_range.series,
             )
             selections.append(
                 XauPlanningSelection(
@@ -145,8 +212,14 @@ def select_planning_cycles(
                     simulation_window_end=window_end,
                     range_snapshot=enriched,
                     strike_rows=selected_strikes,
-                    selected_xau_price_time=selected_bar.timestamp,
-                    basis_alignment_seconds=alignment_seconds,
+                    selected_xau_price_time=mapping_bar.timestamp,
+                    basis_alignment_seconds=source_alignment_seconds,
+                    mapping_mode=mapping_mode,
+                    source_alignment_seconds=source_alignment_seconds,
+                    xau_price_age_at_planning_seconds=xau_age_seconds,
+                    snapshot_age_at_planning_seconds=snapshot_age_seconds,
+                    series_selection_reason=selection_reason,
+                    candidate_series=candidates,
                 )
             )
         current += timedelta(days=1)
@@ -159,11 +232,13 @@ def _select_strikes(
     session_date: date,
     planning_at: datetime,
     zone: ZoneInfo,
+    series: str | None,
 ) -> list[XauVol2VolStrikeSnapshot]:
     eligible = [
         item
         for item in rows
         if item.session_date == session_date and item.observed_at.astimezone(zone) <= planning_at
+        and (series is None or item.series == series)
     ]
     latest_by_kind: dict[str, datetime] = {}
     for item in eligible:
@@ -185,10 +260,18 @@ def _cycle_window(
     *,
     planning_mode: str,
     day_end_time: time,
+    next_cycle: time | None,
 ) -> tuple[datetime, datetime]:
     start = datetime.combine(session_date, cycle, tzinfo=zone) + timedelta(minutes=1)
     if planning_mode == "fixed_morning":
         end = datetime.combine(session_date, day_end_time, tzinfo=zone)
+    elif planning_mode == "rolling_30m":
+        end = (
+            datetime.combine(session_date, next_cycle, tzinfo=zone)
+            - timedelta(microseconds=1)
+            if next_cycle is not None
+            else datetime.combine(session_date, day_end_time, tzinfo=zone)
+        )
     elif cycle < time(19, 0):
         end = datetime.combine(session_date, time(18, 59, 59, 999999), tzinfo=zone)
     else:
@@ -239,6 +322,14 @@ def planning_plan_metadata(selection: XauPlanningSelection) -> dict:
         "traded_reference_price": snapshot.cfd_open,
         "basis_points": diff,
         "expected_move": snapshot.expected_move,
+        "mapping_mode": selection.mapping_mode,
+        "source_alignment_seconds": selection.source_alignment_seconds,
+        "xau_price_age_at_planning_seconds": (
+            selection.xau_price_age_at_planning_seconds
+        ),
+        "snapshot_age_at_planning_seconds": selection.snapshot_age_at_planning_seconds,
+        "series_selection_reason": selection.series_selection_reason,
+        "candidate_series": selection.candidate_series,
         "mapped_lower_1sd": _mapped(snapshot.future_buy_1sd, diff),
         "mapped_lower_2sd": _mapped(snapshot.future_buy_2sd, diff),
         "mapped_lower_3sd": _mapped(snapshot.future_buy_3sd, diff),
@@ -266,3 +357,70 @@ def _levels_are_monotonic(snapshot: XauVol2VolRangeDeskSnapshot) -> bool:
 
 def _mapped(value: float | None, diff: float) -> float | None:
     return value - diff if value is not None else None
+
+
+def _select_series_snapshot(
+    snapshots: list[XauVol2VolRangeDeskSnapshot],
+    *,
+    required_horizon_days: float,
+    planning_at: datetime,
+) -> tuple[XauVol2VolRangeDeskSnapshot | None, list[dict], str | None]:
+    latest_by_series: dict[str, XauVol2VolRangeDeskSnapshot] = {}
+    for snapshot in snapshots:
+        key = snapshot.series or "unlabeled"
+        current = latest_by_series.get(key)
+        if current is None or snapshot.observed_at > current.observed_at:
+            latest_by_series[key] = snapshot
+    effective_dte = {
+        key: (
+            snapshot.dte
+            - max(
+                (
+                    planning_at
+                    - snapshot.observed_at.astimezone(planning_at.tzinfo)
+                ).total_seconds()
+                / 86_400,
+                0,
+            )
+            if snapshot.dte is not None
+            else None
+        )
+        for key, snapshot in latest_by_series.items()
+    }
+    candidates = []
+    for key, snapshot in latest_by_series.items():
+        remaining_dte = effective_dte[key]
+        candidates.append(
+            {
+                "series": snapshot.series,
+                "snapshot_dte": snapshot.dte,
+                "effective_dte_at_planning": remaining_dte,
+                "observed_at": snapshot.observed_at.isoformat(),
+                "covers_monitoring_window": bool(
+                    remaining_dte is not None
+                    and remaining_dte > 0
+                    and remaining_dte >= required_horizon_days
+                ),
+            }
+        )
+    covering = [
+        snapshot
+        for key, snapshot in latest_by_series.items()
+        if effective_dte[key] is not None
+        and effective_dte[key] > 0
+        and effective_dte[key] >= required_horizon_days
+    ]
+    if not covering:
+        return None, sorted(candidates, key=lambda item: str(item["series"])), None
+    selected = min(
+        covering,
+        key=lambda item: (
+            effective_dte[item.series or "unlabeled"] or float("inf"),
+            -item.observed_at.timestamp(),
+        ),
+    )
+    return (
+        selected,
+        sorted(candidates, key=lambda item: str(item["series"])),
+        "nearest_positive_dte_covering_monitoring_window",
+    )
