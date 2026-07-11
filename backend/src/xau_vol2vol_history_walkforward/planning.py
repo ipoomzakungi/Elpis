@@ -15,6 +15,7 @@ from src.models.xau_vol2vol_history_walkforward import (
 @dataclass(frozen=True)
 class XauPlanningSelection:
     session_date: date
+    source_session_date: date
     cycle_label: str
     planning_at: datetime
     simulation_window_start: datetime
@@ -48,6 +49,8 @@ def select_planning_cycles(
     mapping_mode: XauMappingMode = XauMappingMode.DISTANCE_REANCHORED,
     source_alignment_tolerance_seconds: int = 300,
     snapshot_freshness_tolerance_seconds: int = 1800,
+    bar_interval_minutes: int = 1,
+    join_by_observed_trading_date: bool = False,
 ) -> tuple[list[XauPlanningSelection], dict[str, int]]:
     zone = ZoneInfo(timezone)
     selections: list[XauPlanningSelection] = []
@@ -64,8 +67,20 @@ def select_planning_cycles(
         "stale_snapshot_rejected_count": 0,
     }
     current = session_date_from
+    trading_date_by_source_session = _trading_date_by_source_session(
+        range_snapshots,
+        zone,
+    )
     while current <= session_date_to:
-        session_ranges = [item for item in range_snapshots if item.session_date == current]
+        session_ranges = [
+            item
+            for item in range_snapshots
+            if (
+                trading_date_by_source_session.get(item.session_date) == current
+                if join_by_observed_trading_date
+                else item.session_date == current
+            )
+        ]
         session_bars = [
             item for item in bars if item.timestamp.astimezone(zone).date() == current
         ]
@@ -96,6 +111,7 @@ def select_planning_cycles(
                 window_start=window_start,
                 window_end=window_end,
                 zone=zone,
+                bar_interval_minutes=bar_interval_minutes,
             ):
                 issues["incomplete_candle_window_count"] += 1
                 continue
@@ -194,7 +210,7 @@ def select_planning_cycles(
             )
             selected_strikes = _select_strikes(
                 strike_rows,
-                session_date=current,
+                session_date=selected_range.session_date,
                 planning_at=planning_at,
                 zone=zone,
                 series=selected_range.series,
@@ -202,6 +218,7 @@ def select_planning_cycles(
             selections.append(
                 XauPlanningSelection(
                     session_date=current,
+                    source_session_date=selected_range.session_date,
                     cycle_label=(
                         f"fixed_morning_{cycle.strftime('%H%M')}"
                         if planning_mode == "fixed_morning"
@@ -285,13 +302,23 @@ def _window_is_complete(
     window_start: datetime,
     window_end: datetime,
     zone: ZoneInfo,
+    bar_interval_minutes: int,
 ) -> bool:
-    expected = int((window_end - window_start).total_seconds() // 60) + 1
+    interval_seconds = max(bar_interval_minutes, 1) * 60
+    expected = max(int((window_end - window_start).total_seconds() // interval_seconds), 1)
     observed = {
         bar.timestamp.astimezone(zone).replace(second=0, microsecond=0)
         for bar in bars
     }
-    return len(observed) >= expected
+    if not observed:
+        return False
+    first = min(observed)
+    last = max(observed)
+    return (
+        len(observed) >= max(expected - 1, 1)
+        and first <= window_start + timedelta(seconds=interval_seconds)
+        and last >= window_end - timedelta(seconds=interval_seconds)
+    )
 
 
 def _has_numeric_sd(
@@ -424,3 +451,19 @@ def _select_series_snapshot(
         sorted(candidates, key=lambda item: str(item["series"])),
         "nearest_positive_dte_covering_monitoring_window",
     )
+
+
+def _trading_date_by_source_session(
+    snapshots: list[XauVol2VolRangeDeskSnapshot],
+    zone: ZoneInfo,
+) -> dict[date, date]:
+    first_observation: dict[date, datetime] = {}
+    for snapshot in snapshots:
+        observed = snapshot.observed_at.astimezone(zone)
+        current = first_observation.get(snapshot.session_date)
+        if current is None or observed < current:
+            first_observation[snapshot.session_date] = observed
+    return {
+        source_session: observed.date()
+        for source_session, observed in first_observation.items()
+    }

@@ -9,7 +9,11 @@ from src.models.xau_vol2vol_history_walkforward import (
     XauVol2VolStrikeSnapshot,
 )
 from src.xau_vol2vol_history_walkforward.planning import select_planning_cycles
-from src.xau_vol2vol_history_walkforward.sd_zone_audit import build_sd_zone_audit
+from src.xau_vol2vol_history_walkforward.sd_zone_audit import (
+    build_preregistered_exit_backtest,
+    build_sd_zone_audit,
+    build_session_coverage_rows,
+)
 
 
 def test_source_alignment_compares_snapshot_with_xau_source_bar() -> None:
@@ -176,6 +180,117 @@ def test_stale_rolling_snapshot_is_rejected() -> None:
 
     assert selections == []
     assert issues["stale_snapshot_rejected_count"] == 1
+
+
+def test_observed_timestamp_maps_source_session_to_bangkok_trading_date() -> None:
+    snapshot = _snapshot("07:00:00", series="near", dte=0.8).model_copy(
+        update={
+            "session_date": date(2026, 5, 31),
+            "observed_at": datetime.fromisoformat("2026-06-01T06:55:00+07:00"),
+        }
+    )
+    bars = [
+        XauPriceBar(
+            timestamp=datetime.fromisoformat("2026-06-01T07:00:00+07:00"),
+            open=105,
+            high=106,
+            low=104,
+            close=105,
+            volume=1,
+        ),
+        XauPriceBar(
+            timestamp=datetime.fromisoformat("2026-06-01T08:00:00+07:00"),
+            open=110,
+            high=111,
+            low=109,
+            close=110,
+            volume=1,
+        ),
+    ]
+    selections, _ = select_planning_cycles(
+        range_snapshots=[snapshot],
+        strike_rows=[],
+        bars=bars,
+        session_date_from=date(2026, 6, 1),
+        session_date_to=date(2026, 6, 1),
+        planning_times=(time(7, 0),),
+        timezone="Asia/Bangkok",
+        planning_mode="fixed_morning",
+        day_end_time=time(8, 0),
+        join_by_observed_trading_date=True,
+    )
+
+    assert selections[0].session_date == date(2026, 6, 1)
+    assert selections[0].source_session_date == date(2026, 5, 31)
+
+
+def test_coverage_reports_each_source_session_once() -> None:
+    snapshot = _snapshot("06:55:00", series="near", dte=0.8)
+    bars = [_bar("07:00:00", 105), _bar("08:00:00", 110)]
+    result_sets = [
+        {
+            "planning_mode": "fixed_morning",
+            "diagnostics": [{"source_session_date": "2026-07-07"}],
+        },
+        {
+            "planning_mode": "rolling_30m",
+            "diagnostics": [{"source_session_date": "2026-07-07"}],
+        },
+    ]
+
+    rows, _ = build_session_coverage_rows(
+        [snapshot, snapshot.model_copy()],
+        bars,
+        result_sets,
+        timezone="Asia/Bangkok",
+        bar_interval_minutes=60,
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["source_session_date"] == "2026-07-07"
+    assert rows[0]["fixed_morning_testable"] is True
+
+
+def test_preregistered_exit_uses_conservative_stop_first() -> None:
+    selections, _ = _select(
+        mapping_mode=XauMappingMode.DISTANCE_REANCHORED,
+        snapshots=[_snapshot("06:55:00", series="near", dte=0.8)],
+        bars=[_bar("06:54:00", 100), _bar("07:00:00", 105), _bar("08:00:00", 118)],
+    )
+    touch_bar = XauPriceBar(
+        timestamp=_time("08:00:00"),
+        open=118,
+        high=126,
+        low=110,
+        close=118,
+        volume=1,
+    )
+    diagnostics, opportunities, summary = build_sd_zone_audit(
+        selections,
+        [touch_bar],
+        planning_mode="fixed_morning",
+    )
+    result_sets = [
+        {
+            "planning_mode": "fixed_morning",
+            "mapping_mode": "distance_reanchored",
+            "diagnostics": diagnostics,
+            "opportunities": opportunities,
+            "summary": summary,
+        }
+    ]
+
+    backtest = build_preregistered_exit_backtest(result_sets, [touch_bar])
+    experiment = backtest["experiments"][0]
+    strategy_a = [
+        item
+        for item in experiment["outcomes"]
+        if item["strategy_id"] == "A" and item["cost_points"] == 0
+    ]
+
+    assert strategy_a[0]["status"] == "stop_hit"
+    assert experiment["unique_market_opportunity_count"] == 2
+    assert backtest["signal_allowed"] is False
 
 
 def _select(

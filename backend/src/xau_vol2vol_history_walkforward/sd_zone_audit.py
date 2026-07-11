@@ -4,6 +4,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from statistics import mean
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from src.models.xau_market_context import XauPriceBar
 from src.xau_vol2vol_history_walkforward.planning import XauPlanningSelection
@@ -13,6 +14,13 @@ ENTRY_DEFINITIONS = {
     "zone_2_mid": 1.5,
     "literal_2sd": 2.0,
     "literal_3sd": 3.0,
+}
+
+EXIT_STRATEGIES = {
+    "A": {"entry_definition": "zone_2_entry", "target_sd": 0.25, "stop_sd": 2.0},
+    "B": {"entry_definition": "zone_2_entry", "target_sd": 0.5, "stop_sd": 2.0},
+    "C": {"entry_definition": "zone_2_mid", "target_sd": 0.25, "stop_sd": 2.5},
+    "D": {"entry_definition": "zone_2_mid", "target_sd": 0.5, "stop_sd": 2.5},
 }
 
 
@@ -84,6 +92,169 @@ def compare_mapping_modes(
     }
 
 
+def build_session_coverage_rows(
+    range_snapshots,
+    bars: list[XauPriceBar],
+    result_sets: list[dict[str, Any]],
+    *,
+    timezone: str,
+    bar_interval_minutes: int,
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    zone = ZoneInfo(timezone)
+    fixed_sources = {
+        item["source_session_date"]
+        for result in result_sets
+        if result["planning_mode"] == "fixed_morning"
+        for item in result["diagnostics"]
+    }
+    rolling_sources = {
+        item["source_session_date"]
+        for result in result_sets
+        if result["planning_mode"] == "rolling_30m"
+        for item in result["diagnostics"]
+    }
+    by_source = defaultdict(list)
+    for snapshot in range_snapshots:
+        by_source[snapshot.session_date].append(snapshot)
+    rows = []
+    exclusions: dict[str, int] = defaultdict(int)
+    for source_date, snapshots in sorted(by_source.items()):
+        observed = sorted(item.observed_at.astimezone(zone) for item in snapshots)
+        trading_date = observed[0].date()
+        date_bars = sorted(
+            [bar for bar in bars if bar.timestamp.astimezone(zone).date() == trading_date],
+            key=lambda item: item.timestamp,
+        )
+        planning_at = datetime.combine(
+            trading_date,
+            datetime.min.time().replace(hour=7),
+            tzinfo=zone,
+        )
+        pre_morning = [item for item in observed if item <= planning_at]
+        pre_morning_snapshots = [
+            item
+            for item in snapshots
+            if item.observed_at.astimezone(zone) <= planning_at
+        ]
+        complete_pre_morning = [
+            item for item in pre_morning_snapshots if _has_complete_sd_snapshot(item)
+        ]
+        complete_anytime = [item for item in snapshots if _has_complete_sd_snapshot(item)]
+        full_day = _has_complete_day_window(
+            date_bars,
+            planning_at=planning_at,
+            interval_minutes=bar_interval_minutes,
+        )
+        source_text = source_date.isoformat()
+        reasons = []
+        if not date_bars:
+            reasons.append("no_xau_bars_on_bangkok_trading_date")
+        elif not full_day:
+            reasons.append("incomplete_xau_0700_to_2359_window")
+        if not pre_morning:
+            reasons.append("no_pre_0700_vol2vol_snapshot")
+        elif not complete_pre_morning:
+            reasons.append("no_complete_sd_ladder_before_0700")
+        if source_text not in fixed_sources:
+            if date_bars and full_day and complete_pre_morning:
+                reasons.append("fixed_morning_planning_integrity_gate_failed")
+        if source_text not in rolling_sources:
+            if date_bars and complete_anytime:
+                reasons.append("rolling_30m_planning_integrity_gate_failed")
+        for reason in set(reasons):
+            exclusions[reason] += 1
+        rows.append(
+            {
+                "source_session_date": source_text,
+                "first_vol2vol_observed_at": observed[0].isoformat(),
+                "last_vol2vol_observed_at": observed[-1].isoformat(),
+                "bangkok_trading_date": trading_date.isoformat(),
+                "xau_bar_start": (
+                    date_bars[0].timestamp.astimezone(zone).isoformat()
+                    if date_bars
+                    else None
+                ),
+                "xau_bar_end": (
+                    date_bars[-1].timestamp.astimezone(zone).isoformat()
+                    if date_bars
+                    else None
+                ),
+                "xau_bar_count": len(date_bars),
+                "pre_0700_snapshot_available": bool(pre_morning),
+                "complete_full_day_candle_window": full_day,
+                "fixed_morning_testable": source_text in fixed_sources,
+                "rolling_30m_testable": source_text in rolling_sources,
+                "exclusion_reasons": reasons,
+                "research_only": True,
+                "signal_allowed": False,
+            }
+        )
+    return rows, dict(sorted(exclusions.items()))
+
+
+def build_preregistered_exit_backtest(
+    result_sets: list[dict[str, Any]],
+    bars: list[XauPriceBar],
+    *,
+    costs: tuple[float, ...] = (0.0, 0.3, 0.5, 1.0),
+) -> dict[str, Any]:
+    experiments = []
+    for result in result_sets:
+        diagnostics = {
+            (item["session_date"], item["planning_at"]): item
+            for item in result["diagnostics"]
+        }
+        touched = [
+            item
+            for item in result["opportunities"]
+            if item["touched"]
+            and item["entry_definition"] in {"zone_2_entry", "zone_2_mid"}
+        ]
+        opportunities = _first_filled_opportunities(touched)
+        outcomes = []
+        for opportunity in opportunities:
+            diagnostic = diagnostics[
+                (opportunity["session_date"], opportunity["planning_at"])
+            ]
+            for strategy_id, strategy in EXIT_STRATEGIES.items():
+                if strategy["entry_definition"] != opportunity["entry_definition"]:
+                    continue
+                for cost in costs:
+                    outcomes.append(
+                        _simulate_exit_strategy(
+                            opportunity,
+                            diagnostic,
+                            bars,
+                            strategy_id=strategy_id,
+                            target_sd=float(strategy["target_sd"]),
+                            stop_sd=float(strategy["stop_sd"]),
+                            cost_points=cost,
+                        )
+                    )
+        experiments.append(
+            {
+                "planning_mode": result["planning_mode"],
+                "mapping_mode": result["mapping_mode"],
+                "unique_market_opportunity_count": len(opportunities),
+                "configuration_outcome_count": len(outcomes) // max(len(costs), 1),
+                "cost_scenario_row_count": len(outcomes),
+                "outcomes": outcomes,
+                "summary_by_strategy_and_cost": _exit_summary(outcomes),
+                "same_bar_policy": "conservative_stop_first",
+                "rolling_pending_order_policy": "cancel_replace_unfilled_keep_filled",
+                "research_only": True,
+                "signal_allowed": False,
+            }
+        )
+    return {
+        "strategies": EXIT_STRATEGIES,
+        "cost_points": list(costs),
+        "experiments": experiments,
+        "research_only": True,
+        "signal_allowed": False,
+    }
+
+
 def _diagnostic(
     selection: XauPlanningSelection,
     bars: list[XauPriceBar],
@@ -96,6 +267,7 @@ def _diagnostic(
     nearest_2sd = min(abs(high - levels["upper_2sd"]), abs(low - levels["lower_2sd"]))
     return {
         "session_date": selection.session_date.isoformat(),
+        "source_session_date": selection.source_session_date.isoformat(),
         "planning_mode": planning_mode,
         "planning_at": selection.planning_at.isoformat(),
         "simulation_window_start": selection.simulation_window_start.isoformat(),
@@ -341,3 +513,168 @@ def _percentile(values: list[float], fraction: float) -> float | None:
 def _average(values: list[float | None]) -> float | None:
     present = [float(value) for value in values if value is not None]
     return mean(present) if present else None
+
+
+def _first_filled_opportunities(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    first: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for item in sorted(items, key=lambda value: value["first_touch_time"]):
+        key = (item["session_date"], item["side"], item["entry_definition"])
+        first.setdefault(key, item)
+    return list(first.values())
+
+
+def _simulate_exit_strategy(
+    opportunity: dict[str, Any],
+    diagnostic: dict[str, Any],
+    bars: list[XauPriceBar],
+    *,
+    strategy_id: str,
+    target_sd: float,
+    stop_sd: float,
+    cost_points: float,
+) -> dict[str, Any]:
+    touched_at = datetime.fromisoformat(opportunity["first_touch_time"])
+    session_date = datetime.fromisoformat(opportunity["planning_at"]).date()
+    side = opportunity["side"]
+    entry = float(opportunity["entry_level"])
+    center = float(diagnostic["xau_reference"])
+    one_sd = (
+        center - float(diagnostic["lower_1sd"])
+        if side == "long_reversion"
+        else float(diagnostic["upper_1sd"]) - center
+    )
+    target = (
+        entry + target_sd * one_sd
+        if side == "long_reversion"
+        else entry - target_sd * one_sd
+    )
+    stop_suffix = "2sd" if stop_sd == 2.0 else "2_5sd"
+    stop_key = (
+        f"lower_{stop_suffix}"
+        if side == "long_reversion"
+        else f"upper_{stop_suffix}"
+    )
+    stop = float(diagnostic[stop_key])
+    window = [
+        bar
+        for bar in bars
+        if bar.timestamp.astimezone(touched_at.tzinfo).date() == session_date
+        and bar.timestamp >= touched_at
+    ]
+    status = "unavailable"
+    exit_price = None
+    exited_at = None
+    mfe = None
+    mae = None
+    for bar in window:
+        favorable, adverse = _excursions([bar], entry, side)
+        mfe = favorable if mfe is None else max(mfe, favorable)
+        mae = adverse if mae is None else min(mae, adverse)
+        target_hit = bar.high >= target if side == "long_reversion" else bar.low <= target
+        stop_hit = bar.low <= stop if side == "long_reversion" else bar.high >= stop
+        if stop_hit:
+            status = "stop_hit"
+            exit_price = stop
+            exited_at = bar.timestamp
+            break
+        if target_hit:
+            status = "target_hit"
+            exit_price = target
+            exited_at = bar.timestamp
+            break
+    if status == "unavailable" and window:
+        exit_price = window[-1].close
+        exited_at = window[-1].timestamp
+        gross_at_end = _gross(entry, exit_price, side)
+        status = "time_exit_profit" if gross_at_end >= 0 else "time_exit_loss"
+    gross = _gross(entry, exit_price, side) if exit_price is not None else None
+    return {
+        "opportunity_id": opportunity["opportunity_id"],
+        "session_date": opportunity["session_date"],
+        "planning_at": opportunity["planning_at"],
+        "planning_mode": opportunity["planning_mode"],
+        "mapping_mode": opportunity["mapping_mode"],
+        "selected_series": opportunity["selected_series"],
+        "strategy_id": strategy_id,
+        "entry_definition": opportunity["entry_definition"],
+        "side": side,
+        "entry_level": entry,
+        "target_level": target,
+        "stop_level": stop,
+        "triggered_at": opportunity["first_touch_time"],
+        "exited_at": exited_at.isoformat() if exited_at else None,
+        "status": status,
+        "gross_points": gross,
+        "cost_points": cost_points,
+        "net_points": gross - cost_points if gross is not None else None,
+        "mfe_points": mfe,
+        "mae_points": mae,
+        "research_only": True,
+        "signal_allowed": False,
+    }
+
+
+def _exit_summary(outcomes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    groups: dict[tuple[str, float], list[dict[str, Any]]] = defaultdict(list)
+    for outcome in outcomes:
+        groups[(outcome["strategy_id"], outcome["cost_points"])].append(outcome)
+    return [
+        {
+            "strategy_id": key[0],
+            "cost_points": key[1],
+            "configuration_fill_count": len(items),
+            "unique_market_opportunity_count": len(
+                {item["opportunity_id"] for item in items}
+            ),
+            "target_hit_count": sum(item["status"] == "target_hit" for item in items),
+            "stop_hit_count": sum(item["status"] == "stop_hit" for item in items),
+            "time_exit_count": sum(item["status"].startswith("time_exit") for item in items),
+            "net_expectancy_points": _average([item["net_points"] for item in items]),
+            "average_mfe_points": _average([item["mfe_points"] for item in items]),
+            "average_mae_points": _average([item["mae_points"] for item in items]),
+            "research_only": True,
+            "signal_allowed": False,
+        }
+        for key, items in sorted(groups.items())
+    ]
+
+
+def _gross(entry: float, exit_price: float, side: str) -> float:
+    return exit_price - entry if side == "long_reversion" else entry - exit_price
+
+
+def _has_complete_day_window(
+    bars: list[XauPriceBar],
+    *,
+    planning_at: datetime,
+    interval_minutes: int,
+) -> bool:
+    if not bars:
+        return False
+    end = planning_at.replace(hour=23, minute=59, second=59)
+    interval = timedelta(minutes=max(interval_minutes, 1))
+    window = [
+        bar.timestamp.astimezone(planning_at.tzinfo)
+        for bar in bars
+        if planning_at < bar.timestamp.astimezone(planning_at.tzinfo) <= end
+    ]
+    expected = max(int((end - planning_at).total_seconds() // interval.total_seconds()), 1)
+    return (
+        len(window) >= max(expected - 1, 1)
+        and min(window) <= planning_at + interval
+        and max(window) >= end - interval
+    )
+
+
+def _has_complete_sd_snapshot(snapshot) -> bool:
+    return snapshot.future_open is not None and all(
+        value is not None
+        for value in (
+            snapshot.future_buy_1sd,
+            snapshot.future_buy_2sd,
+            snapshot.future_buy_3sd,
+            snapshot.future_sell_1sd,
+            snapshot.future_sell_2sd,
+            snapshot.future_sell_3sd,
+        )
+    )

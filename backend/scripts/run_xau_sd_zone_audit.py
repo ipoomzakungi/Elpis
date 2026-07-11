@@ -11,7 +11,9 @@ from src.xau_vol2vol_history_walkforward.data_lake import load_vol2vol_data_lake
 from src.xau_vol2vol_history_walkforward.history_normalizer import normalize_payload
 from src.xau_vol2vol_history_walkforward.planning import select_planning_cycles
 from src.xau_vol2vol_history_walkforward.sd_zone_audit import (
+    build_preregistered_exit_backtest,
     build_sd_zone_audit,
+    build_session_coverage_rows,
     compare_mapping_modes,
 )
 from src.xau_vol2vol_history_walkforward.walkforward_simulator import (
@@ -35,6 +37,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--day-end-time", default="23:59:59")
     parser.add_argument("--source-alignment-tolerance-seconds", type=int, default=300)
     parser.add_argument("--snapshot-freshness-tolerance-seconds", type=int, default=1800)
+    parser.add_argument("--bar-interval-minutes", type=int, default=1)
+    parser.add_argument("--price-source-label", default="dukascopy_xauusd_spot_bid")
     parser.add_argument("--output-root", default="data/reports/xau_sd_zone_audit")
     parser.add_argument("--overwrite", action="store_true")
     return parser
@@ -88,6 +92,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 snapshot_freshness_tolerance_seconds=(
                     args.snapshot_freshness_tolerance_seconds
                 ),
+                bar_interval_minutes=args.bar_interval_minutes,
+                join_by_observed_trading_date=True,
             )
             diagnostics, opportunities, summary = build_sd_zone_audit(
                 selections,
@@ -107,6 +113,17 @@ def main(argv: Sequence[str] | None = None) -> int:
                 }
             )
     comparison = compare_mapping_modes(result_sets)
+    exit_backtest = build_preregistered_exit_backtest(
+        result_sets,
+        price_result.bars,
+    )
+    coverage_rows, exclusion_counts = build_session_coverage_rows(
+        ranges,
+        price_result.bars,
+        result_sets,
+        timezone=args.timezone,
+        bar_interval_minutes=args.bar_interval_minutes,
+    )
     run_id = f"xau_sd_zone_audit_{datetime.now(UTC):%Y%m%dT%H%M%S%f}"
     report_dir = Path(args.output_root) / run_id
     if report_dir.exists() and not args.overwrite:
@@ -118,8 +135,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         "date_to": date_to.isoformat(),
         "vol2vol_valid_session_count": len({item.session_date for item in ranges}),
         "xau_candle_row_count": len(price_result.bars),
+        "price_source_label": args.price_source_label,
+        "bar_interval_minutes": args.bar_interval_minutes,
+        "session_coverage": coverage_rows,
+        "unique_excluded_sessions_by_reason": exclusion_counts,
         "result_sets": result_sets,
         "comparison": comparison,
+        "preregistered_exit_backtest": exit_backtest,
         "warnings": load_result.warnings + price_result.warnings,
         "true_basis_validation": "unavailable",
         "research_only": True,
@@ -139,6 +161,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     }
     _write_json(report_dir / "source_alignment_audit.json", alignment_payload)
     _write_json(report_dir / "sd_semantics_comparison.json", semantics_payload)
+    _write_json(report_dir / "preregistered_exit_backtest.json", exit_backtest)
     markdown = _markdown(alignment_payload, semantics_payload, report_dir)
     (report_dir / "source_alignment_audit.md").write_text(markdown, encoding="utf-8")
     (report_dir / "sd_semantics_comparison.md").write_text(markdown, encoding="utf-8")
@@ -189,6 +212,8 @@ def _markdown(alignment: dict, semantics: dict, report_dir: Path) -> str:
         "",
         f"- Vol2Vol sessions loaded: `{alignment['vol2vol_valid_session_count']}`",
         f"- XAU candle rows: `{alignment['xau_candle_row_count']}`",
+        f"- Price source: `{alignment['price_source_label']}`",
+        f"- Session coverage rows: `{len(alignment['session_coverage'])}`",
         f"- True GC/MGC basis validation: `{alignment['true_basis_validation']}`",
         "",
         "## Definitions",
@@ -214,6 +239,26 @@ def _markdown(alignment: dict, semantics: dict, report_dir: Path) -> str:
                 f"sessions=`{stats['unique_touched_sessions']}` "
                 f"return_0.5SD=`{stats['return_0_5sd_count']}`"
             )
+    lines.extend(["", "## Preregistered Exit Backtest"])
+    for experiment in alignment["preregistered_exit_backtest"]["experiments"]:
+        lines.append(
+            f"- `{experiment['planning_mode']} / {experiment['mapping_mode']}` "
+            f"opportunities=`{experiment['unique_market_opportunity_count']}` "
+            f"configurations=`{experiment['configuration_outcome_count']}`"
+        )
+        for summary in experiment["summary_by_strategy_and_cost"]:
+            if summary["cost_points"] != 1.0:
+                continue
+            lines.append(
+                f"  - Strategy `{summary['strategy_id']}` cost=1.0 "
+                f"fills=`{summary['configuration_fill_count']}` "
+                f"targets=`{summary['target_hit_count']}` "
+                f"stops=`{summary['stop_hit_count']}` "
+                f"net_expectancy=`{summary['net_expectancy_points']}`"
+            )
+    lines.extend(["", "## Coverage Exclusions"])
+    for reason, count in alignment["unique_excluded_sessions_by_reason"].items():
+        lines.append(f"- `{reason}`: `{count}` sessions")
     lines.extend(
         [
             "",
@@ -222,11 +267,12 @@ def _markdown(alignment: dict, semantics: dict, report_dir: Path) -> str:
             f"`{alignment['comparison']['touch_classification_change_count']}`",
             "- Rolling orders are cancel-and-replace because each plan window ends "
             "immediately before the next 30-minute checkpoint.",
-            "- Cost-adjusted expectancy is unavailable until an exit rule is preregistered.",
+            "- Cost-adjusted expectancy uses the preregistered A-D exit rules above.",
             "",
             "## Artifacts",
             f"- `{(report_dir.resolve() / 'source_alignment_audit.json').as_posix()}`",
             f"- `{(report_dir.resolve() / 'sd_semantics_comparison.json').as_posix()}`",
+            f"- `{(report_dir.resolve() / 'preregistered_exit_backtest.json').as_posix()}`",
             "",
             "signal_allowed=false",
             "research_only=true",
