@@ -539,6 +539,58 @@ class AppendOnlyJournal:
             for row in self._read(self.root / f"{stream}.jsonl")
         )
 
+    def latest_record_id(self, stream: str, logical_record_key: str) -> str | None:
+        matching = [
+            row
+            for row in self._read(self.root / f"{stream}.jsonl")
+            if row.get("logical_record_key", row.get("record_id"))
+            == logical_record_key
+        ]
+        return matching[-1].get("record_id") if matching else None
+
+    def latest_successful_prepare(
+        self,
+        *,
+        session_date: str,
+        planning_mode: str,
+    ) -> dict[str, Any] | None:
+        matching = [
+            row
+            for row in self._read(self.root / "daily_summary.jsonl")
+            if row.get("session_date") == session_date
+            and row.get("planning_mode") == planning_mode
+            and row.get("stage") == "prepare"
+            and row.get("operational_state") == "PLAN_READY"
+            and row.get("observation_mode") != "dry_run"
+            and not row.get("dry_run", False)
+            and row.get("workflow_attempt_id")
+        ]
+        return matching[-1] if matching else None
+
+    def latest_successful_workflow_rows(
+        self,
+        stream: str,
+        *,
+        session_date: str,
+        planning_mode: str,
+    ) -> list[dict[str, Any]]:
+        prepare = self.latest_successful_prepare(
+            session_date=session_date,
+            planning_mode=planning_mode,
+        )
+        if prepare is None:
+            return []
+        attempt_id = prepare["workflow_attempt_id"]
+        return [
+            row
+            for row in self._read(self.root / f"{stream}.jsonl")
+            if row.get("workflow_attempt_id") == attempt_id
+            and row.get("session_date") == session_date
+            and row.get("planning_mode") == planning_mode
+            and row.get("observation_mode") != "dry_run"
+            and not row.get("dry_run", False)
+        ]
+
     @staticmethod
     def _read(path: Path) -> list[dict[str, Any]]:
         if not path.exists():

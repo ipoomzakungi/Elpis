@@ -18,6 +18,10 @@ def daily_raw_path(root: Path, session_date: date) -> Path:
     return root / "daily" / session_date.isoformat() / "raw.json"
 
 
+def daily_metadata_path(root: Path, session_date: date) -> Path:
+    return root / "daily" / session_date.isoformat() / "collection_meta.json"
+
+
 def monthly_raw_path(root: Path, target_month: str) -> Path:
     return root / "monthly" / target_month / "raw.json"
 
@@ -36,7 +40,11 @@ def load_vol2vol_data_lake(
     while current <= session_date_to:
         path = daily_raw_path(root, current)
         if path.exists():
-            _append_payload(path, payloads, source_paths, warnings)
+            metadata_path = daily_metadata_path(root, current)
+            if _is_incomplete(metadata_path):
+                warnings.append(f"Incomplete Vol2Vol daily data-lake file excluded: {path}")
+            else:
+                _append_payload(path, payloads, source_paths, warnings)
         else:
             warnings.append(f"Missing Vol2Vol daily data-lake file: {path}")
         current += timedelta(days=1)
@@ -51,6 +59,16 @@ def load_vol2vol_data_lake(
         source_paths=source_paths,
         warnings=warnings,
     )
+
+
+def _is_incomplete(path: Path) -> bool:
+    if not path.exists():
+        return False
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return True
+    return payload.get("complete") is False
 
 
 def _append_payload(

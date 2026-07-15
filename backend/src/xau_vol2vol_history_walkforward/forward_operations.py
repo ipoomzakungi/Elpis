@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
 from datetime import date, datetime
 from enum import StrEnum
@@ -10,6 +12,20 @@ from src.models.xau_vol2vol_history_walkforward import (
     XauVol2VolRangeDeskSnapshot,
     XauVol2VolStrikeSnapshot,
 )
+
+FORWARD_ENGINE_ERRATUM = "031M-forward-journal-execution-audit-fix"
+FORWARD_ENGINE_REVISION = hashlib.sha256(
+    json.dumps(
+        {
+            "erratum": FORWARD_ENGINE_ERRATUM,
+            "same_entry_bar_exit": "ambiguous_without_intrabar_sequence",
+            "f0_entry_rule": "touch_entry",
+            "f2_entry_rule": "confirmed_next_bar",
+            "price_age_reference": "basis_source_bar",
+        },
+        sort_keys=True,
+    ).encode("utf-8")
+).hexdigest()
 
 
 class ForwardOperationalState(StrEnum):
@@ -84,8 +100,6 @@ def evaluate_forward_readiness(
         )
     selected = min(covering, key=lambda row: (float(row.dte), row.series or ""))
     snapshot_age = (planning_at - selected.observed_at).total_seconds()
-    planning_bar = max(eligible_bars, key=lambda bar: bar.timestamp)
-    price_age = (planning_at - planning_bar.timestamp).total_seconds()
     source_bars = [bar for bar in bars if bar.timestamp <= selected.observed_at]
     if not source_bars:
         return ForwardReadinessResult(
@@ -94,10 +108,11 @@ def evaluate_forward_readiness(
         )
     source_bar = max(source_bars, key=lambda bar: bar.timestamp)
     source_gap = abs((selected.observed_at - source_bar.timestamp).total_seconds())
+    xau_price_age = (planning_at - source_bar.timestamp).total_seconds()
     stale = []
     if snapshot_age > snapshot_freshness_limit_seconds:
         stale.append("Vol2Vol snapshot exceeds the protocol freshness limit.")
-    if price_age > source_gap_limit_seconds:
+    if xau_price_age > source_gap_limit_seconds:
         stale.append("Planning XAUUSD price exceeds the freshness limit.")
     if source_gap > source_gap_limit_seconds:
         stale.append("Vol2Vol and XAUUSD source timestamps exceed alignment tolerance.")
@@ -131,8 +146,8 @@ def evaluate_forward_readiness(
             "vol2vol_snapshot_time": selected.observed_at.isoformat(),
             "xau_source_time": source_bar.timestamp.isoformat(),
             "source_alignment_seconds": source_gap,
-            "snapshot_age_seconds": snapshot_age,
-            "price_age_seconds": price_age,
+            "xau_price_age_at_planning_seconds": xau_price_age,
+            "vol2vol_snapshot_age_at_planning_seconds": snapshot_age,
             "levels": levels,
             "plan_oi_snapshot_time": (
                 oi_snapshot[0].observed_at.isoformat() if oi_snapshot else None
@@ -217,6 +232,15 @@ def observe_forward_plan(
                     {
                         "opportunity_id": opportunity_id,
                         **confirmation,
+                        "execution_variant": "F2",
+                        "entry_rule": "confirmed_next_bar",
+                        "actual_entry_timestamp": confirmation[
+                            "next_executable_entry_timestamp"
+                        ],
+                        "actual_entry_price": confirmation[
+                            "next_executable_entry_price"
+                        ],
+                        "outcome_generated": False,
                         "f2_observed": True,
                         "f2_required_for_f0": False,
                     }
@@ -350,6 +374,9 @@ def _final_outcomes(
         else (("C", 0.25, "2_5sd"), ("D", 0.5, "2_5sd"))
     )
     outcomes = []
+    entry_bar = next((bar for bar in bars if bar.timestamp == touched_at), None)
+    if entry_bar is None:
+        return outcomes
     for strategy, target_sd, stop_suffix in strategies:
         target = (
             entry + target_sd * one_sd
@@ -362,6 +389,9 @@ def _final_outcomes(
         exited_at = None
         mfe = None
         mae = None
+        target_touched_same_bar = False
+        stop_touched_same_bar = False
+        ambiguity_reason = None
         for bar in bars:
             if bar.timestamp < touched_at:
                 continue
@@ -371,6 +401,12 @@ def _final_outcomes(
             mae = adverse if mae is None else min(mae, adverse)
             target_hit = bar.high >= target if side == "long_reversion" else bar.low <= target
             stop_hit = bar.low <= stop if side == "long_reversion" else bar.high >= stop
+            if bar.timestamp == touched_at and (target_hit or stop_hit):
+                target_touched_same_bar = target_hit
+                stop_touched_same_bar = stop_hit
+                status = "same_bar_ambiguous"
+                ambiguity_reason = _same_bar_ambiguity_reason(target_hit, stop_hit)
+                break
             if stop_hit or target_hit:
                 status = "stop_hit" if stop_hit else "target_hit"
                 exit_price = stop if stop_hit else target
@@ -395,7 +431,20 @@ def _final_outcomes(
                 "strategy_id": strategy,
                 "side": side,
                 "status": status,
+                "execution_variant": "F0",
+                "entry_rule": "touch_entry",
                 "entry_price": entry,
+                "actual_entry_price": entry,
+                "actual_entry_timestamp": touched_at.isoformat(),
+                "entry_bar_timestamp": entry_bar.timestamp.isoformat(),
+                "entry_bar_open": entry_bar.open,
+                "entry_bar_high": entry_bar.high,
+                "entry_bar_low": entry_bar.low,
+                "entry_bar_close": entry_bar.close,
+                "target_touched_same_bar": target_touched_same_bar,
+                "stop_touched_same_bar": stop_touched_same_bar,
+                "intrabar_sequence_available": False,
+                "ambiguity_reason": ambiguity_reason,
                 "exit_price": exit_price,
                 "exited_at": exited_at.isoformat() if exited_at else None,
                 "gross_points": gross,
@@ -406,3 +455,11 @@ def _final_outcomes(
             }
         )
     return outcomes
+
+
+def _same_bar_ambiguity_reason(target_hit: bool, stop_hit: bool) -> str:
+    if target_hit and stop_hit:
+        return "entry_target_and_stop_touched_in_same_m1_bar_without_sequence"
+    if target_hit:
+        return "entry_and_target_touched_in_same_m1_bar_without_sequence"
+    return "entry_and_stop_touched_in_same_m1_bar_without_sequence"

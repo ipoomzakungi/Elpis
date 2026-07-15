@@ -4,6 +4,7 @@ import json
 from datetime import date
 
 from src.xau_vol2vol_history_walkforward.data_lake import (
+    daily_metadata_path,
     daily_raw_path,
     load_vol2vol_data_lake,
     monthly_raw_path,
@@ -39,3 +40,21 @@ def test_vol2vol_data_lake_reports_missing_daily_file(tmp_path) -> None:
 
     assert result.payloads == []
     assert "Missing Vol2Vol daily data-lake file" in result.warnings[0]
+
+
+def test_vol2vol_data_lake_excludes_incomplete_daily_file(tmp_path) -> None:
+    daily = daily_raw_path(tmp_path, date(2026, 7, 15))
+    metadata = daily_metadata_path(tmp_path, date(2026, 7, 15))
+    daily.parent.mkdir(parents=True)
+    daily.write_text(json.dumps({"snapshots": [{"id": "partial"}]}), encoding="utf-8")
+    metadata.write_text(json.dumps({"complete": False}), encoding="utf-8")
+
+    result = load_vol2vol_data_lake(
+        root=tmp_path,
+        session_date_from=date(2026, 7, 15),
+        session_date_to=date(2026, 7, 15),
+    )
+
+    assert result.payloads == []
+    assert result.source_paths == []
+    assert "Incomplete Vol2Vol daily data-lake file excluded" in result.warnings[0]

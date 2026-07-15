@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, model_validator
 
 class Vol2VolCollectionStatus(StrEnum):
     COLLECTED = "collected"
+    COLLECTED_INCOMPLETE = "collected_incomplete"
     SKIPPED_EXISTING = "skipped_existing"
     REJECTED_DATE_MISMATCH = "rejected_date_mismatch"
     FAILED = "failed"

@@ -147,6 +147,91 @@ def test_journal_rejects_rewrite_but_allows_superseding_append(tmp_path) -> None
     assert all(row["signal_allowed"] is False for row in rows)
 
 
+def test_latest_successful_workflow_excludes_dry_runs_and_blocked_attempts(
+    tmp_path,
+) -> None:
+    journal = AppendOnlyJournal(tmp_path, "v1", "abc")
+    common = {
+        "session_date": "2026-07-13",
+        "planning_mode": "fixed_morning",
+        "stage": "prepare",
+        "finalized": True,
+    }
+    journal.append(
+        "daily_summary",
+        {
+            **common,
+            "record_id": "dry",
+            "workflow_attempt_id": "dry-attempt",
+            "observation_mode": "dry_run",
+            "dry_run": True,
+            "operational_state": "PLAN_READY",
+        },
+    )
+    journal.append(
+        "daily_summary",
+        {
+            **common,
+            "record_id": "blocked",
+            "workflow_attempt_id": "blocked-attempt",
+            "observation_mode": "retrospective_replay",
+            "operational_state": "DATA_BLOCKED",
+        },
+    )
+    journal.append(
+        "daily_summary",
+        {
+            **common,
+            "record_id": "success",
+            "workflow_attempt_id": "successful-attempt",
+            "observation_mode": "retrospective_replay",
+            "operational_state": "PLAN_READY",
+        },
+    )
+    journal.append(
+        "outcomes",
+        {
+            "record_id": "dry-outcome",
+            "finalized": True,
+            "session_date": "2026-07-13",
+            "planning_mode": "fixed_morning",
+            "workflow_attempt_id": "dry-attempt",
+            "observation_mode": "dry_run",
+        },
+    )
+    journal.append(
+        "outcomes",
+        {
+            "record_id": "retrospective-outcome",
+            "finalized": True,
+            "session_date": "2026-07-13",
+            "planning_mode": "fixed_morning",
+            "workflow_attempt_id": "successful-attempt",
+            "observation_mode": "retrospective_replay",
+        },
+    )
+
+    prepare = journal.latest_successful_prepare(
+        session_date="2026-07-13",
+        planning_mode="fixed_morning",
+    )
+    rows = journal.latest_successful_workflow_rows(
+        "outcomes",
+        session_date="2026-07-13",
+        planning_mode="fixed_morning",
+    )
+    diagnostics = [
+        json.loads(line)
+        for line in (tmp_path / "daily_summary.jsonl").read_text().splitlines()
+    ]
+
+    assert prepare is not None
+    assert prepare["workflow_attempt_id"] == "successful-attempt"
+    assert [row["record_id"] for row in rows] == ["retrospective-outcome"]
+    assert not any(row["observation_mode"] == "true_forward" for row in rows)
+    assert any(row["operational_state"] == "DATA_BLOCKED" for row in diagnostics)
+
+
 def _result_set() -> dict:
     return {
         "planning_mode": "rolling_30m",

@@ -17,7 +17,10 @@ from src.xau_vol2vol_history_walkforward.collection_manifest import (
     atomic_write_text,
     inspect_payload,
 )
-from src.xau_vol2vol_history_walkforward.data_lake import daily_raw_path
+from src.xau_vol2vol_history_walkforward.data_lake import (
+    daily_metadata_path,
+    daily_raw_path,
+)
 
 
 @dataclass(frozen=True)
@@ -67,9 +70,19 @@ class Vol2VolBrowserCollector:
             catalog_payload, _ = await self._fetch_json(page, "/api/vol2vol-history")
             sessions = _catalog_sessions(catalog_payload)
             selected, incomplete = self._select_sessions(sessions)
+            catalog_path = self.config.output_root / "catalog" / "available_sessions.json"
+            retained_sessions = _merge_catalog_sessions(
+                _existing_catalog_sessions(
+                    catalog_path,
+                    daily_root=self.config.output_root / "daily",
+                ),
+                sessions,
+            )
             catalog = {
-                "availableSessions": sessions,
+                "availableSessions": retained_sessions,
+                "currentlyAdvertisedSessions": sessions,
                 "advertised_session_count": len(sessions),
+                "retained_session_count": len(retained_sessions),
                 "selected_session_dates": [item["sessionDate"] for item in selected],
                 "incomplete_session_dates": sorted(incomplete),
                 "collected_at": datetime.now(ZoneInfo(self.config.timezone)).isoformat(),
@@ -78,14 +91,15 @@ class Vol2VolBrowserCollector:
             }
             if not self.config.dry_run:
                 atomic_write_json(
-                    self.config.output_root / "catalog" / "available_sessions.json",
+                    catalog_path,
                     catalog,
                 )
             rows: list[Vol2VolCollectionRow] = []
             for index, session in enumerate(selected):
                 session_date = date.fromisoformat(session["sessionDate"])
                 path = daily_raw_path(self.config.output_root, session_date)
-                if session["sessionDate"] in incomplete:
+                is_incomplete = session["sessionDate"] in incomplete
+                if is_incomplete and not self.config.include_current_incomplete_session:
                     rows.append(
                         Vol2VolCollectionRow(
                             requested_session_date=session_date,
@@ -111,7 +125,12 @@ class Vol2VolBrowserCollector:
                         )
                     )
                     continue
-                row = await self._collect_date(page, session_date, path)
+                row = await self._collect_date(
+                    page,
+                    session_date,
+                    path,
+                    incomplete=is_incomplete,
+                )
                 rows.append(row)
                 if index < len(selected) - 1:
                     await asyncio.sleep(self.config.min_delay_seconds)
@@ -134,6 +153,8 @@ class Vol2VolBrowserCollector:
         page: Any,
         session_date: date,
         path: Path,
+        *,
+        incomplete: bool,
     ) -> Vol2VolCollectionRow:
         last_warning = ""
         for attempt in range(1, self.config.max_retries + 1):
@@ -149,6 +170,28 @@ class Vol2VolBrowserCollector:
                 )
                 if row.status == Vol2VolCollectionStatus.COLLECTED:
                     atomic_write_text(path, body)
+                    atomic_write_json(
+                        daily_metadata_path(self.config.output_root, session_date),
+                        {
+                            "session_date": session_date.isoformat(),
+                            "complete": not incomplete,
+                            "snapshot_count": row.snapshot_count,
+                            "fetched_at": row.fetched_at.isoformat(),
+                            "sha256": row.sha256,
+                            "research_only": True,
+                            "signal_allowed": False,
+                        },
+                    )
+                    if incomplete:
+                        row = row.model_copy(
+                            update={
+                                "status": Vol2VolCollectionStatus.COLLECTED_INCOMPLETE,
+                                "warnings": [
+                                    *row.warnings,
+                                    "Current session was stored before completion.",
+                                ],
+                            }
+                        )
                 return row
             except Exception as exc:  # noqa: BLE001 - bounded retries become manifest evidence
                 last_warning = _safe_error(exc)
@@ -197,8 +240,6 @@ class Vol2VolBrowserCollector:
             selected = sessions
         else:
             raise ValueError("Choose --all-available or --session-date")
-        if self.config.include_current_incomplete_session:
-            incomplete = set()
         return selected, incomplete
 
 
@@ -238,6 +279,14 @@ def _catalog_sessions(payload: dict[str, Any]) -> list[dict[str, Any]]:
 def _valid_existing(path: Path, requested: date) -> Vol2VolCollectionRow | None:
     if not path.exists():
         return None
+    metadata_path = path.with_name("collection_meta.json")
+    if metadata_path.exists():
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        if metadata.get("complete") is False:
+            return None
     try:
         body = path.read_text(encoding="utf-8")
         _, inspected = inspect_payload(
@@ -250,6 +299,50 @@ def _valid_existing(path: Path, requested: date) -> Vol2VolCollectionRow | None:
     if inspected.status != Vol2VolCollectionStatus.COLLECTED:
         return None
     return inspected.model_copy(update={"status": Vol2VolCollectionStatus.SKIPPED_EXISTING})
+
+
+def _existing_catalog_sessions(
+    path: Path,
+    *,
+    daily_root: Path | None = None,
+) -> list[dict[str, Any]]:
+    retained: list[dict[str, Any]] = []
+    if path.exists():
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            payload = {}
+        sessions = payload.get("availableSessions")
+        if isinstance(sessions, list):
+            retained = sessions
+
+    # Older daily responses include the source's advertised catalog. Recover it
+    # when the live endpoint temporarily advertises only the current session.
+    if daily_root is not None and daily_root.exists():
+        for raw_path in sorted(daily_root.glob("*/raw.json"), reverse=True):
+            try:
+                payload = json.loads(raw_path.read_text(encoding="utf-8"))
+                raw_sessions = _catalog_sessions(payload)
+            except (OSError, ValueError, json.JSONDecodeError):
+                continue
+            retained = _merge_catalog_sessions(retained, raw_sessions)
+            if len(raw_sessions) > 1:
+                break
+    return retained
+
+
+def _merge_catalog_sessions(
+    existing: list[dict[str, Any]],
+    current: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    merged = {
+        str(item["sessionDate"])[:10]: item
+        for item in existing
+        if isinstance(item, dict) and item.get("sessionDate")
+    }
+    for item in current:
+        merged[item["sessionDate"]] = item
+    return [merged[key] for key in sorted(merged)]
 
 
 def _matching_page(pages: list[Any], base_url: str) -> Any | None:
