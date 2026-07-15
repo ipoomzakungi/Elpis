@@ -67,6 +67,23 @@ recovery measure, not a requirement to delete browser state every day. Edge's
 native sync notice may cover the visible page, but it is browser chrome rather
 than Vol2Vol content and does not prevent CDP from using the page.
 
+Use the checked-in launcher so the recovery procedure is repeatable:
+
+```powershell
+# Normal profile on the standard port
+powershell -ExecutionPolicy Bypass -File scripts/start_vol2vol_cdp_browser.ps1
+
+# Recovery after persistent reset, 403, or failed in-page fetch
+powershell -ExecutionPolicy Bypass -File scripts/start_vol2vol_cdp_browser.ps1 `
+  -FreshProfile `
+  -Port 9224
+```
+
+The launcher opens Edge visibly because the operator must use the website's
+supported unlock flow. It does not delete profiles, copy session state, or
+automate access around the unlock. If the selected port is already active, use
+that browser or choose another port.
+
 Preserve the current session during the day so Vol2Vol retention cannot remove
 it before the next collection. The file is intentionally marked incomplete and
 the data-lake loader excludes it from backtests until a completed refresh
