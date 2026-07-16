@@ -1,0 +1,79 @@
+{
+  "created_at": "2026-07-16T00:00:00+07:00",
+  "development_fraction": 0.7,
+  "registry_version": "xau_options_research_experiments_v1",
+  "experiments": [
+    {
+      "experiment_id": "MR0",
+      "hypothesis": "SD-zone touches exhibit intraday mean reversion without options filters.",
+      "feature_definitions": ["entry_sd", "side", "morning_sd_position"],
+      "entry_rule": "First 1SD or 1.5SD touch in an excursion.",
+      "outcome_label": "0.25SD/0.5SD target before next-SD stop.",
+      "threshold_source": "preregistered protocol geometry",
+      "development_holdout_policy": "chronological_70_30",
+      "experiment_hash": "f2c3514674b0e14451c5d87809275c081de9764e072a55e25be04aa8898c3d25"
+    },
+    {
+      "experiment_id": "MR1",
+      "hypothesis": "Stable or compressing ATM IV improves SD-zone mean reversion.",
+      "feature_definitions": ["MR0", "iv_state"],
+      "entry_rule": "MR0 with IV stable or compressing.",
+      "outcome_label": "Matched MR0 episode net points.",
+      "threshold_source": "zero IV slope with a fixed stability tolerance",
+      "development_holdout_policy": "chronological_70_30",
+      "experiment_hash": "bc463078876ffbfe4600e6157ea8abf9891aff44bf5c07d1267e3c66a5337787"
+    },
+    {
+      "experiment_id": "MR2",
+      "hypothesis": "A top-five mapped OI wall within 0.25SD improves mean reversion.",
+      "feature_definitions": ["MR0", "oi_rank", "oi_wall_distance_sd"],
+      "entry_rule": "MR0 with top-five OI wall within 0.25SD.",
+      "outcome_label": "Matched MR0 episode net points.",
+      "threshold_source": "predeclared top-five and 0.25SD proximity",
+      "development_holdout_policy": "chronological_70_30",
+      "experiment_hash": "98511041435436360173f833da0a96c6dfa2741e227e7e619aad3cf97a3cb0ef"
+    },
+    {
+      "experiment_id": "MR3",
+      "hypothesis": "Nearby OI, non-expanding IV, and weak flow-through jointly improve reversion.",
+      "feature_definitions": ["MR2", "iv_state", "volume_acceleration_percentile"],
+      "entry_rule": "MR2 with IV not expanding and volume acceleration below the top quartile.",
+      "outcome_label": "Matched MR0 episode net points.",
+      "threshold_source": "predeclared IV state and 75th percentile flow threshold",
+      "development_holdout_policy": "chronological_70_30",
+      "experiment_hash": "4406c361e5e499deffc8daa98678e87e67d731ebdf2cac1cdb8705626006c730"
+    },
+    {
+      "experiment_id": "BO0",
+      "hypothesis": "Accepted closes beyond 1.5SD or 2SD continue toward the next structure level.",
+      "feature_definitions": ["accepted_beyond_boundary", "next_wall", "next_sd"],
+      "entry_rule": "First close beyond 1.5SD or literal 2SD in an excursion.",
+      "outcome_label": "Next wall/0.5SD continuation before close back inside.",
+      "threshold_source": "predeclared SD geometry",
+      "development_holdout_policy": "chronological_70_30",
+      "experiment_hash": "28b00887926747318555a7ab82baeefd37a39ed7640af9009abe4f9375515925"
+    },
+    {
+      "experiment_id": "BO1",
+      "hypothesis": "IV expansion, accelerating option volume, and a low-OI gap improve breakout continuation.",
+      "feature_definitions": ["BO0", "iv_state", "volume_acceleration_percentile", "low_oi_gap"],
+      "entry_rule": "BO0 with expanding IV, top-quartile flow acceleration, and a low-OI gap.",
+      "outcome_label": "Matched BO0 episode net points.",
+      "threshold_source": "predeclared IV, 75th percentile flow, and structure labels",
+      "development_holdout_policy": "chronological_70_30",
+      "experiment_hash": "7627ccace871d767383e153fb9a3c231aecfb43b7ee28e58a28a4cab17b98f0d"
+    },
+    {
+      "experiment_id": "PIN0",
+      "hypothesis": "Low-DTE price inside 1SD is attracted to a nearby top-five OI strike.",
+      "feature_definitions": ["inside_1sd", "dte", "oi_rank", "oi_wall_distance_sd"],
+      "entry_rule": "Inside 1SD with low DTE and top-five OI wall within 0.25SD.",
+      "outcome_label": "Mapped OI strike reached before 0.5SD acceptance away.",
+      "threshold_source": "predeclared DTE and OI proximity",
+      "development_holdout_policy": "chronological_70_30",
+      "experiment_hash": "9a579dae1e1355c9772be6573f9c1f742bfd51cf68391fae4336ec9d51a58b14"
+    }
+  ],
+  "research_only": true,
+  "signal_allowed": false
+}
