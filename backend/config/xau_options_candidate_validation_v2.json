@@ -1,0 +1,66 @@
+{
+  "manifest_version": "xau_options_candidate_validation_v2",
+  "created_at": "2026-07-16T00:00:00+07:00",
+  "data_cutoff": "2026-07-16",
+  "validation_start_date": "2026-07-17",
+  "mapping_mode": "same_time_basis",
+  "costs": {
+    "spread_points": 1.0,
+    "slippage_points_per_side": 0.0
+  },
+  "concurrency_rule": "one_active_position_per_experiment_side_series",
+  "candidates": [
+    {
+      "candidate_id": "C1",
+      "experiment_id": "MR0",
+      "planning_mode": "fixed_morning",
+      "entry_rule": "first 1SD or 1.5SD mean-reversion touch after reset",
+      "target_sd": 0.5,
+      "stop_rule": "next SD boundary",
+      "time_exit_rule": "session end",
+      "status": "primary_price_sd_baseline",
+      "enablement": "enabled",
+      "candidate_hash": "b78575a4e4ebcf3a8c3a695f8b0a21b3a764e817473d867985b4a521803a7b73"
+    },
+    {
+      "candidate_id": "C2",
+      "experiment_id": "MR0",
+      "planning_mode": "rolling_30m",
+      "entry_rule": "first 1SD or 1.5SD mean-reversion touch after reset",
+      "target_sd": 0.25,
+      "stop_rule": "next SD boundary",
+      "time_exit_rule": "session end",
+      "status": "secondary_price_sd_baseline",
+      "enablement": "enabled",
+      "candidate_hash": "ef8dd4fb98700118826328f748dfefaa24e5e6d5df0eda3135a12472cf73c7c6"
+    },
+    {
+      "candidate_id": "C3",
+      "experiment_id": "MR2",
+      "planning_mode": "fixed_morning",
+      "entry_rule": "C1 with top-five mapped OI wall within 0.25SD",
+      "target_sd": 0.5,
+      "stop_rule": "next SD boundary",
+      "time_exit_rule": "session end",
+      "status": "exploratory_oi_candidate",
+      "enablement": "only_if_feature_and_matched_control_audits_pass",
+      "candidate_hash": "fce9408c160c2470fa1fd67686e27cf01d1a1f5f60fca4446e50050b714a65be"
+    },
+    {
+      "candidate_id": "BO0_MONITOR",
+      "experiment_id": "BO0",
+      "planning_mode": "fixed_morning",
+      "entry_rule": "accepted close beyond 1.5SD or literal 2SD",
+      "target_sd": 0.5,
+      "stop_rule": "close back inside",
+      "time_exit_rule": "session end",
+      "status": "monitor_only",
+      "enablement": "disabled_for_candidate_validation",
+      "candidate_hash": "387241b4939ce9ffd9bfaf3808d5a59a1f423872dd46d62cae0d2db59cf8f65d"
+    }
+  ],
+  "disabled_experiments": ["MR1", "MR2_rolling", "BO0_rolling", "PIN0", "MR3", "BO1"],
+  "review_schedule_sessions": [10, 20, 30],
+  "research_only": true,
+  "signal_allowed": false
+}
