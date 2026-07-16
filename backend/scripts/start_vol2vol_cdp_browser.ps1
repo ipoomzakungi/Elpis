@@ -10,10 +10,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$edgeCandidates = @(
+$edgeCandidates = @(@(
     (Join-Path ${env:ProgramFiles(x86)} "Microsoft\Edge\Application\msedge.exe"),
     (Join-Path $env:ProgramFiles "Microsoft\Edge\Application\msedge.exe")
-) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+) | Where-Object { $_ -and (Test-Path -LiteralPath $_) })
 
 if (-not $edgeCandidates) {
     throw "Microsoft Edge was not found in the standard installation paths."
@@ -50,7 +50,11 @@ $arguments = @(
     "--no-default-browser-check"
     "https://www.vol2vol.com/"
 )
-Start-Process -FilePath $edgeCandidates[0] -ArgumentList $arguments
+$edgePath = [string]$edgeCandidates[0]
+if (-not (Test-Path -LiteralPath $edgePath -PathType Leaf)) {
+    throw "Resolved Microsoft Edge executable is invalid: $edgePath"
+}
+Start-Process -FilePath $edgePath -ArgumentList $arguments
 
 $ready = $false
 foreach ($attempt in 1..20) {

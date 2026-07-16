@@ -232,6 +232,45 @@ def test_latest_successful_workflow_excludes_dry_runs_and_blocked_attempts(
     assert any(row["operational_state"] == "DATA_BLOCKED" for row in diagnostics)
 
 
+def test_latest_successful_plan_returns_frozen_prepare_plan(tmp_path) -> None:
+    journal = AppendOnlyJournal(tmp_path, "v1", "hash")
+    journal.append(
+        "plans",
+        {
+            "record_id": "plan-1",
+            "session_date": "2026-07-16",
+            "planning_mode": "fixed_morning",
+            "workflow_attempt_id": "attempt-1",
+            "observation_mode": "true_forward",
+            "planning_at": "2026-07-16T07:00:00+07:00",
+            "levels": {"lower_1sd": 4000},
+            "finalized": True,
+        },
+    )
+    journal.append(
+        "daily_summary",
+        {
+            "record_id": "prepare-1",
+            "session_date": "2026-07-16",
+            "planning_mode": "fixed_morning",
+            "stage": "prepare",
+            "operational_state": "PLAN_READY",
+            "workflow_attempt_id": "attempt-1",
+            "observation_mode": "true_forward",
+            "finalized": True,
+        },
+    )
+
+    plan = journal.latest_successful_plan(
+        session_date="2026-07-16",
+        planning_mode="fixed_morning",
+    )
+
+    assert plan is not None
+    assert plan["record_id"] == "plan-1"
+    assert plan["levels"] == {"lower_1sd": 4000}
+
+
 def _result_set() -> dict:
     return {
         "planning_mode": "rolling_30m",

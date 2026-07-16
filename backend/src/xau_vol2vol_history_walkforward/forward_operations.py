@@ -13,7 +13,7 @@ from src.models.xau_vol2vol_history_walkforward import (
     XauVol2VolStrikeSnapshot,
 )
 
-FORWARD_ENGINE_ERRATUM = "031M-forward-journal-execution-audit-fix"
+FORWARD_ENGINE_ERRATUM = "031N-forward-session-lifecycle-audit"
 FORWARD_ENGINE_REVISION = hashlib.sha256(
     json.dumps(
         {
@@ -22,6 +22,8 @@ FORWARD_ENGINE_REVISION = hashlib.sha256(
             "f0_entry_rule": "touch_entry",
             "f2_entry_rule": "confirmed_next_bar",
             "price_age_reference": "basis_source_bar",
+            "incomplete_session_policy": "current_true_forward_prepare_only",
+            "monitor_finalize_plan_source": "frozen_successful_prepare_journal",
         },
         sort_keys=True,
     ).encode("utf-8")
@@ -34,6 +36,7 @@ class ForwardOperationalState(StrEnum):
     STALE_SOURCE = "STALE_SOURCE"
     NO_VALID_SERIES = "NO_VALID_SERIES"
     NO_PRE_0700_SNAPSHOT = "NO_PRE_07:00_SNAPSHOT"
+    SESSION_INCOMPLETE = "SESSION_INCOMPLETE"
 
 
 @dataclass(frozen=True)
@@ -99,6 +102,9 @@ def evaluate_forward_readiness(
             ["No deterministic series covers the remaining monitoring horizon."],
         )
     selected = min(covering, key=lambda row: (float(row.dte), row.series or ""))
+    selected_snapshot_sha256 = hashlib.sha256(
+        json.dumps(selected.model_dump(mode="json"), sort_keys=True).encode("utf-8")
+    ).hexdigest()
     snapshot_age = (planning_at - selected.observed_at).total_seconds()
     source_bars = [bar for bar in bars if bar.timestamp <= selected.observed_at]
     if not source_bars:
@@ -144,6 +150,7 @@ def evaluate_forward_readiness(
             "basis_points": diff,
             "mapping_mode": "same_time_basis",
             "vol2vol_snapshot_time": selected.observed_at.isoformat(),
+            "selected_snapshot_sha256": selected_snapshot_sha256,
             "xau_source_time": source_bar.timestamp.isoformat(),
             "source_alignment_seconds": source_gap,
             "xau_price_age_at_planning_seconds": xau_price_age,

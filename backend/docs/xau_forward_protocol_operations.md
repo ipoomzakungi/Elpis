@@ -22,13 +22,38 @@ strategy rules unchanged while correcting execution accounting:
 - source alignment, XAU price age, and Vol2Vol snapshot age are persisted as
   separate fields;
 - every prepare/monitor/finalize chain carries a `workflow_attempt_id`,
-  `observation_mode`, `recorded_at`, `data_as_of`, and `engine_revision`.
+`observation_mode`, `recorded_at`, `data_as_of`, and `engine_revision`.
+
+Engine lifecycle revision `031N-forward-session-lifecycle-audit` adds no
+strategy rule changes. It allows a validated incomplete current session only
+for a genuine true-forward prepare, keeps that session ineligible for
+retrospective backtests, persists source eligibility and snapshot hashes, and
+requires monitor/finalize to reuse the immutable successful prepare plan.
 
 Past sessions default to `retrospective_replay`. A same-day prepare defaults to
 `true_forward` only when recorded from the planning time through 30 minutes
 after it. Use `--observation-mode` explicitly when importing a historical
 backtest or running a dry run. Monitor and finalize reuse the latest successful
 prepare workflow for the same session and planning mode.
+
+### Incomplete-session lifecycle
+
+A current session is naturally incomplete at the 07:00 planning checkpoint.
+Revision 031N applies these rules:
+
+- `true_forward` prepare may use `complete=false` only when the requested date
+  is the current local session and freshness/alignment checks pass;
+- the frozen plan records `source_session_status=current_incomplete`,
+  `forward_plan_eligible=true`, `backtest_eligible=false`, the source payload
+  hash, and the selected normalized snapshot hash;
+- retrospective replay and historical backtests return `SESSION_INCOMPLETE`
+  for that file;
+- monitor and finalize load the immutable plan from the successful prepare
+  workflow instead of recalculating levels from a refreshed payload;
+- a later completed collection promotes only the data metadata. It retains
+  prior collection hashes and cannot mutate the frozen plan;
+- a manually supplied `true_forward` prepare is rejected outside the planning
+  time through 30-minute capture window.
 
 ## Before 07:00 Bangkok
 

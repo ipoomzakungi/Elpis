@@ -13,7 +13,11 @@ from src.xau_vol2vol_history_walkforward.browser_collector import (
     Vol2VolBrowserCollectionConfig,
     collect_browser_history,
 )
-from src.xau_vol2vol_history_walkforward.data_lake import daily_raw_path
+from src.xau_vol2vol_history_walkforward.data_lake import (
+    daily_raw_path,
+    evaluate_daily_session_eligibility,
+    session_is_eligible_for_observation,
+)
 from src.xau_vol2vol_history_walkforward.forward_operations import (
     FORWARD_ENGINE_ERRATUM,
     FORWARD_ENGINE_REVISION,
@@ -93,6 +97,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         session_date=session_date.isoformat(),
         planning_mode=args.planning_mode,
     )
+    frozen_plan = journal.latest_successful_plan(
+        session_date=session_date.isoformat(),
+        planning_mode=args.planning_mode,
+    )
     observation_mode = _observation_mode(
         explicit=args.observation_mode,
         stage=args.stage,
@@ -105,7 +113,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.workflow_attempt_id
         or (
             successful_prepare.get("workflow_attempt_id")
-            if args.stage != "prepare" and successful_prepare
+            if successful_prepare
+            and successful_prepare.get("observation_mode") == observation_mode
             else None
         )
         or _new_workflow_attempt_id(
@@ -165,27 +174,70 @@ def main(argv: Sequence[str] | None = None) -> int:
         except subprocess.TimeoutExpired:
             price_refresh_error = "Dukascopy refresh exceeded the 180-second limit."
     raw_path = daily_raw_path(data_root, session_date)
+    eligibility = evaluate_daily_session_eligibility(
+        root=data_root,
+        session_date=session_date,
+        current_date=recorded_at.date(),
+    )
     strike_rows = []
     range_rows = []
-    if raw_path.exists():
+    if raw_path.exists() and eligibility.source_session_status != "date_mismatch":
         strike_rows, range_rows, _ = normalize_payload(
             load_json_payload(raw_path), default_session_date=session_date
         )
     price_result = load_traded_bars_folder(Path(args.price_bars_folder), timezone=args.timezone)
-    readiness = evaluate_forward_readiness(
-        session_date=session_date,
-        planning_at=planning_at,
-        range_rows=range_rows,
-        strike_rows=strike_rows,
-        bars=price_result.bars,
-        planning_mode=args.planning_mode,
-        source_gap_limit_seconds=protocol["data_freshness_limits_seconds"][
-            "price_source_alignment"
-        ],
-        snapshot_freshness_limit_seconds=protocol["data_freshness_limits_seconds"][
-            "plan_options_snapshot"
-        ],
+    reuse_frozen = (
+        frozen_plan is not None
+        and successful_prepare is not None
+        and successful_prepare.get("workflow_attempt_id") == workflow_attempt_id
     )
+    mode_eligible = session_is_eligible_for_observation(
+        eligibility,
+        observation_mode,
+    )
+    if args.stage != "prepare" and successful_prepare is not None and frozen_plan is None:
+        readiness = ForwardReadinessResult(
+            ForwardOperationalState.DATA_BLOCKED,
+            ["Successful prepare summary exists, but its frozen plan is unavailable."],
+        )
+    elif reuse_frozen:
+        readiness = ForwardReadinessResult(
+            ForwardOperationalState.PLAN_READY,
+            ["Reused the immutable plan created by the successful prepare workflow."],
+            frozen_plan,
+        )
+    elif not mode_eligible:
+        state = (
+            ForwardOperationalState.SESSION_INCOMPLETE
+            if eligibility.source_session_status in {"current_incomplete", "incomplete"}
+            else ForwardOperationalState.DATA_BLOCKED
+        )
+        readiness = ForwardReadinessResult(state, eligibility.reasons)
+    else:
+        readiness = evaluate_forward_readiness(
+            session_date=session_date,
+            planning_at=planning_at,
+            range_rows=range_rows,
+            strike_rows=strike_rows,
+            bars=price_result.bars,
+            planning_mode=args.planning_mode,
+            source_gap_limit_seconds=protocol["data_freshness_limits_seconds"][
+                "price_source_alignment"
+            ],
+            snapshot_freshness_limit_seconds=protocol["data_freshness_limits_seconds"][
+                "plan_options_snapshot"
+            ],
+        )
+        if readiness.plan is not None:
+            readiness.plan.update(
+                {
+                    "source_session_status": eligibility.source_session_status,
+                    "backtest_eligible": eligibility.backtest_eligible,
+                    "forward_plan_eligible": eligibility.forward_plan_eligible,
+                    "source_payload_sha256": eligibility.payload_sha256,
+                    "collection_history_count": eligibility.collection_history_count,
+                }
+            )
     if (
         args.stage != "prepare"
         and args.workflow_attempt_id is None
@@ -298,6 +350,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         "price_refresh_error": price_refresh_error,
         "records_written": written,
         "raw_vol2vol_path": raw_path.resolve().as_posix(),
+        "source_session_status": eligibility.source_session_status,
+        "backtest_eligible": eligibility.backtest_eligible,
+        "forward_plan_eligible": eligibility.forward_plan_eligible,
         "price_bar_count": len(price_result.bars),
         "order_submission_allowed": False,
     }
@@ -343,7 +398,25 @@ def _observation_mode(
     recorded_at: datetime,
 ) -> str:
     if explicit is not None:
+        if (
+            explicit == "true_forward"
+            and stage == "prepare"
+            and not (
+                successful_prepare is not None
+                and successful_prepare.get("observation_mode") == "true_forward"
+            )
+            and not planning_at <= recorded_at <= planning_at + timedelta(minutes=30)
+        ):
+            raise ValueError(
+                "true_forward prepare must be recorded from planning time through "
+                "30 minutes after planning"
+            )
         return explicit
+    if (
+        successful_prepare is not None
+        and successful_prepare.get("observation_mode") == "true_forward"
+    ):
+        return "true_forward"
     if stage != "prepare" and successful_prepare is not None:
         return str(successful_prepare["observation_mode"])
     if session_date < recorded_at.date():

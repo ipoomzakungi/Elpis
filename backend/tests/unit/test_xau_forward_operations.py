@@ -34,6 +34,7 @@ def test_forward_readiness_builds_research_plan() -> None:
     assert result.plan["f1_status"] == "context_label_only"
     assert result.plan["xau_price_age_at_planning_seconds"] == 300
     assert result.plan["vol2vol_snapshot_age_at_planning_seconds"] == 300
+    assert len(result.plan["selected_snapshot_sha256"]) == 64
     assert result.plan["signal_allowed"] is False
 
 

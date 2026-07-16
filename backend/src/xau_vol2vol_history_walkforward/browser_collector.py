@@ -170,14 +170,26 @@ class Vol2VolBrowserCollector:
                 )
                 if row.status == Vol2VolCollectionStatus.COLLECTED:
                     atomic_write_text(path, body)
+                    metadata_path = daily_metadata_path(
+                        self.config.output_root, session_date
+                    )
+                    complete = not incomplete
+                    history = _collection_history(
+                        metadata_path,
+                        sha256=row.sha256,
+                        fetched_at=row.fetched_at.isoformat(),
+                        snapshot_count=row.snapshot_count,
+                        complete=complete,
+                    )
                     atomic_write_json(
-                        daily_metadata_path(self.config.output_root, session_date),
+                        metadata_path,
                         {
                             "session_date": session_date.isoformat(),
-                            "complete": not incomplete,
+                            "complete": complete,
                             "snapshot_count": row.snapshot_count,
                             "fetched_at": row.fetched_at.isoformat(),
                             "sha256": row.sha256,
+                            "collection_history": history,
                             "research_only": True,
                             "signal_allowed": False,
                         },
@@ -329,6 +341,46 @@ def _existing_catalog_sessions(
             if len(raw_sessions) > 1:
                 break
     return retained
+
+
+def _collection_history(
+    metadata_path: Path,
+    *,
+    sha256: str | None,
+    fetched_at: str,
+    snapshot_count: int,
+    complete: bool,
+) -> list[dict[str, Any]]:
+    history: list[dict[str, Any]] = []
+    if metadata_path.exists():
+        try:
+            existing = json.loads(metadata_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            existing = {}
+        existing_history = existing.get("collection_history")
+        if isinstance(existing_history, list):
+            history = [item for item in existing_history if isinstance(item, dict)]
+        elif existing.get("sha256"):
+            history.append(
+                {
+                    "sha256": existing["sha256"],
+                    "fetched_at": existing.get("fetched_at"),
+                    "snapshot_count": existing.get("snapshot_count", 0),
+                    "complete": bool(existing.get("complete")),
+                }
+            )
+    current = {
+        "sha256": sha256,
+        "fetched_at": fetched_at,
+        "snapshot_count": snapshot_count,
+        "complete": complete,
+    }
+    if not history or any(
+        history[-1].get(key) != current[key]
+        for key in ("sha256", "snapshot_count", "complete")
+    ):
+        history.append(current)
+    return history
 
 
 def _merge_catalog_sessions(

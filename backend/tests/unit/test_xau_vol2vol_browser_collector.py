@@ -7,6 +7,7 @@ import pytest
 
 from src.xau_vol2vol_history_walkforward.browser_collector import (
     _catalog_sessions,
+    _collection_history,
     _existing_catalog_sessions,
     _merge_catalog_sessions,
     _valid_existing,
@@ -184,3 +185,33 @@ def test_atomic_write_replaces_temporary_file(tmp_path) -> None:
 
     assert json.loads(path.read_text(encoding="utf-8"))["sessionDate"] == "2026-07-07"
     assert not (tmp_path / ".raw.json.tmp").exists()
+
+
+def test_collection_history_retains_partial_hash_during_completion(tmp_path) -> None:
+    metadata = tmp_path / "collection_meta.json"
+    metadata.write_text(
+        json.dumps(
+            {
+                "sha256": "partial-hash",
+                "fetched_at": "2026-07-15T07:00:00+07:00",
+                "snapshot_count": 88,
+                "complete": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    history = _collection_history(
+        metadata,
+        sha256="completed-hash",
+        fetched_at="2026-07-16T06:00:00+07:00",
+        snapshot_count=548,
+        complete=True,
+    )
+
+    assert [item["sha256"] for item in history] == [
+        "partial-hash",
+        "completed-hash",
+    ]
+    assert history[0]["complete"] is False
+    assert history[1]["complete"] is True
