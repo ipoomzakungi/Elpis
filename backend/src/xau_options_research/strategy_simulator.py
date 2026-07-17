@@ -11,6 +11,60 @@ SPREADS = (0.3, 0.5, 1.0, 1.5)
 SLIPPAGES = (0.0, 0.2, 0.5)
 
 
+def simulate_frozen_candidate(
+    candidate: dict[str, Any],
+    events: list[dict[str, Any]],
+    bars: list[XauPriceBar],
+    *,
+    spread_points: float,
+    slippage_points_per_side: float,
+) -> list[dict[str, Any]]:
+    if candidate.get("experiment_id") != "MR0" or candidate.get("candidate_id") not in {
+        "C1",
+        "C2",
+    }:
+        raise ValueError("Only frozen C1/C2 candidates may create validation outcomes")
+    target_sd = float(candidate["target_sd"])
+    selected = [
+        event
+        for event in events
+        if event["planning_mode"] == candidate["planning_mode"]
+        and event["event_type"]
+        in {
+            "lower_1sd_touch",
+            "lower_1_5sd_touch",
+            "upper_1sd_touch",
+            "upper_1_5sd_touch",
+        }
+    ]
+    total_cost = spread_points + 2 * slippage_points_per_side
+    outcomes = []
+    for event in selected:
+        outcome = _simulate(event, bars, target_sd=target_sd)
+        gross = outcome.get("gross_points")
+        outcomes.append(
+            {
+                **outcome,
+                "experiment_id": candidate["experiment_id"],
+                "candidate_id": candidate["candidate_id"],
+                "candidate_hash": candidate["candidate_hash"],
+                "target_sd": target_sd,
+                "spread_points": spread_points,
+                "slippage_points_per_side": slippage_points_per_side,
+                "total_cost_points": total_cost,
+                "net_points": gross - total_cost if gross is not None else None,
+                "original_m1_status": outcome["status"],
+                "resolved_status": outcome["status"],
+                "resolution_source": None,
+                "resolution_confidence": None,
+                "research_only": True,
+                "signal_allowed": False,
+                "order_submission_allowed": False,
+            }
+        )
+    return outcomes
+
+
 def run_preregistered_strategies(
     events: list[dict[str, Any]],
     bars: list[XauPriceBar],

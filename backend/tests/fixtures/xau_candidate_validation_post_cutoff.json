@@ -1,0 +1,84 @@
+{
+  "returned_session_date": "2026-07-17",
+  "source_status": "complete",
+  "price_coverage_complete": true,
+  "bars": [
+    {
+      "timestamp": "2026-07-17T08:00:00+07:00",
+      "open": 100.5,
+      "high": 100.6,
+      "low": 100.0,
+      "close": 100.2,
+      "symbol": "XAUUSD",
+      "timeframe": "1m"
+    },
+    {
+      "timestamp": "2026-07-17T08:01:00+07:00",
+      "open": 100.2,
+      "high": 105.2,
+      "low": 100.1,
+      "close": 105.0,
+      "symbol": "XAUUSD",
+      "timeframe": "1m"
+    },
+    {
+      "timestamp": "2026-07-17T09:00:00+07:00",
+      "open": 100.4,
+      "high": 103.0,
+      "low": 100.0,
+      "close": 102.0,
+      "symbol": "XAUUSD",
+      "timeframe": "1m"
+    }
+  ],
+  "episode_events": [
+    {
+      "event_id": "fixture:fixed:lower_1sd",
+      "episode_id": "2026-07-17:fixed_morning:long_reversion:1sd:E1",
+      "session_date": "2026-07-17",
+      "planning_mode": "fixed_morning",
+      "event_type": "lower_1sd_touch",
+      "side": "long_reversion",
+      "event_timestamp": "2026-07-17T08:00:00+07:00",
+      "entry_price": 100.0,
+      "one_sd_points": 10.0,
+      "selected_series": "FIXTURE",
+      "dte": 1.0,
+      "iv_state": "stable",
+      "oi_rank": 2,
+      "oi_distance_sd": 0.2
+    },
+    {
+      "event_id": "fixture:rolling:lower_1sd",
+      "episode_id": "2026-07-17:rolling_30m:long_reversion:1sd:E1",
+      "session_date": "2026-07-17",
+      "planning_mode": "rolling_30m",
+      "event_type": "lower_1sd_touch",
+      "side": "long_reversion",
+      "event_timestamp": "2026-07-17T09:00:00+07:00",
+      "entry_price": 100.0,
+      "one_sd_points": 10.0,
+      "selected_series": "FIXTURE",
+      "dte": 1.0,
+      "iv_state": "stable",
+      "oi_rank": null,
+      "oi_distance_sd": null
+    },
+    {
+      "event_id": "fixture:fixed:breakout",
+      "episode_id": "2026-07-17:fixed_morning:long_breakout:breakout:E1",
+      "session_date": "2026-07-17",
+      "planning_mode": "fixed_morning",
+      "event_type": "close_beyond_upper_1_5sd",
+      "side": "long_breakout",
+      "event_timestamp": "2026-07-17T09:00:00+07:00",
+      "entry_price": 102.0,
+      "one_sd_points": 10.0,
+      "selected_series": "FIXTURE",
+      "dte": 1.0,
+      "iv_state": "stable",
+      "oi_rank": null,
+      "oi_distance_sd": null
+    }
+  ]
+}
