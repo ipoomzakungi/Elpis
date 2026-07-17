@@ -204,5 +204,20 @@ def test_validation_summary_keeps_calibration_out_and_subgroups_descriptive() ->
 def test_completed_session_counts_even_without_opportunities() -> None:
     summary = build_validation_summary([], accepted_session_dates=["2026-07-17"])
     assert summary["validation_session_count"] == 1
+    assert summary["real_accepted_session_count"] == 1
+    assert summary["synthetic_fixture_session_count"] == 0
+    assert summary["rejected_session_count"] == 0
     assert all(row["validation_session_count"] == 1 for row in summary["candidates"])
     assert all(row["sessions_with_opportunities"] == 0 for row in summary["candidates"])
+
+
+def test_synthetic_fixture_never_counts_as_validation_session() -> None:
+    summary = build_validation_summary(
+        [],
+        accepted_session_dates=[],
+        synthetic_fixture_session_count=1,
+    )
+    assert summary["validation_session_count"] == 0
+    assert summary["real_accepted_session_count"] == 0
+    assert summary["synthetic_fixture_session_count"] == 1
+    assert all(row["validation_session_count"] == 0 for row in summary["candidates"])

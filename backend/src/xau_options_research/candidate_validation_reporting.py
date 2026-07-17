@@ -12,10 +12,13 @@ def build_validation_summary(
     *,
     calibration: list[dict[str, Any]] | None = None,
     accepted_session_dates: list[str] | None = None,
+    synthetic_fixture_session_count: int = 0,
+    rejected_session_count: int = 0,
 ) -> dict[str, Any]:
-    accepted_sessions = set(accepted_session_dates or [])
-    if not accepted_session_dates:
+    if accepted_session_dates is None:
         accepted_sessions = {row["session_date"] for row in outcomes}
+    else:
+        accepted_sessions = set(accepted_session_dates)
     candidates = []
     for candidate_id in ("C1", "C2"):
         rows = [row for row in outcomes if row["candidate_id"] == candidate_id]
@@ -70,6 +73,9 @@ def build_validation_summary(
         )
     return {
         "validation_session_count": len(accepted_sessions),
+        "real_accepted_session_count": len(accepted_sessions),
+        "synthetic_fixture_session_count": synthetic_fixture_session_count,
+        "rejected_session_count": rejected_session_count,
         "candidates": candidates,
         "calibration_rows_in_validation": 0,
         "subgroups_are_descriptive_only": True,

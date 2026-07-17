@@ -211,9 +211,11 @@ def _run_real_session(
         except DuplicateValidationSessionError:
             return _rejection(requested_date, "DUPLICATE_SESSION", [], manifest)
     all_outcomes = outcomes if args.dry_run else store.read("outcomes")
-    accepted_sessions = [requested_date.isoformat()] if args.dry_run else [
-        row["session_date"] for row in store.read("sessions")
-    ]
+    accepted_sessions = (
+        []
+        if args.dry_run
+        else [row["session_date"] for row in store.read("sessions")]
+    )
     summary = build_validation_summary(
         all_outcomes, accepted_session_dates=accepted_sessions
     )
@@ -230,6 +232,11 @@ def _run_real_session(
     return {
         "status": "DRY_RUN_ACCEPTED" if args.dry_run else "ACCEPTED",
         "session_date": requested_date.isoformat(),
+        "real_accepted_session_count": summary["real_accepted_session_count"],
+        "synthetic_fixture_session_count": summary[
+            "synthetic_fixture_session_count"
+        ],
+        "rejected_session_count": summary["rejected_session_count"],
         "manifest_hash": manifest["registry_hash"],
         "candidate_hashes": _candidate_hashes(manifest),
         "c1_opportunity_count": sum(row["candidate_id"] == "C1" for row in opportunities),
@@ -269,7 +276,9 @@ def _run_fixture(
     )
     opportunities, outcomes = _prepare_records(run, requested_date)
     summary = build_validation_summary(
-        outcomes, accepted_session_dates=[requested_date.isoformat()]
+        outcomes,
+        accepted_session_dates=[],
+        synthetic_fixture_session_count=1,
     )
     daily_summary = build_daily_summary(
         requested_date.isoformat(),
@@ -295,6 +304,9 @@ def _run_fixture(
     return {
         "status": "DRY_RUN_ACCEPTED",
         "session_date": requested_date.isoformat(),
+        "real_accepted_session_count": 0,
+        "synthetic_fixture_session_count": 1,
+        "rejected_session_count": 0,
         "manifest_hash": manifest["registry_hash"],
         "candidate_hashes": _candidate_hashes(manifest),
         "c1_opportunity_count": sum(row["candidate_id"] == "C1" for row in opportunities),
@@ -392,6 +404,11 @@ def _write_report(
         "c3_outcome_count": daily_summary["c3_outcome_count"],
         "bo0_candidate_outcome_count": daily_summary["bo0_candidate_outcome_count"],
         "dry_run": dry_run,
+        "real_accepted_session_count": summary["real_accepted_session_count"],
+        "synthetic_fixture_session_count": summary[
+            "synthetic_fixture_session_count"
+        ],
+        "rejected_session_count": summary["rejected_session_count"],
         "research_only": True,
         "signal_allowed": False,
         "order_submission_allowed": False,
@@ -418,12 +435,22 @@ def _handoff(
     *,
     dry_run: bool,
 ) -> str:
+    observation = (
+        "synthetic_dry_run"
+        if session["source_session_status"] == "synthetic_fixture"
+        else "completed_session_dry_run"
+        if dry_run
+        else "historical_validation"
+    )
     lines = [
         "# XAU Candidate Validation v2",
         "",
         f"- Session: `{session['session_date']}`",
-        f"- Observation: `{'synthetic_dry_run' if dry_run else 'completed_session'}`",
+        f"- Observation: `{observation}`",
         f"- Source session status: `{session['source_session_status']}`",
+        f"- Real accepted sessions: {summary['real_accepted_session_count']}",
+        f"- Synthetic fixture sessions: {summary['synthetic_fixture_session_count']}",
+        f"- Rejected sessions: {summary['rejected_session_count']}",
         f"- Manifest hash: `{manifest['registry_hash']}`",
         f"- Validation start: `{manifest['validation_start_date']}`",
         "- Evidence status: `insufficient_sample`",
@@ -473,6 +500,9 @@ def _rejection(
     return {
         "status": "REJECTED",
         "session_date": session_date.isoformat(),
+        "real_accepted_session_count": 0,
+        "synthetic_fixture_session_count": 0,
+        "rejected_session_count": 1,
         "reason": reason,
         "details": details,
         "manifest_hash": manifest["registry_hash"],

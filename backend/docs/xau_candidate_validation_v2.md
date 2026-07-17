@@ -44,3 +44,7 @@ superseding record; existing rows are not edited.
 The runner creates immutable review checkpoints at 10, 20, and 30 accepted
 validation sessions. Calibration results remain separate from validation-v2.
 Subgroup results are descriptive and cannot alter the frozen candidates.
+
+Reports expose `real_accepted_session_count`, `synthetic_fixture_session_count`,
+and `rejected_session_count` separately. Fixtures and non-appending dry runs
+never increase validation-session counts or trigger review checkpoints.
