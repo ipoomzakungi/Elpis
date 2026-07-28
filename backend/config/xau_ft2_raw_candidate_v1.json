@@ -1,0 +1,78 @@
+{
+  "version": "1.0.0",
+  "candidate_id": "FT2_RAW_V1",
+  "candidate_hash": "14dd47390dee635d942db6d01a43fb96fc6a94c467a2bf068e60d53efdb4963f",
+  "canonical_plan": {
+    "anchor": "T0_DTE_080",
+    "source_dte_target": 0.8,
+    "source_dte_tolerance": 0.05,
+    "source_dte_minimum": 0.75,
+    "source_dte_maximum": 0.85,
+    "levels_fixed_after_activation": true,
+    "mapping_mode": "distance_reanchored",
+    "tier": 2.0,
+    "counting_mode": "aggregated_first_touch_per_tier",
+    "entry_model": "touch_reference",
+    "take_profit_points": 25.0,
+    "stop_loss_points": 25.0,
+    "one_event_per_session": true,
+    "one_active_candidate": true,
+    "reentry_allowed": false
+  },
+  "cost_scenarios_points": [
+    0.3,
+    0.5,
+    1.0,
+    1.5,
+    2.5
+  ],
+  "challengers": {
+    "FT2_SMALL_V1": {
+      "take_profit_points": 12.5,
+      "stop_loss_points": 12.5,
+      "state": "SHADOW_ONLY",
+      "manual_alert_allowed": false
+    },
+    "FT2_REJECTION_V1": {
+      "entry_model": "oi_rejection_next_bar_open",
+      "state": "DESCRIPTIVE_ONLY",
+      "manual_alert_allowed": false
+    }
+  },
+  "context": {
+    "oi_gates_primary": false,
+    "rejection_gates_primary": false,
+    "include_oi": true,
+    "include_iv": true,
+    "include_volume": true
+  },
+  "broker_translation": {
+    "maximum_quote_age_seconds": 60,
+    "maximum_alert_delay_seconds": 120,
+    "maximum_touch_quote_gap_seconds": 120,
+    "maximum_spread_points": 2.5,
+    "reference_without_quote": true
+  },
+  "promotion_gates": {
+    "minimum_local_first_touch_events": 30,
+    "minimum_holdout_events": 10,
+    "minimum_resolved_independent_sessions": 10,
+    "minimum_upper_events": 5,
+    "minimum_lower_events": 5,
+    "zero_mapping_timing_violations": true,
+    "positive_median_after_realistic_cost": true,
+    "confidence_evidence_required": true,
+    "maximum_drawdown_points": null,
+    "external_prior_bypass_allowed": false
+  },
+  "guardrails": {
+    "position_sizing_allowed": false,
+    "averaging_allowed": false,
+    "recovery_allowed": false,
+    "martingale_allowed": false,
+    "automatic_execution_allowed": false,
+    "signal_allowed": false,
+    "order_submission_allowed": false,
+    "research_only": true
+  }
+}
