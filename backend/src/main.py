@@ -21,6 +21,7 @@ from src.api.routes import (
     xau_daily_workbench,
     xau_data_capability_audit,
     xau_forward_journal,
+    xau_manual_signals,
     xau_plan_tracker,
     xau_quikstrike_fusion,
     xau_range_desk,
@@ -99,6 +100,11 @@ app.include_router(
     xau_plan_tracker.router,
     prefix="/api/v1",
     tags=["xau-plan-tracker"],
+)
+app.include_router(
+    xau_manual_signals.router,
+    prefix="/api/v1",
+    tags=["xau-manual-signals"],
 )
 
 

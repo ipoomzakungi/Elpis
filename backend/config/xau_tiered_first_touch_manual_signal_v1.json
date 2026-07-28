@@ -1,0 +1,152 @@
+{
+  "version": "1.0.0",
+  "policy_name": "VOL2VOL Tier-2 Confluence manual signal v1",
+  "policy_hash": "717eea13732f6094f8c9d9c1aa6e57b33623dc74c34a0000e302a115f9bc4a65",
+  "canonical_plan": {
+    "anchor": "T0_DTE_080",
+    "target_source_dte": 0.8,
+    "minimum_source_dte": 0.75,
+    "maximum_source_dte": 0.85,
+    "mapping_mode": "distance_reanchored",
+    "levels_fixed_after_activation": true,
+    "one_plan_per_eligible_session": true
+  },
+  "tier_matrix": [
+    {
+      "id": "T1",
+      "tier": 1.0,
+      "primary_barrier": "TP12_5_SL12_5",
+      "comparison_barriers": [
+        "TP25_SL25"
+      ],
+      "initial_state": "SHADOW_ONLY",
+      "manual_candidate_allowed": false,
+      "original_external_tier": true
+    },
+    {
+      "id": "T1_5",
+      "tier": 1.5,
+      "primary_barrier": "TP12_5_SL12_5",
+      "comparison_barriers": [
+        "TP25_SL25"
+      ],
+      "initial_state": "SHADOW_ONLY",
+      "manual_candidate_allowed": false,
+      "original_external_tier": false,
+      "warning": "Elpis interpolation experiment; not part of the external 500-session study."
+    },
+    {
+      "id": "T2",
+      "tier": 2.0,
+      "primary_barrier": "TP25_SL25",
+      "comparison_barriers": [
+        "TP12_5_SL12_5"
+      ],
+      "initial_state": "MANUAL_CANDIDATE",
+      "manual_candidate_allowed": true,
+      "evidence_status": "external_prior_plus_small_local_sample",
+      "original_external_tier": true
+    },
+    {
+      "id": "T3",
+      "tier": 3.0,
+      "primary_barrier": "TP25_SL25",
+      "comparison_barriers": [
+        "TP12_5_SL12_5"
+      ],
+      "initial_state": "TAIL_WATCH",
+      "manual_candidate_allowed": false,
+      "original_external_tier": true
+    }
+  ],
+  "barriers": {
+    "TP12_5_SL12_5": {
+      "take_profit_points": 12.5,
+      "stop_loss_points": 12.5
+    },
+    "TP25_SL25": {
+      "take_profit_points": 25.0,
+      "stop_loss_points": 25.0
+    },
+    "TP25_SL12_5": {
+      "take_profit_points": 25.0,
+      "stop_loss_points": 12.5
+    }
+  },
+  "executable_confluence_profiles": [
+    "TP12_5_SL12_5",
+    "TP25_SL12_5",
+    "TP25_SL25"
+  ],
+  "secondary_excursions": [
+    0.5,
+    1.0
+  ],
+  "first_touch_rules": {
+    "primary_counting": "aggregated_first_touch_per_tier",
+    "side_specific_sensitivity": true,
+    "one_active_manual_candidate": true,
+    "repeat_same_tier_allowed": false,
+    "stack_tier_positions": false,
+    "active_position_conflict_status": "MISSED_DUE_TO_ACTIVE_POSITION"
+  },
+  "traded_scope": {
+    "lower_long": "candidate",
+    "upper_short": "observe_only"
+  },
+  "oi_zone": {
+    "maximum_wall_distance_points": 12.5,
+    "minimum_oi_percentile": 0.8,
+    "same_selected_series_required": true,
+    "snapshot_must_precede_touch": true,
+    "map_strike_to_xauusd": true
+  },
+  "rejection_rules": {
+    "R1_BOUNDARY": {
+      "description": "Touch zone then close back above mapped lower 2SD boundary",
+      "entry": "next_bar_open"
+    },
+    "R2_WHOLE_ZONE": {
+      "description": "Touch zone then close back above the full SD-OI zone",
+      "entry": "next_bar_open"
+    }
+  },
+  "data_gates": {
+    "exact_session_date": true,
+    "fully_closed_reference_bar": true,
+    "future_snapshot_allowed": false,
+    "maximum_xau_price_age_seconds": 300,
+    "maximum_mapping_reconciliation_points": 0.5,
+    "maximum_broker_quote_age_seconds": 60,
+    "maximum_broker_spread_points": 2.5
+  },
+  "cost_scenarios_points": [
+    0.0,
+    0.5,
+    1.0,
+    2.5
+  ],
+  "promotion_gates": {
+    "experimental_manual_event_count": 20,
+    "strong_review_event_count": 30,
+    "minimum_holdout_events": 10,
+    "positive_median_after_realistic_cost": true,
+    "both_sides_represented": true,
+    "zero_integrity_violations": true
+  },
+  "notifications": {
+    "console": true,
+    "windows_toast": false,
+    "generic_webhook": false
+  },
+  "guardrails": {
+    "position_sizing_allowed": false,
+    "averaging_allowed": false,
+    "recovery_allowed": false,
+    "martingale_allowed": false,
+    "automatic_execution_allowed": false,
+    "signal_allowed": false,
+    "order_submission_allowed": false,
+    "research_only": true
+  }
+}
