@@ -1,0 +1,187 @@
+{
+  "version": "1.0.0",
+  "study_name": "XAU Vol2Vol literal SD first-touch replication",
+  "experiment_hash": "446757f6c055ea88654b73a07650ac694ddad10981edbbf2143475903d2882f7",
+  "external_prior": {
+    "source_description": "User-supplied summary of an external 500-session Vol2Vol study",
+    "session_count": 500,
+    "source_stated_dte": 0.8,
+    "significant_reversal_points": 25.0,
+    "tiers": {
+      "1": {
+        "touches": 350,
+        "reversals": 195,
+        "reported_rate": 0.5571
+      },
+      "2": {
+        "touches": 140,
+        "reversals": 110,
+        "reported_rate": 0.7857
+      },
+      "3": {
+        "touches": 35,
+        "reversals": 32,
+        "reported_rate": 0.9143
+      }
+    },
+    "ambiguity_notes": [
+      "The source summary does not prove whether adverse movement before reversal was bounded.",
+      "The source summary does not disclose an exact planning timestamp.",
+      "The meaning of source DTE 0.8 is not independently documented in the supplied material.",
+      "External counts are labeled priors and not Elpis-validated probabilities."
+    ]
+  },
+  "selection": {
+    "primary_dte": 0.8,
+    "primary_dte_tolerance": 0.05,
+    "positive_dte_required": true,
+    "series_activity_tie_break": "highest_snapshot_total_activity",
+    "final_tie_break": "earliest_observation",
+    "never_mix_series": true,
+    "exact_session_date_required": true,
+    "incomplete_sessions_allowed": false
+  },
+  "time_anchors": {
+    "T0_DTE_080": {
+      "description": "Snapshot with raw source DTE nearest 0.80",
+      "primary": true
+    },
+    "T1_CME_SETTLEMENT": {
+      "description": "Snapshot nearest prior applicable COMEX Gold settlement",
+      "timezone": "America/New_York",
+      "settlement_time": "13:30",
+      "dst_via_iana": true
+    },
+    "T2_BANGKOK_0700": {
+      "description": "Latest snapshot at or before 07:00 Bangkok",
+      "timezone": "Asia/Bangkok",
+      "cutoff_time": "07:00"
+    }
+  },
+  "mapping_modes": {
+    "distance_reanchored": {
+      "formula": "planning_xauusd + (futures_level - futures_reference)",
+      "validated_basis": false
+    },
+    "same_time_reference_basis": {
+      "formula": "futures_level - (futures_reference - xauusd_at_or_before_snapshot)",
+      "maximum_timestamp_gap_seconds": 300,
+      "exact_contract_basis": false
+    }
+  },
+  "event_rules": {
+    "literal_sd_tiers": [
+      1,
+      2,
+      3
+    ],
+    "primary_counting_mode": "aggregated_first_touch_per_tier",
+    "sensitivity_counting_mode": "side_specific_first_touch",
+    "first_touch_only": true,
+    "higher_tiers_are_nested": true,
+    "event_window_end": "session_last_closed_bar"
+  },
+  "outcome_labels": {
+    "LABEL_A_PUBLISHED_EVENTUAL_REVERSAL": {
+      "favorable_points": 25.0,
+      "adverse_barrier": null
+    },
+    "LABEL_B_TRADABLE_FIRST_PASSAGE": {
+      "take_profit_points": 25.0,
+      "stop_loss_points": 25.0,
+      "same_bar_policy": "ambiguous"
+    }
+  },
+  "barrier_trials": [
+    {
+      "id": "TP25_SL25",
+      "tp_points": 25.0,
+      "sl_points": 25.0,
+      "primary": true
+    },
+    {
+      "id": "TP12_5_SL12_5",
+      "tp_points": 12.5,
+      "sl_points": 12.5
+    },
+    {
+      "id": "TP25_SL12_5",
+      "tp_points": 25.0,
+      "sl_points": 12.5
+    },
+    {
+      "id": "TP50_SL25",
+      "tp_points": 50.0,
+      "sl_points": 25.0
+    },
+    {
+      "id": "TP50_SL50",
+      "tp_points": 50.0,
+      "sl_points": 50.0
+    },
+    {
+      "id": "TP0_25SD_SL0_25SD",
+      "tp_sd_fraction": 0.25,
+      "sl_sd_fraction": 0.25
+    },
+    {
+      "id": "TP0_50SD_SL0_50SD",
+      "tp_sd_fraction": 0.5,
+      "sl_sd_fraction": 0.5
+    }
+  ],
+  "dte_buckets": [
+    {
+      "id": "DTE_060_070",
+      "minimum": 0.6,
+      "maximum": 0.7
+    },
+    {
+      "id": "DTE_070_075",
+      "minimum": 0.7,
+      "maximum": 0.75
+    },
+    {
+      "id": "DTE_075_085",
+      "minimum": 0.75,
+      "maximum": 0.85,
+      "primary": true
+    },
+    {
+      "id": "DTE_085_095",
+      "minimum": 0.85,
+      "maximum": 0.95
+    },
+    {
+      "id": "DTE_095_105",
+      "minimum": 0.95,
+      "maximum": 1.05
+    }
+  ],
+  "cost_scenarios_points": [
+    0.0,
+    0.3,
+    0.5,
+    1.0,
+    2.5
+  ],
+  "statistics": {
+    "development_fraction": 0.7,
+    "bootstrap_iterations": 2000,
+    "bootstrap_seed": 34,
+    "multiple_testing_method": "benjamini_hochberg"
+  },
+  "shadow": {
+    "control_tier": 1,
+    "primary_tier": 2,
+    "tail_tier": 3,
+    "one_active_position": true,
+    "repeated_tier_entries": false,
+    "averaging_allowed": false,
+    "recovery_allowed": false,
+    "martingale_allowed": false,
+    "signal_allowed": false,
+    "order_submission_allowed": false,
+    "research_only": true
+  }
+}
