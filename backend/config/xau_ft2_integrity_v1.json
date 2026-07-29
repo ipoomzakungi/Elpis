@@ -1,0 +1,37 @@
+{
+  "engine_revision": "034D.1",
+  "engine_hash": "3faf15e02dfafa37dbcbbcb8f330ac82f6a622b0db955c17ed9b8a27bec99bfb",
+  "candidate_id": "FT2_RAW_V1",
+  "candidate_hash": "14dd47390dee635d942db6d01a43fb96fc6a94c467a2bf068e60d53efdb4963f",
+  "timezone": "Asia/Bangkok",
+  "mapping": {
+    "mode": "distance_reanchored",
+    "maximum_source_gap_seconds": 120,
+    "bar_interval_minutes": 1,
+    "fully_closed_bar_required": true
+  },
+  "execution": {
+    "dukascopy_price_side": "bid",
+    "synthetic_spread_points": [
+      0.3,
+      0.5,
+      1.0,
+      1.5,
+      2.5
+    ],
+    "long_entry_side": "ask",
+    "long_exit_side": "bid",
+    "short_entry_side": "bid",
+    "short_exit_side": "ask"
+  },
+  "guardrails": {
+    "position_sizing_allowed": false,
+    "averaging_allowed": false,
+    "recovery_allowed": false,
+    "martingale_allowed": false,
+    "automatic_execution_allowed": false,
+    "signal_allowed": false,
+    "order_submission_allowed": false,
+    "research_only": true
+  }
+}

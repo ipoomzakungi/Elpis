@@ -13,6 +13,7 @@ from src.models.xau_ft2_candidate import (
     XauFt2Alert,
     XauFt2BrokerQuote,
     XauFt2LatestResponse,
+    XauFt2OrderType,
     XauFt2State,
 )
 from src.models.xau_market_context import XauPriceBar
@@ -21,6 +22,10 @@ from src.xau_first_touch_study.selection import (
     load_source_snapshots,
     map_selection,
     select_snapshot,
+)
+from src.xau_ft2_candidate.integrity_policy import (
+    load_integrity_policy,
+    synchronized_reference_accepted,
 )
 from src.xau_ft2_candidate.journal import Ft2CandidateJournal
 from src.xau_ft2_candidate.policy import load_candidate_policy
@@ -39,11 +44,16 @@ class XauFt2CandidateService:
         *,
         journal_root: Path | None = None,
         policy_path: Path = Path("config/xau_ft2_raw_candidate_v1.json"),
+        integrity_policy_path: Path = Path("config/xau_ft2_integrity_v1.json"),
         vol2vol_root: Path = Path("data/imports/vol2vol"),
         price_bars_folder: Path = Path("data/imports/xau/dukascopy/xauusd/m1"),
         timezone: str = "Asia/Bangkok",
     ) -> None:
         self.policy = load_candidate_policy(policy_path)
+        self.integrity_policy = load_integrity_policy(
+            integrity_policy_path,
+            candidate_policy_path=policy_path,
+        )
         self.vol2vol_root = vol2vol_root
         self.price_bars_folder = price_bars_folder
         self.timezone = timezone
@@ -64,16 +74,24 @@ class XauFt2CandidateService:
             self.price_bars_folder,
             timezone=self.timezone,
         )
-        zone = ZoneInfo(self.timezone)
         bars = [
             item
             for item in price_result.bars
-            if item.timestamp.astimezone(zone).date() == session_date
-            and item.timestamp + timedelta(minutes=1) <= current_time
+            if item.timestamp + timedelta(minutes=1) <= current_time
         ]
         self._resolve_open_alerts(bars, current_time)
         existing_plan = self._latest_for_session("plans", session_date)
-        if existing_plan and existing_plan["status"] == XauFt2State.PLAN_READY:
+        maximum_gap = self.integrity_policy["mapping"][
+            "maximum_source_gap_seconds"
+        ]
+        current_ready_plan = (
+            existing_plan
+            and existing_plan["status"] == XauFt2State.PLAN_READY
+            and existing_plan.get("engine_revision")
+            == self.integrity_policy["engine_revision"]
+            and float(existing_plan.get("source_gap_seconds") or 0) <= maximum_gap
+        )
+        if current_ready_plan:
             plan = existing_plan
         else:
             candidate = self._create_plan(session_date, bars)
@@ -100,8 +118,15 @@ class XauFt2CandidateService:
             self._daily_summary(session_date, plan["status"])
             return self._response(plan=plan)
 
+        zone = ZoneInfo(self.timezone)
+        trading_date = date.fromisoformat(plan["trading_date_bangkok"])
+        monitoring_bars = [
+            item
+            for item in bars
+            if item.timestamp.astimezone(zone).date() == trading_date
+        ]
         existing_event = self._latest_for_session("events", session_date)
-        event = existing_event or self._first_touch(plan, bars)
+        event = existing_event or self._first_touch(plan, monitoring_bars)
         if event is None:
             self._daily_summary(session_date, XauFt2State.WAITING_FOR_FIRST_TOUCH)
             return self._response(plan=plan)
@@ -113,7 +138,7 @@ class XauFt2CandidateService:
             alert = self._create_alert(
                 plan=plan,
                 event=event,
-                bars=bars,
+                bars=monitoring_bars,
                 broker_quote=broker_quote,
                 now=current_time,
             )
@@ -163,15 +188,35 @@ class XauFt2CandidateService:
         request: XauFt2AcknowledgementRequest,
     ) -> dict[str, Any]:
         if not any(
-            item.get("alert_id") == alert_id for item in self.journal.read("alerts")
+            item.get("alert_id") == alert_id
+            for item in self.journal.read("alerts")
         ):
             raise FileNotFoundError(f"FT2 alert not found: {alert_id}")
+        alert = next(
+            item
+            for item in reversed(self.journal.read("alerts"))
+            if item.get("alert_id") == alert_id
+        )
         row = {
             "acknowledgement_id": f"ack_{uuid4().hex}",
             "alert_id": alert_id,
             "acknowledged_at": datetime.now(UTC).isoformat(),
             "acknowledged_by": request.acknowledged_by,
             "note": request.note,
+            "broker_symbol": request.broker_symbol or alert.get("broker_symbol"),
+            "order_type": request.order_type.value,
+            "reference_entry_price": alert["mapped_xauusd_level"],
+            "actual_fill_timestamp": (
+                request.actual_fill_timestamp.isoformat() if request.actual_fill_timestamp else None
+            ),
+            "actual_fill_price": request.actual_fill_price,
+            "bid": request.bid,
+            "ask": request.ask,
+            "spread": (
+                request.ask - request.bid
+                if request.ask is not None and request.bid is not None
+                else None
+            ),
         }
         self.journal.append(
             "acknowledgements",
@@ -221,32 +266,75 @@ class XauFt2CandidateService:
             selection,
             bars,
             mapping_mode=MappingMode.DISTANCE_REANCHORED,
+            maximum_gap_seconds=self.integrity_policy["mapping"][
+                "maximum_source_gap_seconds"
+            ],
+            bar_interval_minutes=self.integrity_policy["mapping"][
+                "bar_interval_minutes"
+            ],
         )
         if plan is None:
             return self._blocked_plan(session_date, ["XAUUSD_MAPPING_UNAVAILABLE"])
+        if not synchronized_reference_accepted(
+            plan,
+            maximum_gap_seconds=self.integrity_policy["mapping"][
+                "maximum_source_gap_seconds"
+            ],
+        ):
+            return self._blocked_plan(
+                session_date,
+                ["XAU_REFERENCE_UNAVAILABLE_STALE"],
+            )
+        activation_bangkok = selection.activation_at.astimezone(
+            ZoneInfo(self.timezone)
+        )
         future_lower, future_upper = selection.snapshot.ranges[2]
         mapped_lower, mapped_upper = plan.mapped_levels[2]
         return {
             "plan_id": f"{self.policy['candidate_id']}_{session_date.isoformat()}",
             "candidate_id": self.policy["candidate_id"],
             "session_date": session_date.isoformat(),
+            "source_session_date": session_date.isoformat(),
             "status": XauFt2State.PLAN_READY.value,
             "source_payload_sha256": _sha256(raw_path),
             "selected_series": selection.snapshot.series,
             "source_dte": selection.snapshot.source_dte,
             "selected_snapshot_timestamp": selection.snapshot.observed_at.isoformat(),
             "activation_timestamp": selection.activation_at.isoformat(),
+            "snapshot_timestamp_utc": selection.snapshot.observed_at.isoformat(),
+            "activation_timestamp_bangkok": activation_bangkok.isoformat(),
+            "trading_date_bangkok": activation_bangkok.date().isoformat(),
             "original_futures_reference": selection.snapshot.future_reference,
             "raw_futures_lower_2sd": future_lower,
             "raw_futures_upper_2sd": future_upper,
             "mapped_xauusd_lower_2sd": mapped_lower,
             "mapped_xauusd_upper_2sd": mapped_upper,
             "xau_reference_timestamp": plan.planning_xau_timestamp.isoformat(),
+            "selected_xau_timestamp": plan.planning_xau_timestamp.isoformat(),
             "xau_reference_price": plan.planning_xau_price,
             "source_gap_seconds": plan.source_gap_seconds,
             "mapping_mode": plan.mapping_mode.value,
             "mapping_quality": plan.mapping_quality,
             "levels_frozen": True,
+            "engine_revision": self.integrity_policy["engine_revision"],
+            "engine_hash": self.integrity_policy["engine_hash"],
+            "candidate_hash": self.policy["candidate_hash"],
+            "reference_trade_levels": {
+                "lower_long": {
+                    "entry": mapped_lower,
+                    "take_profit": mapped_lower
+                    + self.policy["canonical_plan"]["take_profit_points"],
+                    "stop_loss": mapped_lower
+                    - self.policy["canonical_plan"]["stop_loss_points"],
+                },
+                "upper_short": {
+                    "entry": mapped_upper,
+                    "take_profit": mapped_upper
+                    - self.policy["canonical_plan"]["take_profit_points"],
+                    "stop_loss": mapped_upper
+                    + self.policy["canonical_plan"]["stop_loss_points"],
+                },
+            },
             "context": _descriptive_context(selection.snapshot, plan),
             "data_block_reasons": [],
             "research_only": True,
@@ -433,24 +521,50 @@ class XauFt2CandidateService:
         for alert in self.journal.read("alerts"):
             if alert.get("alert_id") in resolved_ids:
                 continue
-            touch_at = datetime.fromisoformat(alert["touch_timestamp"])
+            acknowledgement = _latest_matching(
+                self.journal.read("acknowledgements"),
+                "alert_id",
+                alert["alert_id"],
+            )
+            if (
+                acknowledgement is None
+                or acknowledgement.get("order_type")
+                == XauFt2OrderType.OBSERVATION_ONLY.value
+                or acknowledgement.get("actual_fill_timestamp") is None
+                or acknowledgement.get("actual_fill_price") is None
+            ):
+                continue
+            fill_at = datetime.fromisoformat(
+                acknowledgement["actual_fill_timestamp"]
+            )
+            fill_price = float(acknowledgement["actual_fill_price"])
             later = [
                 item
                 for item in sorted(bars, key=lambda row: row.timestamp)
-                if item.timestamp >= touch_at
+                if item.timestamp >= fill_at
             ]
             if not later:
                 continue
             side = alert["side"]
-            tp = alert["reference_take_profit"]
-            sl = alert["reference_stop_loss"]
+            direction = 1 if side == "BUY" else -1
+            tp = fill_price + direction * self.policy["canonical_plan"][
+                "take_profit_points"
+            ]
+            sl = fill_price - direction * self.policy["canonical_plan"][
+                "stop_loss_points"
+            ]
+            spread = float(acknowledgement.get("spread") or 0)
             status = None
             resolved_at = None
             for index, bar in enumerate(later):
-                tp_hit = bar.high >= tp if side == "BUY" else bar.low <= tp
-                sl_hit = bar.low <= sl if side == "BUY" else bar.high >= sl
-                touch_bar_unknown = index == 0 and (tp_hit or sl_hit)
-                if (tp_hit and sl_hit) or touch_bar_unknown:
+                if side == "BUY":
+                    tp_hit = bar.high >= tp
+                    sl_hit = bar.low <= sl
+                else:
+                    tp_hit = bar.low + spread <= tp
+                    sl_hit = bar.high + spread >= sl
+                fill_bar_unknown = index == 0 and (tp_hit or sl_hit)
+                if (tp_hit and sl_hit) or fill_bar_unknown:
                     status = XauFt2State.AMBIGUOUS
                 elif tp_hit:
                     status = XauFt2State.TP_HIT
@@ -459,8 +573,9 @@ class XauFt2CandidateService:
                 if status is not None:
                     resolved_at = bar.timestamp
                     break
-            local_now_date = now.astimezone(ZoneInfo(self.timezone)).date().isoformat()
-            if status is None and alert["session_date"] < local_now_date:
+            local_now_date = now.astimezone(ZoneInfo(self.timezone)).date()
+            fill_date = fill_at.astimezone(ZoneInfo(self.timezone)).date()
+            if status is None and fill_date < local_now_date:
                 status = XauFt2State.SESSION_EXPIRED
             if status is None:
                 continue
@@ -470,6 +585,15 @@ class XauFt2CandidateService:
                 "session_date": alert["session_date"],
                 "status": status.value,
                 "resolved_at": resolved_at.isoformat() if resolved_at else None,
+                "reference_entry_price": alert["mapped_xauusd_level"],
+                "actual_fill_timestamp": fill_at.isoformat(),
+                "actual_fill_price": fill_price,
+                "take_profit_from_actual_fill": tp,
+                "stop_loss_from_actual_fill": sl,
+                "order_type": acknowledgement["order_type"],
+                "research_only": True,
+                "signal_allowed": False,
+                "order_submission_allowed": False,
             }
             self.journal.append("outcomes", row, id_field="outcome_id")
 

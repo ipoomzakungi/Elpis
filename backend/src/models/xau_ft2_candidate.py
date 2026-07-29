@@ -21,6 +21,12 @@ class XauFt2State(StrEnum):
     SESSION_EXPIRED = "SESSION_EXPIRED"
 
 
+class XauFt2OrderType(StrEnum):
+    PENDING_LIMIT = "pending_limit"
+    MARKET_AFTER_ALERT = "market_after_alert"
+    OBSERVATION_ONLY = "observation_only"
+
+
 class XauFt2BrokerQuote(XauBaseModel):
     timestamp: datetime
     symbol: str
@@ -87,6 +93,35 @@ class XauFt2Alert(XauBaseModel):
 class XauFt2AcknowledgementRequest(XauBaseModel):
     acknowledged_by: str = Field(min_length=1, max_length=100)
     note: str | None = Field(default=None, max_length=500)
+    broker_symbol: str | None = Field(default=None, max_length=100)
+    actual_fill_timestamp: datetime | None = None
+    actual_fill_price: float | None = Field(default=None, gt=0)
+    bid: float | None = Field(default=None, gt=0)
+    ask: float | None = Field(default=None, gt=0)
+    order_type: XauFt2OrderType = XauFt2OrderType.OBSERVATION_ONLY
+
+    @model_validator(mode="after")
+    def validate_manual_execution(self) -> XauFt2AcknowledgementRequest:
+        if (
+            self.actual_fill_timestamp is not None
+            and self.actual_fill_timestamp.tzinfo is None
+        ):
+            raise ValueError("actual fill timestamp must be timezone-aware")
+        if (self.bid is None) != (self.ask is None):
+            raise ValueError("bid and ask must be supplied together")
+        if self.bid is not None and self.ask is not None and self.ask < self.bid:
+            raise ValueError("ask must be greater than or equal to bid")
+        has_fill = (
+            self.actual_fill_timestamp is not None
+            and self.actual_fill_price is not None
+        )
+        if self.order_type == XauFt2OrderType.OBSERVATION_ONLY and has_fill:
+            raise ValueError("observation-only acknowledgement cannot record a fill")
+        if self.order_type != XauFt2OrderType.OBSERVATION_ONLY and not has_fill:
+            raise ValueError("manual trade acknowledgement requires actual fill data")
+        if (self.actual_fill_timestamp is None) != (self.actual_fill_price is None):
+            raise ValueError("actual fill timestamp and price must be supplied together")
+        return self
 
 
 class XauFt2LatestResponse(XauBaseModel):

@@ -437,5 +437,5 @@ After smoke test passes:
 - report files changed, commands run, results, commit hash, and remaining risks.
 
 <!-- SPECKIT START -->
-Active Speckit plan: specs/034c-xau-2sd-first-touch-candidate-freeze/plan.md
+Active Speckit plan: specs/034d-xau-ft2-trading-date-integrity/plan.md
 <!-- SPECKIT END -->
